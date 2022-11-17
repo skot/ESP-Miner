@@ -4,7 +4,9 @@ notes from sniffing BM1397 communication and trying to match it up with cgminer
 It looks like this setting up the BM1397:
 ```
 TX: 55 AA 52 05 00 00 0A // also "chippy"??
-CMD.RX: AA 55 13 97 18 00 00 00 06
+
+RX: AA 55 13 97 18 00 00 00 06 //response from the BM1397
+
 TX: 55 AA 53 05 00 00 03 //chain inactive
 TX: 55 AA 53 05 00 00 03 //chain inactive
 TX: 55 AA 53 05 00 00 03 //chain inactive
@@ -31,7 +33,7 @@ TX: 55 AA 21 96 04 04 00 00 00 00 72 E7 07 17 A9 81 51 63 EE D6 E5 43 35 3F 14 9
 
 How does this big work field break down?
 
-- `55 AA` ->
+- `55 AA` -> (most) All of the commands to the BM1397 start with this
 - `21` -> always 21. like bitcoin, always 21 million coins?
 - `96` -> length
 - `04` -> jobID
