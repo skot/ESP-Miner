@@ -12,15 +12,17 @@ ESP-Miner is bitcoin miner software designed to run on the ESP32. It mines on AS
 ### Firmware
 - ESP-Miner connects to and verifies the attached mining ASIC.
     - Setting the baud rate, hashing frequency, and filling in some other mystery registers
-    - This startup-sequence for the BM1387 and BM1397 can be found in cgminer the Kano edition in [driver-gekko.c](https://github.com/kanoi/cgminer/blob/master/driver-gekko.c)
+    - This startup sequence for the BM1387 and BM1397 can be found in cgminer the Kano edition in [driver-gekko.c](https://github.com/kanoi/cgminer/blob/master/driver-gekko.c)
 
 - ESP-Miner connects to your pool or stratum server and subscribes to get the latest work.
     - This is done with [JSON-RPC](https://www.jsonrpc.org)
     - Via the [Stratum](https://braiins.com/stratum-v1/docs) protocol
-- ESP-Miner the latest work and formats it to be sent to the mining ASIC.
+    - [cJSON](https://github.com/DaveGamble/cJSON) seems like a good embedded library for doing this.
+- ESP-Miner gets the latest work and formats it to be sent to the mining ASIC.
     - There isn't much change here except for computing the midstates, and shifting some bytes around
         - Beware of endianess!
         - How do we do this? Examples in cgminer Kano edition.
+        - I have started on this.. [check this](nm1397_protocol.md)
 - ESP-Miner sends this work to the mining ASIC over serial.
 
 - The Mining ASIC will report back any when it finds a hash over the difficulty (which)?
