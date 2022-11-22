@@ -17,7 +17,7 @@ TX: 55 AA 51 09 00 20 00 00 00 01 02 //init3
 TX: 55 AA 51 09 00 3C 80 00 80 74 10 //init4
 TX: 55 AA 51 09 00 14 00 00 00 00 1C //set_ticket
 TX: 55 AA 51 09 00 68 C0 70 01 11 00 //init5
-TX: 55 AA 51 09 00 68 C0 70 01 11 00 //init5 (2x)
+TX: 55 AA 51 09 00 68 C0 70 01 11 00 //init5 (second one)
 TX: 55 AA 51 09 00 28 06 00 00 0F 18 //init6
 TX: 55 AA 51 09 00 18 00 00 7A 31 15 //baudrate
 TX: 55 AA 51 09 00 70 0F 0F 0F 00 19 //prefreq
@@ -51,4 +51,4 @@ AA 55 00 03 EA 0F 02 20 9C
 ```
 this means the Nonce `0003ea0f` was found for JobID `20`
 
-If the BM1397 _doesn't_ find a good nonce in the whole nonce space, it just goes off into lalaland. It's up to the miner to keepm track of what the ASIC is doing and send it more work if this happens. If you look at the hashing frequency you should be able to time this.
+If the BM1397 _doesn't_ find a good nonce in the whole nonce space, it just goes off into lalaland. It's up to the miner to keep track of what the ASIC is doing and send it more work if this happens. If you look at the hashing frequency you should be able to time this.
