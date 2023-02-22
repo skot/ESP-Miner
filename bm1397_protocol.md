@@ -28,22 +28,26 @@ TX: 55 AA 51 09 00 08 40 A0 02 25 16 //freqbuf
 
 Sending work to the BM1397 looks like this;
 ```
-TX: 55 AA 21 96 04 04 00 00 00 00 72 E7 07 17 A9 81 51 63 EE D6 E5 43 35 3F 14 92 56 25 54 19 4E 41 31 08 E5 D7 89 4A C8 13 50 A4 48 05 B8 0E E2 E4 83 95 F8 C1 15 8D EC 07 D8 B8 AE CA DE E6 35 8C 3E E9 1C 57 5D 99 A7 52 95 DC D8 08 7B 7A D
+TX: 55 AA 21 36 38 01 00 00 00 00 20 27 07 17 8A C0 DC 63 F3 CF F8 BF FF 89 BD 99 97 74 10 44 FF 84 D0 74 30 85 44 35 E3 DE 76 0B CC 28 54 A2 FA 12 42 98 00 00 00 00 00 00 00 00 92 C7 00 00 FB 7A BB 8C 33 75 29 7C D8 F6 7E 14 1B D3 0F 2F D1 A0 82 66 00 00 00 20 7F D3
 ```
 
 How does this big work field break down?
 
-- `55 AA` -> (most) All of the commands to the BM1397 start with this
-- `21` -> always 21. like bitcoin, always 21 million coins?
-- `96` -> length
-- `04` -> jobID
-- `04` -> midstates
-- `00 00 00 00` -> always zero. Is this the starting nonce?
-- `72 E7 07 17` -> nbits
-- `A9 81 51 63` -> ntime. if you flip the endianess, this is unixtimestamp for Thu Oct 20 2022 17:13:13 GMT. boom!
-- `EE D6 E5 43` -> last 4 bytes of the merkle root
-- `35 3F 14 92 56 25 54 19 4E 41 31 08 E5 D7 89 4A C8 13 50 A4 48 05 B8 0E E2 E4 83 95 F8 C1 15 8D` -> midstate computed from the first 64 bytes of the header
-- `EC 07 D8 B8 AE CA DE E6 35 8C 3E E9 1C 57 5D 99 A7 52 95 DC D8 08 7B 7A D` -> ?? another midstate?
+`55 AA` - (most) All of the commands to the BM1397 start with this
+`21` - always 21. like bitcoin, always 21 million coins?
+`36` - Length
+`38` - JobID
+`01` - Midstates
+`00 00 00 00` - always zero. Is this the starting nonce?
+`20 27 07 17` - nbits
+`8A C0 DC 63` - ntime → Fri Feb 03 2023 08:06:34 GMT
+`F3 CF F8 BF` - last 4 bytes of the merkle root
+`FF 89 BD 99 97 74 10 44 FF 84 D0 74 30 85 44 35 E3 DE 76 0B CC 28 54 A2 FA 12 42 98 00 00 00 00` - midstate computed from the first 64 bytes of the header
+`00 00 00 00 92 C7 00 00 FB 7A BB 8C 33 75 29 7C D8 F6 7E 14 1B D3 0F 2F D1 A0 82 66 00 00 00 20` - uhoh, what's this?
+`7F D3` - checksum
+
+- for the checksum use crc16_false() on all bytes except for `55 AA`
+
 
 when the BM1397 finds a nonce that makes a hash below the difficulty (which difficulty is that?) it responds with;
 ```
