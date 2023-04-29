@@ -1,0 +1,11 @@
+[package]
+name = "esp_miner"
+version = "0.1.0"
+authors = ["Georges PALAUQUI <g.palauqui@gptechinno.com>"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+
+[dependencies]
+hal = { package = "esp32s3-hal", version = "0.8.0" }
+esp-backtrace = { version = "0.7.0", features = ["esp32s3", "panic-handler", "exception-handler", "print-uart"] }
+esp-println       = { version = "0.5.0", features = ["esp32s3"] }

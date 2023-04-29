@@ -1,28 +1,12 @@
-## ESP-Miner
+# ESP-Miner
 
-ESP-Miner is bitcoin miner software designed to run on the ESP32. It mines on ASICs such as the Bitmain BM1397. The [BitaxeMax](https://github.com/skot/bitaxe/tree/max) is a handy board for this!
-
-![esp-miner block diagram](doc/diagram.png)
+## Introduction
+ESP-Miner is bitcoin miner software designed to run on the ESP32S3 of the [BitaxeMax](https://github.com/skot/bitaxe/tree/max_v2.2) ! It mines on ASIC from Bitmain : the BM1397.
 
 ## Architecture
-- Uses the ESP-IDF Framework, which is based on FreeRTOS (no Linux involved)
-- Uses the ESP32 WiFi to connect to the network
-- The ESP32 is provisioned to the local WiFi over BLE using ESP SmartConfig
+- Based on [esp-template](https://esp-rs.github.io/book/writing-your-own-application/generate-project-from-template.html#esp-template)
 
-### Firmware
-- ESP-Miner connects to and verifies the attached mining ASIC.
-    - This startup-sequence for the BM1387 and BM1397 can be found in cgminer the Kano edition in [driver-gekko.c](https://github.com/kanoi/cgminer/blob/master/driver-gekko.c)
-
-- ESP-Miner connects to your pool or stratum server and subscribes to get the latest work.
-    - This is done with [JSON-RPC](https://www.jsonrpc.org)
-    - Via the [Stratum](https://braiins.com/stratum-v1/docs) protocol
-- ESP-Miner the latest work and formats it to be sent to the mining ASIC.
-    - There isn't much change here except for computing the midstates, and shifting some bytes around
-        - Beware of endianess!
-        - How do we do this? Examples in cgminer Kano edition.
-- ESP-Miner sends this work to the mining ASIC over serial.
-
-- The Mining ASIC will report back any when it finds a hash over the difficulty (which)?
-    - The catch here is that if it doesn't find a hash over the difficulty, it will not report back at all. So you need to keep track of the hashing frequency and the time so that you can send a new block header to be hashed.
-
-- ESP-Miner will report back to the pool over Stratum the results of mining.
+## Setup
+- install [rust](https://esp-rs.github.io/book/installation/installation.html#rust-installation)
+- follow the [espup](https://esp-rs.github.io/book/installation/installation.html#espup) installation guide
+- install [espflash](https://esp-rs.github.io/book/tooling/espflash.html#espflash-1)
