@@ -3,9 +3,34 @@ name = "esp_miner"
 version = "0.1.0"
 authors = ["Georges PALAUQUI <g.palauqui@gptechinno.com>"]
 edition = "2021"
+rust-version = "1.65.0"
+description = "Rust based firmware for BitaxeMax"
+repository = "https://github.com/skot/ESP-Miner"
 license = "MIT OR Apache-2.0"
 
+keywords = ["embedded", "embedded-hal", "esp", "esp32s3", "no-std"]
+categories = ["embedded", "no-std"]
+
 [dependencies]
-hal = { package = "esp32s3-hal", version = "0.8.0" }
-esp-backtrace = { version = "0.7.0", features = ["esp32s3", "panic-handler", "exception-handler", "print-uart"] }
-esp-println       = { version = "0.5.0", features = ["esp32s3"] }
+embassy-time = { version = "0.1.1", package = "embassy-time", features = [
+    "nightly",
+    "tick-hz-16_000_000",
+] }
+esp32s3-hal = { version = "0.9.0", package = "esp32s3-hal", features = [
+    "embassy",
+    "embassy-time-systick",
+] }
+embassy-executor = { version = "0.2.0", features = [
+    "nightly",
+    "integrated-timers",
+    "arch-xtensa",
+    "executor-thread",
+] }
+esp-backtrace = { version = "0.7.0", features = [
+    "esp32s3",
+    "panic-handler",
+    "exception-handler",
+    "print-uart",
+] }
+esp-println = { version = "0.5.0", features = ["esp32s3"] }
+static_cell = "1.0.0"
