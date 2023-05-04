@@ -4,8 +4,15 @@
 
 use embassy_executor::Executor;
 use embassy_time::{Duration, Timer};
+#[cfg(feature = "generate-clki")]
+use esp32s3_hal::ledc::{
+    channel::{self, ChannelIFace},
+    timer::{self, TimerIFace},
+    LSGlobalClkSource, LowSpeed, LEDC,
+};
 use esp32s3_hal::{
-    clock::ClockControl, embassy, peripherals::Peripherals, prelude::*, timer::TimerGroup, Rtc,
+    clock::ClockControl, embassy, gpio::IO, peripherals::Peripherals, prelude::*,
+    timer::TimerGroup, Delay, Rtc,
 };
 use esp_backtrace as _;
 use esp_println::println;
@@ -14,7 +21,7 @@ use static_cell::StaticCell;
 #[embassy_executor::task]
 async fn run1() {
     loop {
-        esp_println::println!("Hello world from embassy using esp-hal-async!");
+        println!("Hello world from embassy using esp-hal-async!");
         Timer::after(Duration::from_millis(1_000)).await;
     }
 }
@@ -22,7 +29,7 @@ async fn run1() {
 #[embassy_executor::task]
 async fn run2() {
     loop {
-        esp_println::println!("Bing!");
+        println!("Bing!");
         Timer::after(Duration::from_millis(5_000)).await;
     }
 }
@@ -65,6 +72,46 @@ fn main() -> ! {
 
     #[cfg(feature = "embassy-time-timg0")]
     embassy::init(&clocks, timer_group0.timer0);
+
+    let io = IO::new(peripherals.GPIO, peripherals.IO_MUX);
+    let mut bm_rst = io.pins.gpio1.into_push_pull_output();
+    bm_rst.set_low().unwrap();
+    println!("Reset BM1397 RST with gpio1 LOW");
+    #[cfg(feature = "generate-clki")]
+    {
+        println!("Generating BM1397 CLKI 20MHz on gpio41");
+        let bm_clki = io.pins.gpio41.into_push_pull_output();
+        let mut ledc = LEDC::new(
+            peripherals.LEDC,
+            &clocks,
+            &mut system.peripheral_clock_control,
+        );
+        ledc.set_global_slow_clock(LSGlobalClkSource::APBClk);
+
+        let mut lstimer0 = ledc.get_timer::<LowSpeed>(timer::Number::Timer0);
+
+        lstimer0
+            .configure(timer::config::Config {
+                duty: timer::config::Duty::Duty1Bit,
+                clock_source: timer::LSClockSource::APBClk,
+                frequency: 20u32.MHz(),
+            })
+            .unwrap();
+
+        let mut channel0 = ledc.get_channel(channel::Number::Channel0, bm_clki);
+        channel0
+            .configure(channel::config::Config {
+                timer: &lstimer0,
+                duty_pct: 50,
+                pin_config: channel::config::PinConfig::PushPull,
+            })
+            .unwrap();
+    }
+
+    let mut delay = Delay::new(&clocks);
+    delay.delay_ms(100u32);
+    bm_rst.set_high().unwrap();
+    println!("Release BM1397 RST with gpio1 HIGH");
 
     let executor = EXECUTOR.init(Executor::new());
     executor.run(|spawner| {
