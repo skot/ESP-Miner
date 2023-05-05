@@ -6,6 +6,7 @@ use embassy_executor::{Executor, _export::StaticCell};
 use embassy_net::{tcp::TcpSocket, Config, Ipv4Address, Stack, StackResources};
 use embassy_time::{Duration, Timer};
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
+use emc2101_driver::{Level, EMC2101};
 #[cfg(feature = "generate-clki")]
 use esp32s3_hal::ledc::{
     channel::{self, ChannelIFace},
@@ -149,7 +150,7 @@ fn main() -> ! {
     /* embedded-hal-async is on its way : https://github.com/esp-rs/esp-hal/pull/510 */
 
     // will be used to control emc2101/ina260/ds44232u
-    let _i2c = I2C::new(
+    let i2c = I2C::new(
         peripherals.I2C0,
         io.pins.gpio46,
         io.pins.gpio45,
@@ -157,11 +158,43 @@ fn main() -> ! {
         &mut system.peripheral_clock_control,
         &clocks,
     );
-
     /* As of today embedded-hal-async traits are not yet available for I2C */
     /* see https://github.com/esp-rs/esp-hal/issues/70 */
     /* So cannot drive I2C slaves asynchronously for now... */
     /* This give me time to implement async in emc2101 driver too */
+
+    let mut emc2101 = EMC2101::new(i2c, emc2101_driver::SENSOR_ADDRESS).unwrap();
+    /* Noctua PWM fan have a PWM target frequency of 25kHz, acceptable range 21kHz to 28kHz */
+    /* The signal is not inverted, 100% PWM duty cycle (= 5V DC) results in maximum fan speed. */
+    /* See https://noctua.at/pub/media/wysiwyg/Noctua_PWM_specifications_white_paper.pdf */
+    emc2101.set_fan_pwm(25_000, false).unwrap();
+    #[cfg(feature = "emc2101-tach")]
+    emc2101.enable_tach_input().unwrap();
+    #[cfg(feature = "emc2101-alert")]
+    emc2101.enable_alert_output().unwrap();
+    let lvl1 = Level {
+        temp: 50,
+        percent: 20,
+    };
+    let lvl2 = Level {
+        temp: 70,
+        percent: 50,
+    };
+    let lvl3 = Level {
+        temp: 80,
+        percent: 70,
+    };
+    let lvl4 = Level {
+        temp: 90,
+        percent: 85,
+    };
+    let lvl5 = Level {
+        temp: 100,
+        percent: 100,
+    };
+    emc2101
+        .set_fan_lut(&[lvl1, lvl2, lvl3, lvl4, lvl5], 3)
+        .unwrap();
 
     let wifi_config = Config::Dhcp(Default::default());
     let wifi_seed = 1234; // very random, very secure seed

@@ -458,6 +458,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "emc2101-driver"
+version = "0.1.0"
+source = "git+https://github.com/Georges760/emc2101-rs?rev=94cea2a7f2ec8732c06839631ec12def9e8d0847#94cea2a7f2ec8732c06839631ec12def9e8d0847"
+dependencies = [
+ "embedded-hal 0.2.7",
+]
+
+[[package]]
 name = "enum-as-inner"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -548,6 +556,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "esp-miner"
+version = "0.1.0"
+dependencies = [
+ "embassy-executor",
+ "embassy-net",
+ "embassy-time 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embedded-io 0.4.0",
+ "embedded-svc",
+ "emc2101-driver",
+ "esp-backtrace",
+ "esp-println",
+ "esp-wifi",
+ "esp32s3-hal",
+ "fugit",
+ "static_cell",
+]
+
+[[package]]
 name = "esp-println"
 version = "0.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -625,23 +651,6 @@ dependencies = [
  "embedded-hal 0.2.7",
  "embedded-hal-async",
  "esp-hal-common",
-]
-
-[[package]]
-name = "esp_miner"
-version = "0.1.0"
-dependencies = [
- "embassy-executor",
- "embassy-net",
- "embassy-time 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
- "embedded-io 0.4.0",
- "embedded-svc",
- "esp-backtrace",
- "esp-println",
- "esp-wifi",
- "esp32s3-hal",
- "fugit",
- "static_cell",
 ]
 
 [[package]]

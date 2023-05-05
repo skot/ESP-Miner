@@ -1,5 +1,5 @@
 [package]
-name = "esp_miner"
+name = "esp-miner"
 version = "0.1.0"
 authors = ["Georges PALAUQUI <g.palauqui@gptechinno.com>"]
 edition = "2021"
@@ -31,6 +31,8 @@ embassy-time = { version = "0.1.1", package = "embassy-time", features = [
 ] }
 embedded-io = "0.4.0"
 embedded-svc = { version = "0.24.0", default-features = false, features = [] }
+# emc2101-driver = { version = "0.1.0", path = "../emc2101-driver" }
+emc2101-driver = { version = "0.1.0", git = "https://github.com/Georges760/emc2101-rs", rev = "94cea2a7f2ec8732c06839631ec12def9e8d0847" }
 esp-backtrace = { version = "0.7.0", features = [
     "esp32s3",
     "panic-handler",
@@ -54,7 +56,10 @@ fugit = "0.3.6"
 static_cell = "1.0.0"
 
 [features]
+default = ["emc2101-tach"]
 generate-clki = []
+emc2101-tach = []
+emc2101-alert = []
 
 [profile.release]
 # Explicitly disable LTO which the Xtensa codegen backend has issues
