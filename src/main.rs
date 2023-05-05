@@ -18,6 +18,7 @@ use esp32s3_hal::{
     clock::{ClockControl, CpuClock},
     embassy,
     gpio::IO,
+    i2c::I2C,
     peripherals::Peripherals,
     prelude::*,
     timer::TimerGroup,
@@ -141,6 +142,16 @@ fn main() -> ! {
         )),
         &clocks,
         &mut system.peripheral_clock_control,
+    );
+
+    // will be used to control emc2101/ina260/ds44232u
+    let _i2c = I2C::new(
+        peripherals.I2C0,
+        io.pins.gpio46,
+        io.pins.gpio45,
+        400u32.kHz(),
+        &mut system.peripheral_clock_control,
+        &clocks,
     );
 
     let wifi_config = Config::Dhcp(Default::default());
