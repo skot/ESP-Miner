@@ -2,10 +2,8 @@
 #![no_main]
 #![feature(type_alias_impl_trait)]
 
-use embassy_executor::Executor;
-use embassy_executor::_export::StaticCell;
-use embassy_net::tcp::TcpSocket;
-use embassy_net::{Config, Ipv4Address, Stack, StackResources};
+use embassy_executor::{Executor, _export::StaticCell};
+use embassy_net::{tcp::TcpSocket, Config, Ipv4Address, Stack, StackResources};
 use embassy_time::{Duration, Timer};
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
 #[cfg(feature = "generate-clki")]
@@ -27,8 +25,10 @@ use esp32s3_hal::{
 };
 use esp_backtrace as _;
 use esp_println::println;
-use esp_wifi::initialize;
-use esp_wifi::wifi::{WifiController, WifiDevice, WifiEvent, WifiMode, WifiState};
+use esp_wifi::{
+    initialize,
+    wifi::{WifiController, WifiDevice, WifiEvent, WifiMode, WifiState},
+};
 use fugit::HertzU32;
 
 const SSID: &str = env!("SSID");
@@ -127,6 +127,7 @@ fn main() -> ! {
             .unwrap();
     }
 
+    // Timer::after(Duration::from_millis(100)).await;
     let mut delay = Delay::new(&clocks);
     delay.delay_ms(100u32);
     bm_rst.set_high().unwrap();
