@@ -12,29 +12,45 @@ keywords = ["embedded", "embedded-hal", "esp", "esp32s3", "no-std"]
 categories = ["embedded", "no-std", "bitcoin"]
 
 [dependencies]
-embassy-time = { version = "0.1.1", package = "embassy-time", features = [
-    "nightly",
-    "tick-hz-16_000_000",
-] }
-esp32s3-hal = { version = "0.9.0", package = "esp32s3-hal", features = [
-    "embassy",
-    "embassy-time-systick",
-] }
 embassy-executor = { version = "0.2.0", features = [
     "nightly",
     "integrated-timers",
     "arch-xtensa",
     "executor-thread",
 ] }
+embassy-net = { git = "https://github.com/embassy-rs/embassy", rev = "fb27594", features = [
+    "nightly",
+    "tcp",
+    "udp",
+    "dhcpv4",
+    "medium-ethernet",
+] }
+embassy-time = { version = "0.1.1", package = "embassy-time", features = [
+    "nightly",
+    "tick-hz-1_000_000",
+] }
+embedded-io = "0.4.0"
+embedded-svc = { version = "0.24.0", default-features = false, features = [] }
 esp-backtrace = { version = "0.7.0", features = [
     "esp32s3",
     "panic-handler",
     "exception-handler",
     "print-uart",
 ] }
+esp32s3-hal = { version = "0.9.0", package = "esp32s3-hal", features = [
+    "embassy",
+    "embassy-time-timg0",
+] }
 esp-println = { version = "0.5.0", features = ["esp32s3"] }
-static_cell = "1.0.0"
+esp-wifi = { version = "0.1.0", git = "https://github.com/esp-rs/esp-wifi", rev = "c446177984b82b5e1658d6b24318e7214460ded8", features = [
+    "async",
+    "embassy-net",
+    "embedded-svc",
+    "esp32s3",
+    "wifi",
+] }
 fugit = "0.3.6"
+static_cell = "1.0.0"
 
 [features]
 generate-clki = []
