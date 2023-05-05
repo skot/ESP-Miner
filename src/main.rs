@@ -21,7 +21,8 @@ use esp32s3_hal::{
     peripherals::Peripherals,
     prelude::*,
     timer::TimerGroup,
-    Delay, Rng, Rtc,
+    uart::TxRxPins,
+    Delay, Rng, Rtc, Uart,
 };
 use esp_backtrace as _;
 use esp_println::println;
@@ -129,6 +130,18 @@ fn main() -> ! {
     delay.delay_ms(100u32);
     bm_rst.set_high().unwrap();
     println!("Release BM1397 RST with gpio1 HIGH");
+
+    // will be use to init the bm1397 chain
+    let _bm_serial = Uart::new_with_config(
+        peripherals.UART1,
+        None,
+        Some(TxRxPins::new_tx_rx(
+            io.pins.gpio17.into_push_pull_output(),
+            io.pins.gpio18.into_floating_input(),
+        )),
+        &clocks,
+        &mut system.peripheral_clock_control,
+    );
 
     let wifi_config = Config::Dhcp(Default::default());
     let wifi_seed = 1234; // very random, very secure seed

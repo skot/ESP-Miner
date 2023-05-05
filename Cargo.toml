@@ -40,6 +40,7 @@ esp-backtrace = { version = "0.7.0", features = [
 esp32s3-hal = { version = "0.9.0", package = "esp32s3-hal", features = [
     "embassy",
     "embassy-time-timg0",
+    "async",
 ] }
 esp-println = { version = "0.5.0", features = ["esp32s3"] }
 esp-wifi = { version = "0.1.0", git = "https://github.com/esp-rs/esp-wifi", rev = "c446177984b82b5e1658d6b24318e7214460ded8", features = [

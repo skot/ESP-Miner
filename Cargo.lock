@@ -357,6 +357,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "embedded-can"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9d2e857f87ac832df68fa498d18ddc679175cf3d2e4aa893988e5601baf9438"
+dependencies = [
+ "nb 1.1.0",
+]
+
+[[package]]
 name = "embedded-dma"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -388,6 +397,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8042370aa7af48de36d5312cda14c18ed8ca6b7ce64f5a07832fedc9dc83063f"
 dependencies = [
  "embedded-hal 1.0.0-alpha.10",
+]
+
+[[package]]
+name = "embedded-hal-nb"
+version = "1.0.0-alpha.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1465fffd56a95bbc105c17965bca1c1d5815027b1cc6bb183bc05d04563d065c"
+dependencies = [
+ "embedded-hal 1.0.0-alpha.10",
+ "nb 1.1.0",
 ]
 
 [[package]]
@@ -490,9 +509,15 @@ dependencies = [
  "bitflags 2.2.1",
  "cfg-if",
  "critical-section",
+ "embassy-futures",
+ "embassy-sync 0.2.0 (registry+https://github.com/rust-lang/crates.io-index)",
  "embassy-time 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "embedded-can",
  "embedded-dma",
  "embedded-hal 0.2.7",
+ "embedded-hal 1.0.0-alpha.10",
+ "embedded-hal-async",
+ "embedded-hal-nb",
  "esp-hal-procmacros",
  "esp-synopsys-usb-otg",
  "esp32s3",
@@ -598,6 +623,7 @@ dependencies = [
  "bare-metal",
  "embassy-time 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "embedded-hal 0.2.7",
+ "embedded-hal-async",
  "esp-hal-common",
 ]
 
