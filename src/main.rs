@@ -17,11 +17,12 @@ use esp32s3_hal::{
     embassy,
     gpio::IO,
     i2c::I2C,
-    peripherals::Peripherals,
+    interrupt,
+    peripherals::{Interrupt, Peripherals},
     prelude::*,
     timer::TimerGroup,
     uart::TxRxPins,
-    Delay, Rng, Rtc, Uart,
+    Delay, Priority, Rng, Rtc, Uart,
 };
 use esp_backtrace as _;
 use esp_println::println;
@@ -144,6 +145,8 @@ fn main() -> ! {
         &clocks,
         &mut system.peripheral_clock_control,
     );
+    interrupt::enable(Interrupt::UART1, Priority::Priority1).unwrap();
+    /* embedded-hal-async is on its way : https://github.com/esp-rs/esp-hal/pull/510 */
 
     // will be used to control emc2101/ina260/ds44232u
     let _i2c = I2C::new(
@@ -154,6 +157,11 @@ fn main() -> ! {
         &mut system.peripheral_clock_control,
         &clocks,
     );
+
+    /* As of today embedded-hal-async traits are not yet available for I2C */
+    /* see https://github.com/esp-rs/esp-hal/issues/70 */
+    /* So cannot drive I2C slaves asynchronously for now... */
+    /* This give me time to implement async in emc2101 driver too */
 
     let wifi_config = Config::Dhcp(Default::default());
     let wifi_seed = 1234; // very random, very secure seed
