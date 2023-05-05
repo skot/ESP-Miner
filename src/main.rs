@@ -16,6 +16,7 @@ use esp32s3_hal::{
 };
 use esp_backtrace as _;
 use esp_println::println;
+use fugit::HertzU32;
 use static_cell::StaticCell;
 
 #[embassy_executor::task]
@@ -77,9 +78,14 @@ fn main() -> ! {
     let mut bm_rst = io.pins.gpio1.into_push_pull_output();
     bm_rst.set_low().unwrap();
     println!("Reset BM1397 RST with gpio1 LOW");
+
+    #[cfg(not(feature = "generate-clki"))]
+    let _bm_clki_freq: HertzU32 = 25u32.MHz(); // will be use to init the bm1397 chain
+
     #[cfg(feature = "generate-clki")]
     {
         println!("Generating BM1397 CLKI 20MHz on gpio41");
+        let bm_clki_freq: HertzU32 = 20u32.MHz();
         let bm_clki = io.pins.gpio41.into_push_pull_output();
         let mut ledc = LEDC::new(
             peripherals.LEDC,
@@ -94,7 +100,7 @@ fn main() -> ! {
             .configure(timer::config::Config {
                 duty: timer::config::Duty::Duty1Bit,
                 clock_source: timer::LSClockSource::APBClk,
-                frequency: 20u32.MHz(),
+                frequency: bm_clki_freq,
             })
             .unwrap();
 
