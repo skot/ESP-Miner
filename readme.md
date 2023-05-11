@@ -4,7 +4,8 @@ The ESP-Miner is a ESP32 firmware in development to mine bitcoin with [the bitax
 
 ## Overview
 
-This branch, `serial_test` is just to show that the level-shifted serial communication between the ESP32 and the BM1397 is working. It's super hacky and quick, so don't judge!
+This branch, `serial_test` is just to show that the level-shifted serial communication between the ESP32 and the BM1397 is working. It's super hacky and quick, so don't judge! 
+A lot of this was quickly ported over from [bitskipc](https://github.com/skot/bitskipc), a prototype BM1397 driver for use with libftdi
 
 ### Build and Flash
 
