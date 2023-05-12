@@ -47,5 +47,6 @@ int OLED_setPixel(int x, int y, uint8_t ucPixel);
 bool OLED_setContrast(uint8_t ucContrast);
 int OLED_clearLine(uint8_t);
 bool OLED_status(void);
+void OLED_clear(void);
 
 #endif // OLED96_H

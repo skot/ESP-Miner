@@ -12,6 +12,8 @@
 #include "adc.h"
 #include "oled.h"
 
+#define USE_OLED 1  //Set to 1 to use OLED, 0 to not use it
+
 static const char *TAG = "system";
 
 void init_system(void) {
@@ -40,9 +42,15 @@ void init_system(void) {
     vTaskDelay(500 / portTICK_RATE_MS);
 
     //oled
+    #ifdef USE_OLED
     if (!OLED_init()) {
         ESP_LOGI(TAG, "OLED init failed!");
+    } else {
+        ESP_LOGI(TAG, "OLED init success!");
+        OLED_clear();
+        OLED_writeString(0, 0, "The bitaxe!");
     }
+    #endif
 }
 
 void get_stats(void) {

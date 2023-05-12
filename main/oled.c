@@ -261,6 +261,10 @@ int OLED_fill(uint8_t ucData) {
     return 0;
 }
 
+void OLED_clear(void) {
+    OLED_fill(0x00);
+}
+
 int OLED_clearLine(uint8_t line) {
     uint8_t temp[128];
 
