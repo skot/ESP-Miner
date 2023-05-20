@@ -1,17 +1,74 @@
-# ESP-Miner -- serial_test
+| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-S2 | ESP32-S3 |
+| ----------------- | ----- | -------- | -------- | -------- | -------- |
 
-The ESP-Miner is a ESP32 firmware in development to mine bitcoin with [the bitaxe](https://github.com/skot/bitaxe) based on the BM1397 ASIC
 
-## Overview
+# ESP-miner
 
-This branch, `serial_test` is just to show that the level-shifted serial communication between the ESP32 and the BM1397 is working. It's super hacky and quick, so don't judge! 
-A lot of this was quickly ported over from [bitskipc](https://github.com/skot/bitskipc), a prototype BM1397 driver for use with libftdi
+## Hardware Required
 
-### Build and Flash
+This example can be run on any commonly available ESP32 development board.
 
-Enter `idf.py -p PORT flash monitor` to build, flash and monitor the project.
+## Configure the project
+
+Set the target
+
+```
+idf.py set-target esp32s3
+```
+
+Use menuconfig to set the stratum server address/port and WiFi SSID/Password
+```
+idf.py menuconfig
+```
+Set following parameters under Example Configuration Options, these will define the stratum server you connect to:
+
+* Set IP version of example to be IPV4 or IPV6.
+
+* Set IPV4 Address in case your chose IP version IPV4 above.
+
+* Set IPV6 Address in case your chose IP version IPV6 above.
+
+    Set Port number that represents remote port the example will connect to.
+
+Set following parameters under Example Connection Configuration Options:
+
+* Set `WiFi SSID` to your target wifi network SSID.
+
+* Set `Wifi Password` to the password for your target SSID.
+
+* Set `Stratum address` to the stratum pool domain name. example "solo.ckpool.org"
+
+* Set `Stratum username` to the stratum pool username
+
+* Set `Stratum password` to the stratum pool password
+
+For more information about the example_connect() method used here, check out https://github.com/espressif/esp-idf/blob/master/examples/protocols/README.md.
+
+```
+#define STRATUM_USERNAME "johnny9.esp"
+```
+
+## Build and Flash
+
+Build the project and flash it to the board, then run monitor tool to view serial output:
+
+```
+idf.py -p PORT flash monitor
+```
 
 (To exit the serial monitor, type ``Ctrl-]``.)
 
-See the [Getting Started Guide](https://docs.espressif.com/projects/esp-idf/en/latest/get-started/index.html) for full steps to configure and use ESP-IDF to build projects.
+See the Getting Started Guide for full steps to configure and use ESP-IDF to build projects.
+
+## Run Unit tests
+
+The unit tests for the project use the unity test framework and currently require actual esp32 hardware to run.
+
+They are located at https://github.com/johnny9/esp-miner/tree/master/components/stratum/test
+
+```
+cd ./test/
+idf.py set-target esp32s3
+idf.py -p PORT flash monitor
+```
 
