@@ -1,12 +1,14 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- |
+| Supported Targets | ESP32-S3 |
+| ----------------- | -------- |
 
 
 # ESP-miner
 
+## Requires ESP-IDF v4.4.4
+
 ## Hardware Required
 
-This example can be run on any commonly available ESP32 development board.
+This firmware is designed to run on a BitAxe v2+
 
 ## Configure the project
 
