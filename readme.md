@@ -1,12 +1,14 @@
-| Supported Targets | ESP32 | ESP32-C2 | ESP32-C3 | ESP32-S2 | ESP32-S3 |
-| ----------------- | ----- | -------- | -------- | -------- | -------- |
+| Supported Targets | ESP32-S3 |
+| ----------------- | -------- |
 
 
 # ESP-miner
 
+## Requires ESP-IDF v4.4.4
+
 ## Hardware Required
 
-This example can be run on any commonly available ESP32 development board.
+This firmware is designed to run on a BitAxe v2+
 
 ## Configure the project
 
@@ -22,13 +24,13 @@ idf.py menuconfig
 ```
 Set following parameters under Example Configuration Options, these will define the stratum server you connect to:
 
-* Set IP version of example to be IPV4 or IPV6.
+* Set `Stratum Address` to the stratum pool domain name. example "solo.ckpool.org"
 
-* Set IPV4 Address in case your chose IP version IPV4 above.
+* Set `Stratum Port` to the stratum pool port. example "3333"
 
-* Set IPV6 Address in case your chose IP version IPV6 above.
+* Set `Stratum username` to the stratum pool username
 
-    Set Port number that represents remote port the example will connect to.
+* Set `Stratum password` to the stratum pool password
 
 Set following parameters under Example Connection Configuration Options:
 
@@ -36,17 +38,9 @@ Set following parameters under Example Connection Configuration Options:
 
 * Set `Wifi Password` to the password for your target SSID.
 
-* Set `Stratum address` to the stratum pool domain name. example "solo.ckpool.org"
-
-* Set `Stratum username` to the stratum pool username
-
-* Set `Stratum password` to the stratum pool password
 
 For more information about the example_connect() method used here, check out https://github.com/espressif/esp-idf/blob/master/examples/protocols/README.md.
 
-```
-#define STRATUM_USERNAME "johnny9.esp"
-```
 
 ## Build and Flash
 

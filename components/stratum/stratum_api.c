@@ -230,12 +230,15 @@ int suggest_difficulty(int socket, uint32_t difficulty)
     sprintf(difficulty_msg, "{\"id\": %d, \"method\": \"mining.suggest_difficulty\", \"params\": [%d]}\n", send_uid++, difficulty);
     ESP_LOGI(TAG, "-> %s", difficulty_msg);
     write(socket, difficulty_msg, strlen(difficulty_msg));
+
+    /* TODO: fix race condition with first mining.notify message
     char * line;
     line = receive_jsonrpc_line(socket);
 
     ESP_LOGI(TAG, "Received result %s", line);
 
     free(line);
+    */
 
     return 1;
 }
@@ -246,16 +249,17 @@ int auth_to_stratum(int socket, const char * username)
     sprintf(authorize_msg, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"x\"]}\n",
             send_uid++, username);
     ESP_LOGI(TAG, "-> %s", authorize_msg);
-   
+
     write(socket, authorize_msg, strlen(authorize_msg));
+    /*
+    // TODO: Parse authorize results
     char * line;
     line = receive_jsonrpc_line(socket);
 
     ESP_LOGI(TAG, "Received result %s", line);
-    
-    // TODO: Parse authorize results
 
     free(line);
+    */
 
     return 1;
 }

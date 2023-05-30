@@ -3,7 +3,6 @@
 #include <limits.h>
 #include "mining.h"
 #include "utils.h"
-#include "../../main/pretty.h"
 #include "mbedtls/sha256.h"
 
 void free_bm_job(bm_job * job)
@@ -63,23 +62,18 @@ bm_job construct_bm_job(mining_notify * params, const char * merkle_root) {
     new_job.ntime = params->ntime;
 
     hex2bin(merkle_root, new_job.merkle_root, 32);
-    hex2bin(params->prev_block_hash, new_job.prev_block_hash, 32);
+    swap_endian_words(params->prev_block_hash, new_job.prev_block_hash);
 
     ////make the midstate hash
     uint8_t midstate_data[64];
 
     //print the header
-    printf("header: %08x%s%s%08x%08x000000000000008000000000000000000000000000000000000000000000000000000000\n", params->version, params->prev_block_hash, merkle_root, params->ntime, params->target);
+    //printf("header: %08x%s%s%08x%08x000000000000008000000000000000000000000000000000000000000000000000000000\n", params->version, params->prev_block_hash, merkle_root, params->ntime, params->target);
 
     //copy 68 bytes header data into midstate (and deal with endianess)
     memcpy(midstate_data, &new_job.version, 4); //copy version
-    swap_endian_words(params->prev_block_hash, midstate_data + 4); //copy prev_block_hash
-    swap_endian_words(merkle_root, midstate_data + 36); //copy merkle_root
-
-
-    printf("midstate_data: ");
-    prettyHex(midstate_data, 64);
-    printf("\n");   
+    memcpy(midstate_data + 4, new_job.prev_block_hash, 32); //copy prev_block_hash
+    memcpy(midstate_data + 36, new_job.merkle_root, 28); //copy merkle_root
 
     midstate_sha256_bin(midstate_data, 64, new_job.midstate); //make the midstate hash
     reverse_bytes(new_job.midstate, 32); //reverse the midstate bytes for the BM job packet
@@ -90,7 +84,12 @@ bm_job construct_bm_job(mining_notify * params, const char * merkle_root) {
 char * extranonce_2_generate(uint32_t extranonce_2, uint32_t length)
 {
     char * extranonce_2_str = malloc(length * 2 + 1);
-    bin2hex((uint8_t *) &extranonce_2, length, extranonce_2_str, length * 2 + 1);
+    memset(extranonce_2_str, '0', length * 2);
+    extranonce_2_str[length * 2] = '\0';
+    bin2hex((uint8_t *) &extranonce_2, sizeof(extranonce_2), extranonce_2_str, length * 2 + 1);
+    if (length > 4) {
+        extranonce_2_str[8] = '0';
+    }
     return extranonce_2_str;
 }
 
@@ -112,27 +111,12 @@ double test_nonce_value(bm_job * job, uint32_t nonce) {
     memcpy(header + 72, &job->target, 4);
     memcpy(header + 76, &nonce, 4);
 
-	unsigned char swapped_header[80];
 	unsigned char hash_buffer[32];
     unsigned char hash_result[32];
 
-    printf("data32: ");
-    prettyHex(header, 80);
-
-    //endian flip the first 80 bytes.
-    //version (4 bytes), prevhash (32 bytes), merkle (32 bytes), time (4 bytes), bits (4 bytes), nonce (4 bytes) = 80 bytes
-	flip80bytes((uint32_t *)swapped_header, header);
-
     //double hash the header
-	mbedtls_sha256(swapped_header, 80, hash_buffer, 0);
+	mbedtls_sha256(header, 80, hash_buffer, 0);
 	mbedtls_sha256(hash_buffer, 32, hash_result, 0);
-
-    printf("hash: ");
-    prettyHex(hash_result, 32);
-    // //check that the last 4 bytes are 0
-	// if (*hash_32 != 0) {
-	// 	return 0.0;
-    // }
 
 	d64 = truediffone;
 	s64 = le256todouble(hash_result);

@@ -2,8 +2,12 @@
 sdkconfig
 sdkconfig.old
 
+# User specific VSCode
+.vscode/*
+
 # Production folder
-build/*
+build/
+**/build/
 !build/config
 build/config/*
 !build/config/kconfig_menus.json
