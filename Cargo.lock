@@ -458,11 +458,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "emc2101-driver"
-version = "0.1.0"
-source = "git+https://github.com/Georges760/emc2101-rs?rev=94cea2a7f2ec8732c06839631ec12def9e8d0847#94cea2a7f2ec8732c06839631ec12def9e8d0847"
+name = "emc2101"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "dbf91498b1ac336ff1085d246b5df5cebc5b7f3225b491e544399fde98d442ae"
 dependencies = [
- "embedded-hal 0.2.7",
+ "embedded-hal-async",
+ "fugit",
+ "maybe-async-cfg",
 ]
 
 [[package]]
@@ -564,12 +567,13 @@ dependencies = [
  "embassy-time 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
  "embedded-io 0.4.0",
  "embedded-svc",
- "emc2101-driver",
+ "emc2101",
  "esp-backtrace",
  "esp-println",
  "esp-wifi",
  "esp32s3-hal",
  "fugit",
+ "log",
  "static_cell",
 ]
 
@@ -580,6 +584,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "af6a511d37dba5fb8f01bf5485bc619a1a1959e1aaf666a7597df8fe615a0816"
 dependencies = [
  "critical-section",
+ "log",
 ]
 
 [[package]]
@@ -597,7 +602,7 @@ dependencies = [
 [[package]]
 name = "esp-wifi"
 version = "0.1.0"
-source = "git+https://github.com/esp-rs/esp-wifi?rev=c446177984b82b5e1658d6b24318e7214460ded8#c446177984b82b5e1658d6b24318e7214460ded8"
+source = "git+https://github.com/esp-rs/esp-wifi?rev=c4461779#c446177984b82b5e1658d6b24318e7214460ded8"
 dependencies = [
  "atomic-polyfill 1.0.2",
  "critical-section",
@@ -624,7 +629,7 @@ dependencies = [
 [[package]]
 name = "esp-wifi-sys"
 version = "0.1.0"
-source = "git+https://github.com/esp-rs/esp-wifi?rev=c446177984b82b5e1658d6b24318e7214460ded8#c446177984b82b5e1658d6b24318e7214460ded8"
+source = "git+https://github.com/esp-rs/esp-wifi?rev=c4461779#c446177984b82b5e1658d6b24318e7214460ded8"
 dependencies = [
  "anyhow",
 ]
@@ -843,18 +848,28 @@ dependencies = [
 
 [[package]]
 name = "log"
-version = "0.4.17"
+version = "0.4.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abb12e687cfb44aa40f41fc3978ef76448f9b6038cad6aef4259d3c095a2382e"
-dependencies = [
- "cfg-if",
-]
+checksum = "518ef76f2f87365916b142844c16d8fefd85039bc5699050210a7778ee1cd1de"
 
 [[package]]
 name = "managed"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ca88d725a0a943b096803bd34e73a4437208b6077654cc4ecb2947a5f91618d"
+
+[[package]]
+name = "maybe-async-cfg"
+version = "0.2.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21fb8fac02158b9b529eb692491895d8459dbac939f3bc6e32159969646ffe55"
+dependencies = [
+ "proc-macro-error",
+ "proc-macro2",
+ "pulldown-cmark",
+ "quote",
+ "syn 1.0.109",
+]
 
 [[package]]
 name = "memchr"
@@ -989,6 +1004,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2b63bdb0cd06f1f4dedf69b254734f9b45af66e4a031e42a7480257d9898b435"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "pulldown-cmark"
+version = "0.9.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "77a1a2f1f0a7ecff9c31abbe177637be0e97a0aef46cf8738ece09327985d998"
+dependencies = [
+ "bitflags 1.3.2",
+ "memchr",
+ "unicase",
 ]
 
 [[package]]
@@ -1179,6 +1205,15 @@ name = "typenum"
 version = "1.16.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "497961ef93d974e23eb6f433eb5fe1b7930b659f06d12dec6fc44a8f554c0bba"
+
+[[package]]
+name = "unicase"
+version = "2.6.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "50f37be617794602aabbeee0be4f259dc1778fabe05e2d67ee8f79326d5cb4f6"
+dependencies = [
+ "version_check",
+]
 
 [[package]]
 name = "unicode-ident"

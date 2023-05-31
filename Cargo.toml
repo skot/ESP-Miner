@@ -31,29 +31,30 @@ embassy-time = { version = "0.1.1", package = "embassy-time", features = [
 ] }
 embedded-io = "0.4.0"
 embedded-svc = { version = "0.24.0", default-features = false, features = [] }
-# emc2101-driver = { version = "0.1.0", path = "../emc2101-driver" }
-emc2101-driver = { version = "0.1.0", git = "https://github.com/Georges760/emc2101-rs", rev = "94cea2a7f2ec8732c06839631ec12def9e8d0847" }
+emc2101 = { version = "0.2.1", default-features = false, features = ["async"] }
 esp-backtrace = { version = "0.7.0", features = [
     "esp32s3",
     "panic-handler",
     "exception-handler",
     "print-uart",
 ] }
-esp32s3-hal = { version = "0.9.0", package = "esp32s3-hal", features = [
-    "embassy",
-    "embassy-time-timg0",
-    "async",
-] }
-esp-println = { version = "0.5.0", features = ["esp32s3"] }
-esp-wifi = { version = "0.1.0", git = "https://github.com/esp-rs/esp-wifi", rev = "c446177984b82b5e1658d6b24318e7214460ded8", features = [
+esp-println = { version = "0.5.0", features = ["esp32s3", "log"] }
+esp-wifi = { version = "0.1.0", git = "https://github.com/esp-rs/esp-wifi", rev = "c4461779", features = [
     "async",
     "embassy-net",
     "embedded-svc",
     "esp32s3",
     "wifi",
 ] }
+esp32s3-hal = { version = "0.9.0", package = "esp32s3-hal", features = [
+    "embassy",
+    "embassy-time-timg0",
+    "async",
+    "rt",
+] }
 fugit = "0.3.6"
 static_cell = "1.0.0"
+log = "0.4.18"
 
 [features]
 default = ["emc2101-tach"]

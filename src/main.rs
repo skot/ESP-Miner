@@ -6,7 +6,7 @@ use embassy_executor::{Executor, _export::StaticCell};
 use embassy_net::{tcp::TcpSocket, Config, Ipv4Address, Stack, StackResources};
 use embassy_time::{Duration, Timer};
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
-use emc2101_driver::{Level, EMC2101};
+use emc2101::{EMC2101Async, Level};
 #[cfg(feature = "generate-clki")]
 use esp32s3_hal::ledc::{
     channel::{self, ChannelIFace},
@@ -19,14 +19,14 @@ use esp32s3_hal::{
     gpio::IO,
     i2c::I2C,
     interrupt,
-    peripherals::{Interrupt, Peripherals},
+    peripherals::{Interrupt, Peripherals, I2C0},
     prelude::*,
     timer::TimerGroup,
     uart::TxRxPins,
     Delay, Priority, Rng, Rtc, Uart,
 };
 use esp_backtrace as _;
-use esp_println::println;
+use esp_println::{logger::init_logger, println};
 use esp_wifi::{
     initialize,
     wifi::{WifiController, WifiDevice, WifiEvent, WifiMode, WifiState},
@@ -49,6 +49,7 @@ static EXECUTOR: StaticCell<Executor> = StaticCell::new();
 
 #[entry]
 fn main() -> ! {
+    init_logger(log::LevelFilter::Info);
     println!("Init!");
     let peripherals = Peripherals::take();
     let mut system = peripherals.SYSTEM.split();
@@ -158,43 +159,7 @@ fn main() -> ! {
         &mut system.peripheral_clock_control,
         &clocks,
     );
-    /* As of today embedded-hal-async traits are not yet available for I2C */
-    /* see https://github.com/esp-rs/esp-hal/issues/70 */
-    /* So cannot drive I2C slaves asynchronously for now... */
-    /* This give me time to implement async in emc2101 driver too */
-
-    let mut emc2101 = EMC2101::new(i2c, emc2101_driver::SENSOR_ADDRESS).unwrap();
-    /* Noctua PWM fan have a PWM target frequency of 25kHz, acceptable range 21kHz to 28kHz */
-    /* The signal is not inverted, 100% PWM duty cycle (= 5V DC) results in maximum fan speed. */
-    /* See https://noctua.at/pub/media/wysiwyg/Noctua_PWM_specifications_white_paper.pdf */
-    emc2101.set_fan_pwm(25_000, false).unwrap();
-    #[cfg(feature = "emc2101-tach")]
-    emc2101.enable_tach_input().unwrap();
-    #[cfg(feature = "emc2101-alert")]
-    emc2101.enable_alert_output().unwrap();
-    let lvl1 = Level {
-        temp: 50,
-        percent: 20,
-    };
-    let lvl2 = Level {
-        temp: 70,
-        percent: 50,
-    };
-    let lvl3 = Level {
-        temp: 80,
-        percent: 70,
-    };
-    let lvl4 = Level {
-        temp: 90,
-        percent: 85,
-    };
-    let lvl5 = Level {
-        temp: 100,
-        percent: 100,
-    };
-    emc2101
-        .set_fan_lut(&[lvl1, lvl2, lvl3, lvl4, lvl5], 3)
-        .unwrap();
+    esp32s3_hal::interrupt::enable(Interrupt::I2C_EXT0, Priority::Priority1).unwrap();
 
     let wifi_config = Config::Dhcp(Default::default());
     let wifi_seed = 1234; // very random, very secure seed
@@ -212,6 +177,7 @@ fn main() -> ! {
         spawner.spawn(connection(controller)).ok();
         spawner.spawn(net_task(&stack)).ok();
         spawner.spawn(task(&stack)).ok();
+        spawner.spawn(emc2101_task(i2c)).ok();
     });
 }
 
@@ -316,5 +282,51 @@ async fn task(stack: &'static Stack<WifiDevice<'static>>) {
             println!("{}", core::str::from_utf8(&buf[..n]).unwrap());
         }
         Timer::after(Duration::from_millis(3000)).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn emc2101_task(i2c: I2C<'static, I2C0>) {
+    let mut emc2101 = EMC2101Async::new(i2c).await.unwrap();
+    /* Noctua PWM fan have a PWM target frequency of 25kHz, acceptable range 21kHz to 28kHz */
+    /* The signal is not inverted, 100% PWM duty cycle (= 5V DC) results in maximum fan speed. */
+    /* See https://noctua.at/pub/media/wysiwyg/Noctua_PWM_specifications_white_paper.pdf */
+    emc2101.set_fan_pwm(25u32.kHz(), false).await.unwrap();
+    #[cfg(feature = "emc2101-tach")]
+    emc2101.enable_tach_input().await.unwrap();
+    #[cfg(feature = "emc2101-alert")]
+    emc2101.enable_alert_output().await.unwrap();
+    let lvl1 = Level {
+        temp: 50,
+        percent: 20,
+    };
+    let lvl2 = Level {
+        temp: 70,
+        percent: 50,
+    };
+    let lvl3 = Level {
+        temp: 80,
+        percent: 70,
+    };
+    let lvl4 = Level {
+        temp: 90,
+        percent: 85,
+    };
+    let lvl5 = Level {
+        temp: 100,
+        percent: 100,
+    };
+    emc2101
+        .set_fan_lut(&[lvl1, lvl2, lvl3, lvl4, lvl5], 3)
+        .await
+        .unwrap();
+
+    loop {
+        let bm_temp = emc2101.get_temp_external().await.unwrap();
+        println!("BM1397 temperature: {}°C", bm_temp);
+        let fan_rpm = emc2101.get_fan_rpm().await.unwrap();
+        println!("FAN speed: {} rpm", fan_rpm);
+
+        Timer::after(Duration::from_millis(1000)).await;
     }
 }
