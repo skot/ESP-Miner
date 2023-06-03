@@ -25,6 +25,7 @@
 #include "serial.h"
 #include "bm1397.h"
 #include <pthread.h>
+#include <stdint.h>
 
 
 #define PORT CONFIG_STRATUM_PORT
@@ -34,16 +35,13 @@
 
 #define STRATUM_DIFFICULTY CONFIG_STRATUM_DIFFICULTY
 
-#define DEFAULT_JOB_TIMEOUT 20 //ms
-
-
 static const char *TAG = "miner";
 
 TaskHandle_t sysTaskHandle = NULL;
 TaskHandle_t serialTaskHandle = NULL;
 
-static work_queue g_queue;
-static work_queue g_bm_queue;
+static work_queue stratum_queue;
+static work_queue ASIC_jobs_queue;
 
 static char * extranonce_str = NULL;
 static int extranonce_2_len = 0;
@@ -57,7 +55,7 @@ bm_job ** active_jobs;
 uint8_t * valid_jobs;
 pthread_mutex_t valid_jobs_lock;
 
-static void AsicTask(void * pvParameters)
+static void ASIC_task(void * pvParameters)
 {
     init_serial();
 
@@ -89,7 +87,7 @@ static void AsicTask(void * pvParameters)
 
     uint32_t prev_nonce = 0;
     while (1) {
-        bm_job * next_bm_job = (bm_job *) queue_dequeue(&g_bm_queue);
+        bm_job * next_bm_job = (bm_job *) queue_dequeue(&ASIC_jobs_queue);
         struct job_packet job;
         // max job number is 128
         id = (id + 4) % 128;
@@ -114,63 +112,65 @@ static void AsicTask(void * pvParameters)
         send_work(&job); //send the job to the ASIC
 
         //wait for a response
-        int received = serial_rx(buf, 9, DEFAULT_JOB_TIMEOUT); //TODO: this timeout should be 2^32/hashrate
+        int received = serial_rx(buf, 9, BM1397_FULLSCAN_MS); //TODO: this timeout should be 2^32/hashrate
 
         if (received < 0) {
             ESP_LOGI(TAG, "Error in serial RX");
             continue;
+        } else if(received == 0){
+            // Didn't find a solution, restart and try again
+            continue;
         }
-        if (received == 0) {
+        
+        if(received != 9 || buf[0] != 0xAA || buf[1] != 0x55){
+            ESP_LOGI(TAG, "Serial RX invalid %i", received);
+            ESP_LOG_BUFFER_HEX(TAG, buf, received);
             continue;
         }
 
         uint8_t nonce_found = 0;
         uint32_t first_nonce = 0;
-        for (int i = 0; i <= received - 9; i++)
+
+        struct nonce_response nonce;
+        memcpy((void *) &nonce, buf, sizeof(struct nonce_response));
+
+        if (valid_jobs[nonce.job_id] == 0) {
+            ESP_LOGI(TAG, "Invalid job nonce found");
+        }
+
+        //print_hex((uint8_t *) &nonce.nonce, 4, 4, "nonce: ");
+        if (nonce_found == 0) {
+            first_nonce = nonce.nonce;
+            nonce_found = 1;
+        } else if (nonce.nonce == first_nonce) {
+            // stop if we've already seen this nonce
+            break;
+        }
+
+        if (nonce.nonce == prev_nonce) {
+            continue;
+        } else {
+            prev_nonce = nonce.nonce;
+        }
+
+        // check the nonce difficulty
+        double nonce_diff = test_nonce_value(active_jobs[nonce.job_id], nonce.nonce);
+
+        ESP_LOGI(TAG, "Nonce difficulty %.2f of %d.", nonce_diff, active_jobs[nonce.job_id]->pool_diff);
+
+        if (nonce_diff > active_jobs[nonce.job_id]->pool_diff)
         {
-            if (buf[i] == 0xAA && buf[i + 1] == 0x55) {
-                struct nonce_response nonce;
-                memcpy((void *) &nonce, buf + i, sizeof(struct nonce_response));
-
-                if (valid_jobs[nonce.job_id] == 0) {
-                    ESP_LOGI(TAG, "Invalid job nonce found");
-                }
-
-                //print_hex((uint8_t *) &nonce.nonce, 4, 4, "nonce: ");
-                if (nonce_found == 0) {
-                    first_nonce = nonce.nonce;
-                    nonce_found = 1;
-                } else if (nonce.nonce == first_nonce) {
-                    // stop if we've already seen this nonce
-                    break;
-                }
-
-                if (nonce.nonce == prev_nonce) {
-                    continue;
-                } else {
-                    prev_nonce = nonce.nonce;
-                }
-
-                // check the nonce difficulty
-                double nonce_diff = test_nonce_value(active_jobs[nonce.job_id], nonce.nonce);
-
-                ESP_LOGI(TAG, "Nonce difficulty %.2f of %d", nonce_diff, active_jobs[nonce.job_id]->pool_diff);
-
-                if (nonce_diff > active_jobs[nonce.job_id]->pool_diff)
-                {
-                    //print_hex((uint8_t *)&job, sizeof(struct job_packet), sizeof(struct job_packet), "job: ");
-                    submit_share(sock, STRATUM_USER, active_jobs[nonce.job_id]->jobid, active_jobs[nonce.job_id]->ntime,
-                                 active_jobs[nonce.job_id]->extranonce2, nonce.nonce);
-                }
-            }
+            //print_hex((uint8_t *)&job, sizeof(struct job_packet), sizeof(struct job_packet), "job: ");
+            submit_share(sock, STRATUM_USER, active_jobs[nonce.job_id]->jobid, active_jobs[nonce.job_id]->ntime,
+                            active_jobs[nonce.job_id]->extranonce2, nonce.nonce);
         }
     }
 }
 
-static void mining_task(void * pvParameters)
+static void create_jobs_task(void * pvParameters)
 {
     while (1) {
-        char * next_notify_json_str = (char *) queue_dequeue(&g_queue);
+        char * next_notify_json_str = (char *) queue_dequeue(&stratum_queue);
         ESP_LOGI(TAG, "New Work Dequeued");
         uint32_t free_heap_size = esp_get_free_heap_size();
         ESP_LOGI(TAG, "miner heap free size: %u bytes", free_heap_size);
@@ -203,7 +203,7 @@ static void mining_task(void * pvParameters)
             queued_next_job->extranonce2 = strdup(extranonce_2_str);
             queued_next_job->jobid = strdup(params.job_id);
 
-            queue_enqueue(&g_bm_queue, queued_next_job);
+            queue_enqueue(&ASIC_jobs_queue, queued_next_job);
 
             free(coinbase_tx);
             free(merkle_root);
@@ -213,7 +213,7 @@ static void mining_task(void * pvParameters)
 
         if (abandon_work == 1) {
             abandon_work = 0;
-            queue_clear(&g_bm_queue);
+            queue_clear(&ASIC_jobs_queue);
         }
 
         free_mining_notify(params);
@@ -230,7 +230,7 @@ void dns_found_cb(const char * name, const ip_addr_t * ipaddr, void * callback_a
     bDNSFound = true;
 }
 
-static void admin_task(void * pvParameters)
+static void stratum_task(void * pvParameters)
 {
     initialize_stratum_buffer();
     char host_ip[20];
@@ -290,27 +290,27 @@ static void admin_task(void * pvParameters)
         while (1)
         {
             char * line = receive_jsonrpc_line(sock);
-            ESP_LOGI(TAG, "%s", line); //debug incoming stratum messages
+            //ESP_LOGI(TAG, "%s", line); //debug incoming stratum messages
 
             stratum_method method = parse_stratum_method(line);
             if (method == MINING_NOTIFY) {
-                if (should_abandon_work(line) && g_queue.count > 0) {
+                if (should_abandon_work(line) && stratum_queue.count > 0) {
                     ESP_LOGI(TAG, "Should abandon work, clearing queues");
                     abandon_work = 1;
-                    queue_clear(&g_queue);
+                    queue_clear(&stratum_queue);
 
                     pthread_mutex_lock(&valid_jobs_lock);
-                    queue_clear(&g_bm_queue);
+                    queue_clear(&ASIC_jobs_queue);
                     for (int i = 0; i < 128; i = i + 4) {
                         valid_jobs[i] = 0;
                     }
                     pthread_mutex_unlock(&valid_jobs_lock);
                 }
-                if (g_queue.count == QUEUE_SIZE) {
-                    char * next_notify_json_str = (char *) queue_dequeue(&g_queue);
+                if (stratum_queue.count == QUEUE_SIZE) {
+                    char * next_notify_json_str = (char *) queue_dequeue(&stratum_queue);
                     free(next_notify_json_str);
                 }
-                queue_enqueue(&g_queue, line);
+                queue_enqueue(&stratum_queue, line);
             } else if (method == MINING_SET_DIFFICULTY) {
                 stratum_difficulty = parse_mining_set_difficulty_message(line);
                 ESP_LOGI(TAG, "Set stratum difficulty: %d", stratum_difficulty);
@@ -347,10 +347,10 @@ void app_main(void)
      */
     ESP_ERROR_CHECK(example_connect());
 
-    queue_init(&g_queue);
-    queue_init(&g_bm_queue);
+    queue_init(&stratum_queue);
+    queue_init(&ASIC_jobs_queue);
 
-    xTaskCreate(admin_task, "stratum admin", 8192, NULL, 15, NULL);
-    xTaskCreate(mining_task, "stratum miner", 8192, NULL, 10, NULL);
-    xTaskCreate(AsicTask, "asic", 8192, NULL, 10, &serialTaskHandle);
+    xTaskCreate(stratum_task, "stratum admin", 8192, NULL, 15, NULL);
+    xTaskCreate(create_jobs_task, "stratum miner", 8192, NULL, 10, NULL);
+    xTaskCreate(ASIC_task, "asic", 8192, NULL, 10, &serialTaskHandle);
 }
