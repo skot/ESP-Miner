@@ -89,6 +89,7 @@ static void ASIC_task(void * pvParameters)
 
     uint32_t prev_nonce = 0;
 
+    ESP_LOGI(TAG, "Mining!");
     set_max_baud();
     
     while (1) {
@@ -158,22 +159,14 @@ static void ASIC_task(void * pvParameters)
             prev_nonce = nonce.nonce;
         }
 
-        // If the pool diff is a power of 2, the ASIC won't return nonces lower than the diff
-        //  hence we can skip all the checking
-        if(active_jobs[nonce.job_id]->pool_diff_pow2){
-            submit_share(sock, STRATUM_USER, active_jobs[nonce.job_id]->jobid, active_jobs[nonce.job_id]->ntime,
-                            active_jobs[nonce.job_id]->extranonce2, nonce.nonce);
-            notify_system_submitted_share();
-            continue;
-        }
-
         // check the nonce difficulty
         double nonce_diff = test_nonce_value(active_jobs[nonce.job_id], nonce.nonce);
 
         ESP_LOGI(TAG, "Nonce difficulty %.2f of %d.", nonce_diff, active_jobs[nonce.job_id]->pool_diff);
-
+        
         if (nonce_diff > active_jobs[nonce.job_id]->pool_diff)
         {
+            notify_system_found_nonce(active_jobs[nonce.job_id]->pool_diff);
             //print_hex((uint8_t *)&job, sizeof(struct job_packet), sizeof(struct job_packet), "job: ");
             submit_share(sock, STRATUM_USER, active_jobs[nonce.job_id]->jobid, active_jobs[nonce.job_id]->ntime,
                             active_jobs[nonce.job_id]->extranonce2, nonce.nonce);
@@ -207,8 +200,6 @@ static void create_jobs_task(void * pvParameters)
             bm_job next_job = construct_bm_job(&params, merkle_root);
 
             next_job.pool_diff = stratum_difficulty; //each job is tied to the _current_ difficulty
-            // Check if diff is a power of 2, we can skip stuff later if it is.
-            next_job.pool_diff_pow2 = (stratum_difficulty != 0 && (stratum_difficulty & (stratum_difficulty - 1)) == 0);
 
             bm_job * queued_next_job = malloc(sizeof(bm_job));
             memcpy(queued_next_job, &next_job, sizeof(bm_job));

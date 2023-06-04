@@ -166,7 +166,7 @@ void set_job_difficulty_mask(int difficulty){
     // The mask must be a power of 2 so there are no holes
     // Correct:  {0b00000000, 0b00000000, 0b11111111, 0b11111111}
     // Incorrect: {0b00000000, 0b00000000, 0b11100111, 0b11111111}
-    difficulty = largestPowerOfTwo(difficulty) -1;
+    difficulty = largestPowerOfTwo(difficulty) -1; // (difficulty - 1) if it is a pow 2 then step down to second largest for more hashrate sampling
 
     // convert difficulty into char array
     // Ex: 256 = {0b00000000, 0b00000000, 0b00000000, 0b11111111}, {0x00, 0x00, 0x00, 0xff}
@@ -176,6 +176,7 @@ void set_job_difficulty_mask(int difficulty){
         //The char is read in backwards to the register so we need to reverse them
         //So a mask of 512 looks like 0b00000000 00000000 00000001 1111111
         //and not 0b00000000 00000000 10000000 1111111
+        
         job_difficulty_mask[5 - i] = reverseBits(value);
     }
 
