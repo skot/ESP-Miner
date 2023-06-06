@@ -90,9 +90,11 @@ static void ASIC_task(void * pvParameters)
 
     uint32_t prev_nonce = 0;
 
-    ESP_LOGI(TAG, "Mining!");
-    set_max_baud();
     
+    set_max_baud();
+
+    notify_system_mining_started();
+    ESP_LOGI(TAG, "Mining!");
     while (1) {
         bm_job * next_bm_job = (bm_job *) queue_dequeue(&ASIC_jobs_queue);
         struct job_packet job;
@@ -105,14 +107,15 @@ static void ASIC_task(void * pvParameters)
         memcpy(&job.ntime, &next_bm_job->ntime, 4);
         memcpy(&job.merkle4, next_bm_job->merkle_root + 28, 4);
         memcpy(job.midstate, next_bm_job->midstate, 32);
-        if (active_jobs[id] != NULL) {
-            free(active_jobs[id]->jobid);
-            free(active_jobs[id]->extranonce2);
-            free(active_jobs[id]);
+        if (active_jobs[job.job_id] != NULL) {
+            free(active_jobs[job.job_id]->jobid);
+            free(active_jobs[job.job_id]->extranonce2);
+            free(active_jobs[job.job_id]);
         }
-        active_jobs[id] = next_bm_job;
+        active_jobs[job.job_id] = next_bm_job;
+   
         pthread_mutex_lock(&valid_jobs_lock);
-        valid_jobs[id] = 1;
+        valid_jobs[job.job_id] = 1;
         pthread_mutex_unlock(&valid_jobs_lock);
 
         clear_serial_buffer();
@@ -173,6 +176,7 @@ static void ASIC_task(void * pvParameters)
                             active_jobs[nonce.job_id]->extranonce2, nonce.nonce);
             
         }
+
     }
 }
 
@@ -331,6 +335,7 @@ static void stratum_task(void * pvParameters)
                     ESP_LOGI(TAG, "Set stratum difficulty: %d", stratum_difficulty);
                     set_job_difficulty_mask(stratum_difficulty);
                 }
+                free(line);
 
             } else if (method == MINING_SET_VERSION_MASK) {
                 version_mask = parse_mining_set_version_mask_message(line);
@@ -346,10 +351,13 @@ static void stratum_task(void * pvParameters)
                 } else {
                     ESP_LOGI(TAG, "message id %d result rejected", parsed_id);
                     notify_system_rejected_share();
-            }
-            } else {
+                }
+                free(line);
+            }  else {
                 free(line);
             }
+               
+            
         }
 
         if (sock != -1)
