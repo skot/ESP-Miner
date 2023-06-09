@@ -23,6 +23,12 @@ void create_jobs_task(void * pvParameters)
         uint32_t extranonce_2 = 0;
         while (extranonce_2 < UINT_MAX && GLOBAL_STATE->abandon_work == 0)
         {
+            // if(GLOBAL_STATE->stratum_queue.count > 0){
+            //     STRATUM_V1_free_mining_notify(mining_notification);
+            //     extranonce_2 = 0;
+            //     mining_notification = (mining_notify *) queue_dequeue(&GLOBAL_STATE->stratum_queue);
+            // }
+
             char * extranonce_2_str = extranonce_2_generate(extranonce_2, GLOBAL_STATE->extranonce_2_len);
 
             

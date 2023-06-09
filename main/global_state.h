@@ -23,9 +23,6 @@ typedef struct  {
     int extranonce_2_len;
     int abandon_work;
 
-    uint8_t * valid_jobs;
-    pthread_mutex_t valid_jobs_lock;
-
     uint32_t stratum_difficulty;
 
     int sock;
