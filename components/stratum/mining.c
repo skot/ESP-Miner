@@ -60,15 +60,13 @@ bm_job construct_bm_job(mining_notify * params, const char * merkle_root) {
     new_job.starting_nonce = 0;
     new_job.target = params->target;
     new_job.ntime = params->ntime;
+    new_job.pool_diff = params->difficulty;
 
     hex2bin(merkle_root, new_job.merkle_root, 32);
     swap_endian_words(params->prev_block_hash, new_job.prev_block_hash);
 
     ////make the midstate hash
     uint8_t midstate_data[64];
-
-    //print the header
-    //printf("header: %08x%s%s%08x%08x000000000000008000000000000000000000000000000000000000000000000000000000\n", params->version, params->prev_block_hash, merkle_root, params->ntime, params->target);
 
     //copy 68 bytes header data into midstate (and deal with endianess)
     memcpy(midstate_data, &new_job.version, 4); //copy version
@@ -102,6 +100,8 @@ static const double truediffone = 2695953529101130949315647634472399133601089873
 double test_nonce_value(bm_job * job, uint32_t nonce) {
 	double d64, s64, ds;
     unsigned char header[80];
+
+    //TODO: use the midstate hash instead of hashing the whole header
 
     //copy data from job to header
     memcpy(header, &job->version, 4);

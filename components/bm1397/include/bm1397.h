@@ -23,6 +23,17 @@
 #define RESPONSE_JOB 0x80
 #define CRC5_MASK 0x1F
 
+static const u_int64_t BM1397_FREQUENCY = CONFIG_BM1397_FREQUENCY;
+static const u_int64_t BM1397_CORE_COUNT = 672;
+static const u_int64_t BM1397_HASHRATE_S = BM1397_FREQUENCY * BM1397_CORE_COUNT * 1000000;
+//2^32
+static const u_int64_t NONCE_SPACE = 4294967296;
+static const double  BM1397_FULLSCAN_MS = ((double)NONCE_SPACE / (double)BM1397_HASHRATE_S) * 1000; 
+
+typedef struct {
+
+} bm1397Module;
+
 typedef enum {
   JOB_PACKET = 0, 
   CMD_PACKET = 1,
@@ -51,14 +62,12 @@ struct __attribute__((__packed__)) nonce_response {
     uint8_t crc;
 };
 
+void BM1397_init(void);
 
-void send_read_address(void);
-void send_init(void);
-void send_work(struct job_packet *job);
-void parse_packet(unsigned char *buf, int len);
-void split_response(unsigned char *buf, int len);
-void reset_BM1397(void);
-void init_BM1397(void);
-
+void BM1397_send_init(void);
+void BM1397_send_work(struct job_packet *job);
+void BM1397_set_job_difficulty_mask(int);
+int BM1397_set_max_baud(void);
+void BM1397_set_default_baud(void);
 
 #endif /* BM1397_H_ */

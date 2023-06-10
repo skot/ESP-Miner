@@ -1,4 +1,5 @@
 #include "work_queue.h"
+#include "esp_log.h"
 
 void queue_init(work_queue * queue) {
     queue->head = 0;
@@ -47,7 +48,25 @@ void queue_clear(work_queue * queue)
 
     while (queue->count > 0)
     {
-        void * next_work = queue->buffer[queue->head];
+        mining_notify * next_work = queue->buffer[queue->head];
+        STRATUM_V1_free_mining_notify(next_work);
+        queue->head = (queue->head + 1) % QUEUE_SIZE;
+        queue->count--;
+    }
+
+    pthread_cond_signal(&queue->not_full);
+    pthread_mutex_unlock(&queue->lock);
+}
+
+void ASIC_jobs_queue_clear(work_queue * queue)
+{
+    pthread_mutex_lock(&queue->lock);
+
+    while (queue->count > 0)
+    {
+        bm_job * next_work = queue->buffer[queue->head];
+        free(next_work->jobid);
+        free(next_work->extranonce2);
         free(next_work);
         queue->head = (queue->head + 1) % QUEUE_SIZE;
         queue->count--;
