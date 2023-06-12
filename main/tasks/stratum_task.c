@@ -42,11 +42,16 @@ void stratum_task(void * pvParameters)
     int addr_family = 0;
     int ip_protocol = 0;
 
-    //get ip address from hostname
-    IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
-    ESP_LOGI(TAG, "Get IP for URL: %s\n", STRATUM_URL);
-    dns_gethostbyname(STRATUM_URL, &ip_Addr, dns_found_cb, NULL);
-    while (!bDNSFound);
+    //check to see if the STRATUM_URL is an ip address already
+    if (inet_pton(AF_INET, STRATUM_URL, &ip_Addr) == 1) {
+        bDNSFound = true;
+    } else {
+        //it's a hostname. Lookup the ip address.
+        IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
+        ESP_LOGI(TAG, "Get IP for URL: %s\n", STRATUM_URL);
+        dns_gethostbyname(STRATUM_URL, &ip_Addr, dns_found_cb, NULL);
+        while (!bDNSFound);
+    }
 
     //make IP address string from ip_Addr
     snprintf(host_ip, sizeof(host_ip), "%d.%d.%d.%d",
@@ -113,7 +118,7 @@ void stratum_task(void * pvParameters)
                     }
                     pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
                 }
-                if ( GLOBAL_STATE->stratum_queue.count == QUEUE_SIZE) {
+                if (GLOBAL_STATE->stratum_queue.count == QUEUE_SIZE) {
                     mining_notify * next_notify_json_str = (mining_notify *) queue_dequeue(&GLOBAL_STATE->stratum_queue);
                     STRATUM_V1_free_mining_notify(next_notify_json_str);
                 }
@@ -127,12 +132,12 @@ void stratum_task(void * pvParameters)
                     ESP_LOGI(TAG, "Set stratum difficulty: %d", SYSTEM_TASK_MODULE.stratum_difficulty);
                 }
 
-            } else if (stratum_api_v1_message.method == MINING_SET_VERSION_MASK) {
+            } else if (stratum_api_v1_message.method == MINING_SET_VERSION_MASK || stratum_api_v1_message.method == STRATUM_RESULT_VERSION_MASK) {
                 //1fffe000
                 ESP_LOGI(TAG, "Set version mask: %08x", stratum_api_v1_message.version_mask);
+                GLOBAL_STATE->version_mask = stratum_api_v1_message.version_mask;
 
             } else if (stratum_api_v1_message.method == STRATUM_RESULT) {
-
                 if (stratum_api_v1_message.response_success) {
                     ESP_LOGI(TAG, "message result accepted");
                     SYSTEM_notify_accepted_share(&GLOBAL_STATE->SYSTEM_MODULE);
@@ -140,10 +145,7 @@ void stratum_task(void * pvParameters)
                     ESP_LOGE(TAG, "message result rejected");
                     SYSTEM_notify_rejected_share(&GLOBAL_STATE->SYSTEM_MODULE);
                 }
-            }  
-
-          
-
+            }
         }
 
         if (GLOBAL_STATE->sock != -1)

@@ -128,7 +128,6 @@ void STRATUM_V1_parse(StratumApiV1Message* message, const char * stratum_json)
         } else if (strcmp("mining.set_version_mask", method_json->valuestring) == 0) {
             result = MINING_SET_VERSION_MASK;
         }
-        
     } else {
         //parse results
         cJSON * result_json = cJSON_GetObjectItem(json, "result");
@@ -136,15 +135,18 @@ void STRATUM_V1_parse(StratumApiV1Message* message, const char * stratum_json)
 
             result = STRATUM_RESULT;
 
-            
-
             bool response_success = false;
             if (result_json != NULL && cJSON_IsTrue(result_json)) {
                 response_success = true;
             }
 
             message->response_success = response_success;
-            
+        } else {
+            cJSON * mask = cJSON_GetObjectItem(result_json, "version-rolling.mask");
+            if (mask != NULL) {
+                result = STRATUM_RESULT_VERSION_MASK;
+                message->version_mask = strtoul(mask->valuestring, NULL, 16);
+            }
         }
     }
 
@@ -305,11 +307,12 @@ int STRATUM_V1_authenticate(int socket, const char * username)
 /// @param extranonce_2 The hex-encoded value of extra nonce 2.
 /// @param nonce The hex-encoded nonce value to use in the block header.
 void STRATUM_V1_submit_share(int socket, const char * username, const char * jobid,
-                 const char * extranonce_2, const uint32_t ntime, const uint32_t nonce)
+                             const char * extranonce_2, const uint32_t ntime, const uint32_t nonce,
+                             const uint32_t version)
 {
     char submit_msg[BUFFER_SIZE];
-    sprintf(submit_msg, "{\"id\": %d, \"method\": \"mining.submit\", \"params\": [\"%s\", \"%s\", \"%s\", \"%08x\", \"%08x\"]}\n",
-            send_uid++, username, jobid, extranonce_2, ntime, nonce);
+    sprintf(submit_msg, "{\"id\": %d, \"method\": \"mining.submit\", \"params\": [\"%s\", \"%s\", \"%s\", \"%08x\", \"%08x\", \"%08x\"]}\n",
+            send_uid++, username, jobid, extranonce_2, ntime, nonce, version);
     debug_stratum_tx(submit_msg);
     write(socket, submit_msg, strlen(submit_msg));
 

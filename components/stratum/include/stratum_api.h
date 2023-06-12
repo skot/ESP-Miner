@@ -16,7 +16,8 @@ typedef enum {
     MINING_NOTIFY,
     MINING_SET_DIFFICULTY,
     MINING_SET_VERSION_MASK,
-    STRATUM_RESULT
+    STRATUM_RESULT,
+    STRATUM_RESULT_VERSION_MASK
 } stratum_method;
 
 typedef struct {
@@ -27,6 +28,7 @@ typedef struct {
     uint8_t * merkle_branches;
     size_t n_merkle_branches;
     uint32_t version;
+    uint32_t version_mask;
     uint32_t target;
     uint32_t ntime;
     uint32_t difficulty;
@@ -69,7 +71,8 @@ void STRATUM_V1_configure_version_rolling(int socket);
 int STRATUM_V1_suggest_difficulty(int socket, uint32_t difficulty);
 
 void STRATUM_V1_submit_share(int socket, const char * username, const char * jobid,
-                 const char * extranonce_2, const uint32_t ntime, const uint32_t nonce);
+                             const char * extranonce_2, const uint32_t ntime, const uint32_t nonce,
+                             const uint32_t version);
 
 
 #endif // STRATUM_API_H
