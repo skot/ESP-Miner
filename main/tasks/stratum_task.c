@@ -1,6 +1,7 @@
 
 #include "esp_log.h"
-#include "addr_from_stdin.h"
+//#include "addr_from_stdin.h"
+#include "connect.h"
 #include "lwip/dns.h"
 #include "work_queue.h"
 #include "bm1397.h"
@@ -42,11 +43,16 @@ void stratum_task(void * pvParameters)
     int addr_family = 0;
     int ip_protocol = 0;
 
-    //get ip address from hostname
-    IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
-    ESP_LOGI(TAG, "Get IP for URL: %s\n", STRATUM_URL);
-    dns_gethostbyname(STRATUM_URL, &ip_Addr, dns_found_cb, NULL);
-    while (!bDNSFound);
+    //check to see if the STRATUM_URL is an ip address already
+    if (inet_pton(AF_INET, STRATUM_URL, &ip_Addr) == 1) {
+        bDNSFound = true;
+    } else {
+        //it's a hostname. Lookup the ip address.
+        IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
+        ESP_LOGI(TAG, "Get IP for URL: %s\n", STRATUM_URL);
+        dns_gethostbyname(STRATUM_URL, &ip_Addr, dns_found_cb, NULL);
+        while (!bDNSFound);
+    }
 
     //make IP address string from ip_Addr
     snprintf(host_ip, sizeof(host_ip), "%d.%d.%d.%d",
