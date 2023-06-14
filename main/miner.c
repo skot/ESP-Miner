@@ -3,7 +3,8 @@
 #include "esp_log.h"
 #include "nvs_flash.h"
 
-#include "protocol_examples_common.h"
+//#include "protocol_examples_common.h"
+#include "connect.h"
 
 
 #include "stratum_task.h"
@@ -11,6 +12,8 @@
 #include "create_jobs_task.h"
 #include "global_state.h"
 #include "serial.h"
+#include "asic_result_task.h"
+#include "nvs_config.h"
 
 static GlobalState GLOBAL_STATE = {
     .extranonce_str = NULL,
@@ -22,21 +25,22 @@ static GlobalState GLOBAL_STATE = {
 
 static const char *TAG = "miner";
 
-
 void app_main(void)
 {
     ESP_LOGI(TAG, "Welcome to the bitaxe!");
     ESP_ERROR_CHECK(nvs_flash_init());
-    ESP_ERROR_CHECK(esp_netif_init());
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    //ESP_ERROR_CHECK(esp_netif_init());
+    //ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void*)&GLOBAL_STATE.SYSTEM_MODULE, 10, NULL);
+    xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void*)&GLOBAL_STATE, 3, NULL);
 
-    /* This helper function configures Wi-Fi or Ethernet, as selected in menuconfig.
-     * Read "Establishing Wi-Fi or Ethernet Connection" section in
-     * examples/protocols/README.md for more information about this function.
-     */
-    ESP_ERROR_CHECK(example_connect());
+    ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
+
+    char * wifi_ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, WIFI_SSID);
+    char * wifi_pass = nvs_config_get_string(NVS_CONFIG_WIFI_PASS, WIFI_PASS);
+    wifi_init_sta(wifi_ssid, wifi_pass);
+    free(wifi_ssid);
+    free(wifi_pass);
 
     queue_init(&GLOBAL_STATE.stratum_queue);
     queue_init(&GLOBAL_STATE.ASIC_jobs_queue);
@@ -45,9 +49,12 @@ void app_main(void)
 
     BM1397_init();
 
-    xTaskCreate(stratum_task, "stratum admin", 8192, (void*)&GLOBAL_STATE, 15, NULL);
+    xTaskCreate(stratum_task, "stratum admin", 8192, (void*)&GLOBAL_STATE, 5, NULL);
     xTaskCreate(create_jobs_task, "stratum miner", 8192, (void*)&GLOBAL_STATE, 10, NULL);
+    xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void*)&GLOBAL_STATE, 10, NULL);
     xTaskCreate(ASIC_task, "asic", 8192, (void*)&GLOBAL_STATE, 10, NULL);
+    xTaskCreate(ASIC_result_task, "asic result", 8192, (void*)&GLOBAL_STATE, 15, NULL);
+
 }
 
 
