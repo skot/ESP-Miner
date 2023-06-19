@@ -120,8 +120,10 @@ void BM1397_send_hash_frequency(float frequency) {
 	int i;
 
     //bound the frequency setting
-    if (frequency < 13) {
-        f1 = 13;
+    // You can go as low as 13 but it doesn't really scale or
+    // produce any nonces
+    if (frequency < 50) {
+        f1 = 50;
     } else if (frequency > 500) {
         f1 = 500;
     } else {
@@ -176,7 +178,7 @@ void BM1397_send_hash_frequency(float frequency) {
 
 }
 
-static void _send_init(void) {
+static void _send_init(u_int64_t frequency) {
 
     //send serial data
     vTaskDelay(SLEEP_TIME / portTICK_RATE_MS);
@@ -206,7 +208,7 @@ static void _send_init(void) {
 
     BM1397_set_default_baud();
 
-    BM1397_send_hash_frequency(BM1397_FREQUENCY);
+    BM1397_send_hash_frequency(frequency);
 }
 
 
@@ -234,7 +236,7 @@ static void _send_read_address(void) {
 }
 
 
-void BM1397_init(void) {
+void BM1397_init(u_int64_t frequency) {
     ESP_LOGI(TAG, "Initializing BM1397");
 
     gpio_pad_select_gpio(BM1397_RST_PIN);
@@ -246,7 +248,7 @@ void BM1397_init(void) {
     //send the init command
     _send_read_address();
 
-    _send_init();
+    _send_init(frequency);
 
 
 }
@@ -257,10 +259,11 @@ void BM1397_init(void) {
 
 // Baud formula = 25M/((denominator+1)*8)
 // The denominator is 5 bits found in the misc_control (bits 9-13)
-void BM1397_set_default_baud(void){
+int BM1397_set_default_baud(void){
     //default divider of 26 (11010) for 115,749
     unsigned char baudrate[9] = {0x00, MISC_CONTROL, 0x00, 0x00, 0b01111010, 0b00110001}; //baudrate - misc_control
     _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), baudrate, 6, false);
+    return 115749;
 }
 
 int BM1397_set_max_baud(void){

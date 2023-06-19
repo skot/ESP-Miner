@@ -65,13 +65,13 @@ struct __attribute__((__packed__)) nonce_response {
     uint8_t crc;
 };
 
-void BM1397_init(void);
+void BM1397_init(u_int64_t frequency);
 
 void BM1397_send_init(void);
 void BM1397_send_work(struct job_packet *job);
 void BM1397_set_job_difficulty_mask(int);
 int BM1397_set_max_baud(void);
-void BM1397_set_default_baud(void);
+int BM1397_set_default_baud(void);
 void BM1397_send_hash_frequency(float frequency);
 
 #endif /* BM1397_H_ */
