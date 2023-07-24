@@ -9,7 +9,7 @@
 #include "esp_log.h"
 
 #include "serial.h"
-#include "bm1397.h"
+#include "bm1366.h"
 #include "utils.h"
 #include "crc.h"
 
@@ -25,17 +25,14 @@
 #define TICKET_MASK 0x14
 #define MISC_CONTROL 0x18
 
-static const char *TAG = "bm1397Module";
-
-static uint8_t asic_response_buffer[CHUNK_SIZE];
-static asic_result _asic_result;
+static const char *TAG = "bm1366Module";
 
 /// @brief
 /// @param ftdi
 /// @param header
 /// @param data
 /// @param len
-static void _send_BM1397(uint8_t header, uint8_t * data, uint8_t data_len, bool debug) {
+static void _send_BM1366(uint8_t header, uint8_t * data, uint8_t data_len, bool debug) {
     packet_type_t packet_type = (header & TYPE_JOB) ? JOB_PACKET : CMD_PACKET;
     uint8_t total_length = (packet_type == JOB_PACKET) ? (data_len+6) : (data_len+5);
 
@@ -74,14 +71,14 @@ static void _send_chain_inactive(void) {
 
     unsigned char read_address[2] = {0x00, 0x00};
     //send serial data
-    _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_INACTIVE), read_address, 2, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_INACTIVE), read_address, 2, false);
 }
 
 static void _set_chip_address(uint8_t chipAddr) {
 
     unsigned char read_address[2] = {chipAddr, 0x00};
     //send serial data
-    _send_BM1397((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, false);
+    _send_BM1366((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, false);
 }
 
 static unsigned char _reverse_bits(unsigned char num) {
@@ -109,7 +106,7 @@ static int _largest_power_of_two(int num) {
 }
 
 // borrowed from cgminer driver-gekko.c calc_gsf_freq()
-void BM1397_send_hash_frequency(float frequency) {
+void BM1366_send_hash_frequency(float frequency) {
 
     unsigned char prefreq1[9] = {0x00, 0x70, 0x0F, 0x0F, 0x0F, 0x00}; //prefreq - pll0_divider
 
@@ -168,11 +165,11 @@ void BM1397_send_hash_frequency(float frequency) {
 
 	for (i = 0; i < 2; i++) {
         vTaskDelay(10 / portTICK_RATE_MS);
-        _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), prefreq1, 6, false);
+        _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), prefreq1, 6, false);
 	}
 	for (i = 0; i < 2; i++) {
         vTaskDelay(10 / portTICK_RATE_MS);
-        _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), freqbuf, 6, false);
+        _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), freqbuf, 6, false);
 	}
 
     vTaskDelay(10 / portTICK_RATE_MS);
@@ -190,40 +187,40 @@ static void _send_init(u_int64_t frequency) {
     _set_chip_address(0x00);
 
     unsigned char init[6] = {0x00, CLOCK_ORDER_CONTROL_0, 0x00, 0x00, 0x00, 0x00}; //init1 - clock_order_control0
-    _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), init, 6, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), init, 6, false);
 
     unsigned char init2[6] = {0x00, CLOCK_ORDER_CONTROL_1, 0x00, 0x00, 0x00, 0x00}; //init2 - clock_order_control1
-    _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), init2, 6, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), init2, 6, false);
 
     unsigned char init3[9] = {0x00, ORDERED_CLOCK_ENABLE, 0x00, 0x00, 0x00, 0x01}; //init3 - ordered_clock_enable
-    _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), init3, 6, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), init3, 6, false);
 
     unsigned char init4[9] = {0x00, CORE_REGISTER_CONTROL, 0x80, 0x00, 0x80, 0x74}; //init4 - init_4_?
-    _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), init4, 6, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), init4, 6, false);
 
-    BM1397_set_job_difficulty_mask(256);
+    BM1366_set_job_difficulty_mask(256);
 
     unsigned char init5[9] = {0x00, PLL3_PARAMETER, 0xC0, 0x70, 0x01, 0x11}; //init5 - pll3_parameter
-    _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), init5, 6, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), init5, 6, false);
 
     unsigned char init6[9] = {0x00, FAST_UART_CONFIGURATION, 0x06, 0x00, 0x00, 0x0F}; //init6 - fast_uart_configuration
-    _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), init6, 6, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), init6, 6, false);
 
-    BM1397_set_default_baud();
+    BM1366_set_default_baud();
 
-    BM1397_send_hash_frequency(frequency);
+    BM1366_send_hash_frequency(frequency);
 }
 
 
-//reset the BM1397 via the RTS line
+//reset the BM1366 via the RTS line
 static void _reset(void) {
-    gpio_set_level(BM1397_RST_PIN, 0);
+    gpio_set_level(BM1366_RST_PIN, 0);
 
     //delay for 100ms
     vTaskDelay(100 / portTICK_RATE_MS);
 
     //set the gpio pin high
-    gpio_set_level(BM1397_RST_PIN, 1);
+    gpio_set_level(BM1366_RST_PIN, 1);
 
     //delay for 100ms
     vTaskDelay(100 / portTICK_RATE_MS);
@@ -235,19 +232,17 @@ static void _send_read_address(void) {
 
     unsigned char read_address[2] = {0x00, 0x00};
     //send serial data
-    _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_READ), read_address, 2, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_READ), read_address, 2, false);
 }
 
 
-void BM1397_init(u_int64_t frequency) {
-    ESP_LOGI(TAG, "Initializing BM1397");
+void BM1366_init(u_int64_t frequency) {
+    ESP_LOGI(TAG, "Initializing BM1366");
 
-    memset(asic_response_buffer, 0, 1024);
+    gpio_pad_select_gpio(BM1366_RST_PIN);
+    gpio_set_direction(BM1366_RST_PIN, GPIO_MODE_OUTPUT);
 
-    gpio_pad_select_gpio(BM1397_RST_PIN);
-    gpio_set_direction(BM1397_RST_PIN, GPIO_MODE_OUTPUT);
-
-    //reset the bm1397
+    //reset the bm1366
     _reset();
 
     //send the init command
@@ -264,22 +259,23 @@ void BM1397_init(u_int64_t frequency) {
 
 // Baud formula = 25M/((denominator+1)*8)
 // The denominator is 5 bits found in the misc_control (bits 9-13)
-int BM1397_set_default_baud(void){
+int BM1366_set_default_baud(void){
     //default divider of 26 (11010) for 115,749
     unsigned char baudrate[9] = {0x00, MISC_CONTROL, 0x00, 0x00, 0b01111010, 0b00110001}; //baudrate - misc_control
-    _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), baudrate, 6, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), baudrate, 6, false);
     return 115749;
 }
 
-int BM1397_set_max_baud(void){
+int BM1366_set_max_baud(void){
+
     // divider of 0 for 3,125,000
     ESP_LOGI(TAG, "Setting max baud of 3125000");
     unsigned char baudrate[9] = { 0x00, MISC_CONTROL, 0x00, 0x00, 0b01100000, 0b00110001 };; //baudrate - misc_control
-    _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), baudrate, 6, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), baudrate, 6, false);
     return 3125000;
 }
 
-void BM1397_set_job_difficulty_mask(int difficulty){
+void BM1366_set_job_difficulty_mask(int difficulty){
 
     // Default mask of 256 diff
     unsigned char job_difficulty_mask[9] = {0x00, TICKET_MASK, 0b00000000, 0b00000000, 0b00000000, 0b11111111};
@@ -303,45 +299,16 @@ void BM1397_set_job_difficulty_mask(int difficulty){
 
     ESP_LOGI(TAG, "Setting job ASIC mask to %d", difficulty);
 
-    _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), job_difficulty_mask, 6, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), job_difficulty_mask, 6, false);
 }
 
 
 
 
-void BM1397_send_work(job_packet *job) {
-    _send_BM1397((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t*)job, sizeof(job_packet), false);
+void BM1366_send_work(job_packet *job) {
+    _send_BM1366((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t*)job, sizeof(job_packet), false);
 }
 
 
-
-
-asic_result * BM1397_receive_work(void){
-
-
-        //wait for a response, wait time is pretty arbitrary
-        int received = SERIAL_rx(asic_response_buffer, 9, 60000);
-
-        if (received < 0) {
-            ESP_LOGI(TAG, "Error in serial RX");
-            return NULL;
-        } else if(received == 0){
-            // Didn't find a solution, restart and try again
-            return NULL;
-        }
-
-        if(received != 9 || asic_response_buffer[0] != 0xAA || asic_response_buffer[1] != 0x55){
-            ESP_LOGI(TAG, "Serial RX invalid %i", received);
-            ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, received);
-            return NULL;
-        }
-
-
-        memcpy((void *) &_asic_result, asic_response_buffer, sizeof(asic_result));
-
-        return &_asic_result;
-
-
-}
 
 

@@ -30,7 +30,7 @@ void ASIC_task(void * pvParameters)
 
 
 
-    int baud = BM1397_set_max_baud();
+    int baud = (*GLOBAL_STATE->ASIC_FUNCTIONS.set_max_baud)();
     SERIAL_set_baud(baud);
 
     SYSTEM_notify_mining_started(&GLOBAL_STATE->SYSTEM_MODULE);
@@ -41,12 +41,12 @@ void ASIC_task(void * pvParameters)
 
         if(next_bm_job->pool_diff != GLOBAL_STATE->stratum_difficulty){
             ESP_LOGI(TAG, "New difficulty %d", next_bm_job->pool_diff);
-            BM1397_set_job_difficulty_mask(next_bm_job->pool_diff);
+            (*GLOBAL_STATE->ASIC_FUNCTIONS.set_difficulty_mask)(next_bm_job->pool_diff);
             GLOBAL_STATE->stratum_difficulty = next_bm_job->pool_diff;
         }
 
 
-        struct job_packet job;
+        job_packet job;
         // max job number is 128
         // there is still some really weird logic with the job id bits for the asic to sort out
         // so we have it limited to 128 and it has to increment by 4
@@ -79,8 +79,7 @@ void ASIC_task(void * pvParameters)
 
 
 
-
-        BM1397_send_work(&job); //send the job to the ASIC
+        (*GLOBAL_STATE->ASIC_FUNCTIONS.send_work)(&job);  //send the job to the ASIC
 
         //Time to execute the above code is ~0.3ms
         vTaskDelay((BM1397_FULLSCAN_MS - 0.3 ) / portTICK_RATE_MS);

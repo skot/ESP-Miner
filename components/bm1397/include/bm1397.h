@@ -44,7 +44,7 @@ typedef enum {
   CMD_RESP = 1,
 } response_type_t;
 
-struct __attribute__((__packed__)) job_packet {
+typedef struct __attribute__((__packed__))  {
   uint8_t job_id;
   uint8_t num_midstates;
   uint8_t starting_nonce[4];
@@ -55,23 +55,23 @@ struct __attribute__((__packed__)) job_packet {
   uint8_t midstate1[32];
   uint8_t midstate2[32];
   uint8_t midstate3[32];
-};
+} job_packet;
 
-struct __attribute__((__packed__)) nonce_response {
+typedef struct __attribute__((__packed__)) {
     uint8_t preamble[2];
     uint32_t nonce;
     uint8_t midstate_num;
     uint8_t job_id;
     uint8_t crc;
-};
+} asic_result;
 
 void BM1397_init(u_int64_t frequency);
 
-void BM1397_send_init(void);
-void BM1397_send_work(struct job_packet *job);
+void BM1397_send_work(job_packet *job);
 void BM1397_set_job_difficulty_mask(int);
 int BM1397_set_max_baud(void);
 int BM1397_set_default_baud(void);
 void BM1397_send_hash_frequency(float frequency);
+asic_result * BM1397_receive_work(void);
 
 #endif /* BM1397_H_ */

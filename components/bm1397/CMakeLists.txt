@@ -1,5 +1,6 @@
 idf_component_register(
 SRCS 
+    "bm1366.c"
     "bm1397.c" 
     "serial.c"  
     "crc.c"

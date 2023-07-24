@@ -23,6 +23,13 @@ static GlobalState GLOBAL_STATE = {
     .POWER_MANAGEMENT_MODULE = {
         .frequency_multiplier = 1,
         .frequency_value = BM1397_FREQUENCY
+    },
+    .ASIC_FUNCTIONS = {
+        .init = BM1397_init,
+        .receive_work_fn = BM1397_receive_work,
+        .set_max_baud = BM1397_set_max_baud,
+        .set_difficulty_mask = BM1397_set_job_difficulty_mask,
+        .send_work = BM1397_send_work
     }
 };
 
@@ -70,14 +77,14 @@ void app_main(void)
 
     SERIAL_init();
 
-    BM1397_init(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value);
+    (*GLOBAL_STATE.ASIC_FUNCTIONS.init)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value);
 
     //set the startup_done flag
     GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
 
     xTaskCreate(stratum_task, "stratum admin", 8192, (void*)&GLOBAL_STATE, 5, NULL);
     xTaskCreate(create_jobs_task, "stratum miner", 8192, (void*)&GLOBAL_STATE, 10, NULL);
-    xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void*)&GLOBAL_STATE, 10, NULL);
+    //xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void*)&GLOBAL_STATE, 10, NULL);
     xTaskCreate(ASIC_task, "asic", 8192, (void*)&GLOBAL_STATE, 10, NULL);
     xTaskCreate(ASIC_result_task, "asic result", 8192, (void*)&GLOBAL_STATE, 15, NULL);
 
