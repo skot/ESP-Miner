@@ -137,7 +137,7 @@ fn main() -> ! {
     println!("Release BM1397 RST with gpio1 HIGH");
 
     // will be use to init the bm1397 chain
-    let _bm_serial = Uart::new_with_config(
+    let bm_serial = Uart::new_with_config(
         peripherals.UART1,
         None,
         Some(TxRxPins::new_tx_rx(
@@ -148,7 +148,6 @@ fn main() -> ! {
         &mut system.peripheral_clock_control,
     );
     interrupt::enable(Interrupt::UART1, Priority::Priority1).unwrap();
-    /* embedded-hal-async is on its way : https://github.com/esp-rs/esp-hal/pull/510 */
 
     // will be used to control emc2101/ina260/ds44232u
     let i2c = I2C::new(
@@ -178,6 +177,7 @@ fn main() -> ! {
         spawner.spawn(net_task(&stack)).ok();
         spawner.spawn(task(&stack)).ok();
         spawner.spawn(emc2101_task(i2c)).ok();
+        spawner.spawn(bm1397_task(bm_serial)).ok();
     });
 }
 
@@ -328,5 +328,18 @@ async fn emc2101_task(i2c: I2C<'static, I2C0>) {
         println!("FAN speed: {} rpm", fan_rpm);
 
         Timer::after(Duration::from_millis(1000)).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn bm1397_task(mut uart: Uart<'static, UART1>) {
+    loop {
+        embedded_hal_async::serial::Write::write(&mut uart, b"Hello async write!!!\r\n")
+            .await
+            .unwrap();
+        embedded_hal_async::serial::Write::flush(&mut uart)
+            .await
+            .unwrap();
+        Timer::after(Duration::from_millis(1_000)).await;
     }
 }
