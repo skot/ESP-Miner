@@ -19,8 +19,6 @@ void ASIC_task(void * pvParameters)
     GlobalState *GLOBAL_STATE = (GlobalState*) pvParameters;
 
 
-
-
     GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs = malloc(sizeof(bm_job *) * 128);
     GLOBAL_STATE->valid_jobs = malloc(sizeof(uint8_t) * 128);
     for (int i = 0; i < 128; i++) {

@@ -9,8 +9,6 @@
 
 const char * TAG = "asic_result";
 
-
-
 void ASIC_result_task(void * pvParameters)
 {
     GlobalState *GLOBAL_STATE = (GlobalState*) pvParameters;

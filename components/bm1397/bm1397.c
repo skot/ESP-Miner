@@ -262,7 +262,6 @@ void BM1397_init(u_int64_t frequency) {
 
     _send_init(frequency);
 
-
 }
 
 
