@@ -2,30 +2,15 @@
 #define BM1397_H_
 
 #include "driver/gpio.h"
+#include "mining.h"
+#include "common.h"
 
-#define BM1397_RST_PIN  GPIO_NUM_1
-
-
-#define TYPE_JOB 0x20
-#define TYPE_CMD 0x40
-
-#define GROUP_SINGLE 0x00
-#define GROUP_ALL 0x10
-
-#define CMD_JOB 0x01
-
-#define CMD_SETADDRESS 0x00
-#define CMD_WRITE 0x01
-#define CMD_READ 0x02
-#define CMD_INACTIVE 0x03
-
-#define RESPONSE_CMD 0x00
-#define RESPONSE_JOB 0x80
 #define CRC5_MASK 0x1F
 
-static const u_int64_t BM1397_FREQUENCY = CONFIG_BM1397_FREQUENCY;
+
+static const u_int64_t ASIC_FREQUENCY = CONFIG_ASIC_FREQUENCY;
 static const u_int64_t BM1397_CORE_COUNT = 672;
-static const u_int64_t BM1397_HASHRATE_S = BM1397_FREQUENCY * BM1397_CORE_COUNT * 1000000;
+static const u_int64_t BM1397_HASHRATE_S = ASIC_FREQUENCY * BM1397_CORE_COUNT * 1000000;
 //2^32
 static const u_int64_t NONCE_SPACE = 4294967296;
 static const double  BM1397_FULLSCAN_MS = ((double)NONCE_SPACE / (double)BM1397_HASHRATE_S) * 1000;
@@ -57,21 +42,17 @@ typedef struct __attribute__((__packed__))  {
   uint8_t midstate3[32];
 } job_packet;
 
-typedef struct __attribute__((__packed__)) {
-    uint8_t preamble[2];
-    uint32_t nonce;
-    uint8_t midstate_num;
-    uint8_t job_id;
-    uint8_t crc;
-} asic_result;
+
+
+
 
 void BM1397_init(u_int64_t frequency);
 
-void BM1397_send_work(job_packet *job);
+void BM1397_send_work(void *GLOBAL_STATE, bm_job *next_bm_job);
 void BM1397_set_job_difficulty_mask(int);
 int BM1397_set_max_baud(void);
 int BM1397_set_default_baud(void);
 void BM1397_send_hash_frequency(float frequency);
-asic_result * BM1397_receive_work(void);
+task_result * BM1397_proccess_work(void *GLOBAL_STATE);
 
 #endif /* BM1397_H_ */

@@ -1,13 +1,19 @@
 menu "Bitaxe Configuration"
 
-    config BM1397_VOLTAGE
+    config ASIC_MODEL
+        string "ASIC Model"
+        default "BM1397"
+        help
+            BM1397 or BM1366
+
+    config ASIC_VOLTAGE
         int "ASIC Core Voltage (mV)"
         range 1000 1800
         default 1400
         help
-            The core voltage to set the BM1397 ASIC to.
+            The core voltage to set the ASIC to. 1200 for BM1366 or 1400 for BM1397 is typical.
 
-    config BM1397_FREQUENCY
+    config ASIC_FREQUENCY
         int "ASIC Hash Frequency (MHz)"
         range 200 800
         default 250
@@ -19,20 +25,20 @@ menu "Stratum Configuration"
 
     config STRATUM_URL
         string "Stratum Address"
-        default "solo.ckpool.org"
+        default "public-pool.io"
         help
             The example will connect to this Stratum pool address.
 
     config STRATUM_PORT
         int "Stratum Port"
         range 0 65535
-        default 3333
+        default 21496
         help
             The stratum server port to connect to.
 
     config STRATUM_USER
         string "Stratum username"
-        default ""
+        default "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa.bitaxe"
         help
             Stratum user to use with pool
 
