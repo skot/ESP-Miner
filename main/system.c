@@ -34,12 +34,12 @@ void init_system(void) {
     ADC_init();
 
     //DS4432U tests
-    DS4432U_set_vcore(1.4);
+    DS4432U_set_vcore(1.2);
     
     //Fan Tests
     EMC2101_init();
-    EMC2101_set_fan_speed(0.75);
-    vTaskDelay(500 / portTICK_RATE_MS);
+    EMC2101_set_fan_speed(0);
+    vTaskDelay(500 / portTICK_PERIOD_MS);
 
     //oled
     #ifdef USE_OLED
@@ -99,6 +99,6 @@ void SysTask(void *arg) {
 
     while(1){
         get_stats();
-        vTaskDelay(5000 / portTICK_RATE_MS);
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
     }
 }
