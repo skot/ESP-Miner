@@ -4,7 +4,7 @@
 #include "nvs_flash.h"
 
 //#include "protocol_examples_common.h"
-#include "miner.h"
+#include "main.h"
 
 
 #include "stratum_task.h"

@@ -13,7 +13,7 @@
 #include "lwip/sys.h"
 
 #include "connect.h"
-#include "miner.h"
+#include "main.h"
 
 
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK
