@@ -16,13 +16,12 @@
 static const char *TAG = "example";
 
 
-static const char *REST_TAG = "esp-rest";
 #define REST_CHECK(a, str, goto_tag, ...)                                              \
     do                                                                                 \
     {                                                                                  \
         if (!(a))                                                                      \
         {                                                                              \
-            ESP_LOGE(REST_TAG, "%s(%d): " str, __FUNCTION__, __LINE__, ##__VA_ARGS__); \
+            ESP_LOGE(TAG, "%s(%d): " str, __FUNCTION__, __LINE__, ##__VA_ARGS__); \
             goto goto_tag;                                                             \
         }                                                                              \
     } while (0)
@@ -69,82 +68,10 @@ esp_err_t init_fs(void)
     return ESP_OK;
 }
 
-    /* Our URI handler function to be called during GET /uri request */
-esp_err_t get_handler(httpd_req_t *req)
-{
-    /* Send a simple response */
-    const char resp[] = "<html><title>Bitaxe</title><body><h1>Hello From Bitaxe</h1></body></html>";
-    httpd_resp_send(req, resp, strlen(resp));
-    return ESP_OK;
-}
 
-/* Our URI handler function to be called during POST /uri request */
-esp_err_t post_handler(httpd_req_t *req)
-{
-    /* Destination buffer for content of HTTP POST request.
-     * httpd_req_recv() accepts char* only, but content could
-     * as well be any binary data (needs type casting).
-     * In case of string data, null termination will be absent, and
-     * content length would give length of string */
-    char content[100];
 
-    /* Truncate if content length larger than the buffer */
-    size_t recv_size = MIN(req->content_len, sizeof(content));
 
-    int ret = httpd_req_recv(req, content, recv_size);
-    if (ret <= 0) {  /* 0 return value indicates connection closed */
-        /* Check if timeout occurred */
-        if (ret == HTTPD_SOCK_ERR_TIMEOUT) {
-            /* In case of timeout one can choose to retry calling
-             * httpd_req_recv(), but to keep it simple, here we
-             * respond with an HTTP 408 (Request Timeout) error */
-            httpd_resp_send_408(req);
-        }
-        /* In case of error, returning ESP_FAIL will
-         * ensure that the underlying socket is closed */
-        return ESP_FAIL;
-    }
 
-    /* Send a simple response */
-    const char resp[] = "URI POST Response";
-    httpd_resp_send(req, resp, strlen(resp));
-    return ESP_OK;
-}
-
-/* URI handler structure for GET /uri */
-httpd_uri_t uri_get = {
-    .uri      = "/uri",
-    .method   = HTTP_GET,
-    .handler  = get_handler,
-    .user_ctx = NULL
-};
-
-/* URI handler structure for POST /uri */
-httpd_uri_t uri_post = {
-    .uri      = "/uri",
-    .method   = HTTP_POST,
-    .handler  = post_handler,
-    .user_ctx = NULL
-};
-
-/* Function for starting the webserver */
-httpd_handle_t start_webserver(void)
-{
-    /* Generate default configuration */
-    httpd_config_t config = HTTPD_DEFAULT_CONFIG();
-
-    /* Empty handle to esp_http_server */
-    httpd_handle_t server = NULL;
-
-    /* Start the httpd server */
-    if (httpd_start(&server, &config) == ESP_OK) {
-        /* Register URI handlers */
-        httpd_register_uri_handler(server, &uri_get);
-        httpd_register_uri_handler(server, &uri_post);
-    }
-    /* If server failed to start, handle will be NULL */
-    return server;
-}
 
 /* Function for stopping the webserver */
 void stop_webserver(httpd_handle_t server)
@@ -191,7 +118,7 @@ static esp_err_t rest_common_get_handler(httpd_req_t *req)
     }
     int fd = open(filepath, O_RDONLY, 0);
     if (fd == -1) {
-        ESP_LOGE(REST_TAG, "Failed to open file : %s", filepath);
+        ESP_LOGE(TAG, "Failed to open file : %s", filepath);
         /* Respond with 500 Internal Server Error */
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to read existing file");
         return ESP_FAIL;
@@ -205,12 +132,12 @@ static esp_err_t rest_common_get_handler(httpd_req_t *req)
         /* Read file in chunks into the scratch buffer */
         read_bytes = read(fd, chunk, SCRATCH_BUFSIZE);
         if (read_bytes == -1) {
-            ESP_LOGE(REST_TAG, "Failed to read file : %s", filepath);
+            ESP_LOGE(TAG, "Failed to read file : %s", filepath);
         } else if (read_bytes > 0) {
             /* Send the buffer contents as HTTP response chunk */
             if (httpd_resp_send_chunk(req, chunk, read_bytes) != ESP_OK) {
                 close(fd);
-                ESP_LOGE(REST_TAG, "File sending failed!");
+                ESP_LOGE(TAG, "File sending failed!");
                 /* Abort sending file */
                 httpd_resp_sendstr_chunk(req, NULL);
                 /* Respond with 500 Internal Server Error */
@@ -221,54 +148,56 @@ static esp_err_t rest_common_get_handler(httpd_req_t *req)
     } while (read_bytes > 0);
     /* Close file after sending complete */
     close(fd);
-    ESP_LOGI(REST_TAG, "File sending complete");
+    ESP_LOGI(TAG, "File sending complete");
     /* Respond with an empty chunk to signal HTTP response completion */
     httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
 
-/* Simple handler for light brightness control */
-static esp_err_t light_brightness_post_handler(httpd_req_t *req)
-{
-    int total_len = req->content_len;
-    int cur_len = 0;
-    char *buf = ((rest_server_context_t *)(req->user_ctx))->scratch;
-    int received = 0;
-    if (total_len >= SCRATCH_BUFSIZE) {
-        /* Respond with 500 Internal Server Error */
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
-        return ESP_FAIL;
-    }
-    while (cur_len < total_len) {
-        received = httpd_req_recv(req, buf + cur_len, total_len);
-        if (received <= 0) {
-            /* Respond with 500 Internal Server Error */
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to post control value");
-            return ESP_FAIL;
-        }
-        cur_len += received;
-    }
-    buf[total_len] = '\0';
+// /* Simple handler for light brightness control */
+// static esp_err_t light_brightness_post_handler(httpd_req_t *req)
+// {
+//     int total_len = req->content_len;
+//     int cur_len = 0;
+//     char *buf = ((rest_server_context_t *)(req->user_ctx))->scratch;
+//     int received = 0;
+//     if (total_len >= SCRATCH_BUFSIZE) {
+//         /* Respond with 500 Internal Server Error */
+//         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
+//         return ESP_FAIL;
+//     }
+//     while (cur_len < total_len) {
+//         received = httpd_req_recv(req, buf + cur_len, total_len);
+//         if (received <= 0) {
+//             /* Respond with 500 Internal Server Error */
+//             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to post control value");
+//             return ESP_FAIL;
+//         }
+//         cur_len += received;
+//     }
+//     buf[total_len] = '\0';
 
-    cJSON *root = cJSON_Parse(buf);
-    int red = cJSON_GetObjectItem(root, "red")->valueint;
-    int green = cJSON_GetObjectItem(root, "green")->valueint;
-    int blue = cJSON_GetObjectItem(root, "blue")->valueint;
-    ESP_LOGI(REST_TAG, "Light control: red = %d, green = %d, blue = %d", red, green, blue);
-    cJSON_Delete(root);
-    httpd_resp_sendstr(req, "Post control value successfully");
-    return ESP_OK;
-}
+//     cJSON *root = cJSON_Parse(buf);
+//     int red = cJSON_GetObjectItem(root, "red")->valueint;
+//     int green = cJSON_GetObjectItem(root, "green")->valueint;
+//     int blue = cJSON_GetObjectItem(root, "blue")->valueint;
+//     ESP_LOGI(TAG, "Light control: red = %d, green = %d, blue = %d", red, green, blue);
+//     cJSON_Delete(root);
+//     httpd_resp_sendstr(req, "Post control value successfully");
+//     return ESP_OK;
+// }
 
 /* Simple handler for getting system handler */
-static esp_err_t system_info_get_handler(httpd_req_t *req)
+static esp_err_t GET_system_info(httpd_req_t *req)
 {
+
     httpd_resp_set_type(req, "application/json");
     cJSON *root = cJSON_CreateObject();
     esp_chip_info_t chip_info;
     esp_chip_info(&chip_info);
     cJSON_AddStringToObject(root, "version", IDF_VER);
     cJSON_AddNumberToObject(root, "cores", chip_info.cores);
+    cJSON_AddNumberToObject(root, "temp", GLOBAL_STATE.POWER_MANAGEMENT_MODULE.chip_temp);
     const char *sys_info = cJSON_Print(root);
     httpd_resp_sendstr(req, sys_info);
     free((void *)sys_info);
@@ -289,8 +218,10 @@ static esp_err_t temperature_data_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-esp_err_t start_rest_server(const char *base_path)
+esp_err_t start_rest_server(void *pvParameters)
 {
+    const char *base_path = "";
+
     ESP_ERROR_CHECK(init_fs());
 
     REST_CHECK(base_path, "wrong base path", err);
@@ -302,35 +233,35 @@ esp_err_t start_rest_server(const char *base_path)
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
 
-    ESP_LOGI(REST_TAG, "Starting HTTP Server");
+    ESP_LOGI(TAG, "Starting HTTP Server");
     REST_CHECK(httpd_start(&server, &config) == ESP_OK, "Start server failed", err_start);
 
     /* URI handler for fetching system info */
     httpd_uri_t system_info_get_uri = {
-        .uri = "/api/v1/system/info",
+        .uri = "/api/system/info",
         .method = HTTP_GET,
-        .handler = system_info_get_handler,
+        .handler = GET_system_info,
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &system_info_get_uri);
 
     /* URI handler for fetching temperature data */
     httpd_uri_t temperature_data_get_uri = {
-        .uri = "/api/v1/temp/raw",
+        .uri = "/api/temp/raw",
         .method = HTTP_GET,
         .handler = temperature_data_get_handler,
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &temperature_data_get_uri);
 
-    /* URI handler for light brightness control */
-    httpd_uri_t light_brightness_post_uri = {
-        .uri = "/api/v1/light/brightness",
-        .method = HTTP_POST,
-        .handler = light_brightness_post_handler,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &light_brightness_post_uri);
+    // /* URI handler for light brightness control */
+    // httpd_uri_t light_brightness_post_uri = {
+    //     .uri = "/api/v1/light/brightness",
+    //     .method = HTTP_POST,
+    //     .handler = light_brightness_post_handler,
+    //     .user_ctx = rest_context
+    // };
+    // httpd_register_uri_handler(server, &light_brightness_post_uri);
 
     /* URI handler for getting web server files */
     httpd_uri_t common_get_uri = {

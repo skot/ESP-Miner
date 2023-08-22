@@ -1,4 +1,7 @@
 import { Component } from '@angular/core';
+import { Observable } from 'rxjs';
+
+import { SystemService } from './services/system.service';
 
 @Component({
   selector: 'app-root',
@@ -6,5 +9,9 @@ import { Component } from '@angular/core';
   styleUrls: ['./app.component.scss']
 })
 export class AppComponent {
-  title = 'axe-os';
+
+  public info$: Observable<any>;
+  constructor(private systemService: SystemService) {
+    this.info$ = this.systemService.getInfo();
+  }
 }

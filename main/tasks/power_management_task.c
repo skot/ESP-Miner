@@ -38,11 +38,10 @@ static float _fbound(float value, float lower_bound, float upper_bound)
 
 // }
 
-void POWER_MANAGEMENT_task(void * pvParameters){
+void POWER_MANAGEMENT_task(void){
 
-    GlobalState *GLOBAL_STATE = (GlobalState*)pvParameters;
     //bm1397Module * bm1397 = &GLOBAL_STATE->BM1397_MODULE;
-    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+    PowerManagementModule * power_management = &GLOBAL_STATE.POWER_MANAGEMENT_MODULE;
    // _power_init(power_management);
 
     int last_frequency_increase = 0;
