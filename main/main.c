@@ -14,6 +14,7 @@
 #include "serial.h"
 #include "asic_result_task.h"
 #include "nvs_config.h"
+#include "http_server.h"
 
 #define ASIC_MODEL CONFIG_ASIC_MODEL
 
@@ -118,6 +119,8 @@ void app_main(void)
     xTaskCreate(ASIC_task, "asic", 8192, (void*)&GLOBAL_STATE, 10, NULL);
     xTaskCreate(ASIC_result_task, "asic result", 8192, (void*)&GLOBAL_STATE, 15, NULL);
 
+    start_rest_server("");
+
 }
 
 void MINER_set_wifi_status(wifi_status_t status, uint16_t retry_count) {
@@ -129,4 +132,3 @@ void MINER_set_wifi_status(wifi_status_t status, uint16_t retry_count) {
         return;
     }
 }
-
