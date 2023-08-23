@@ -10,5 +10,14 @@ body {
     background-color: #1f2d40;
     border: 1px solid #304562;
     border-radius: 12px;
-    padding: 1.5rem
+    padding: 1.5rem;
+    margin-bottom: 1.5rem;
+
+    h1,
+    h2,
+    h3,
+    h4 {
+        margin-top: 0;
+    }
+
 }

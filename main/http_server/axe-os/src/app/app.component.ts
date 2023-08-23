@@ -11,7 +11,10 @@ import { SystemService } from './services/system.service';
 export class AppComponent {
 
   public info$: Observable<any>;
+  public chartOptions: any;
+
   constructor(private systemService: SystemService) {
     this.info$ = this.systemService.getInfo();
+
   }
 }

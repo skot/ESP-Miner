@@ -19,6 +19,17 @@
 #define ASIC_MODEL CONFIG_ASIC_MODEL
 
 
+static GlobalState GLOBAL_STATE = {
+    .extranonce_str = NULL,
+    .extranonce_2_len = 0,
+    .abandon_work = 0,
+    .version_mask = 0,
+    .POWER_MANAGEMENT_MODULE = {
+        .frequency_multiplier = 1,
+        .frequency_value = ASIC_FREQUENCY
+    }
+};
+
 static const char *TAG = "miner";
 
 void app_main(void)
@@ -103,7 +114,7 @@ void app_main(void)
 
     xTaskCreate(stratum_task, "stratum admin", 8192, (void*)&GLOBAL_STATE, 5, NULL);
     xTaskCreate(create_jobs_task, "stratum miner", 8192, (void*)&GLOBAL_STATE, 10, NULL);
-    xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, NULL, 10, NULL);
+    xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void*)&GLOBAL_STATE, 10, NULL);
     xTaskCreate(ASIC_task, "asic", 8192, (void*)&GLOBAL_STATE, 10, NULL);
     xTaskCreate(ASIC_result_task, "asic result", 8192, (void*)&GLOBAL_STATE, 15, NULL);
 

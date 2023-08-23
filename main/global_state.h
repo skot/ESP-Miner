@@ -51,16 +51,7 @@ typedef struct  {
 } GlobalState;
 
 
-static GlobalState GLOBAL_STATE = {
-    .extranonce_str = NULL,
-    .extranonce_2_len = 0,
-    .abandon_work = 0,
-    .version_mask = 0,
-    .POWER_MANAGEMENT_MODULE = {
-        .frequency_multiplier = 1,
-        .frequency_value = ASIC_FREQUENCY
-    }
-};
+
 
 
 #endif /* GLOBAL_STATE_H_ */
