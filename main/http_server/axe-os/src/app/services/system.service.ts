@@ -1,6 +1,7 @@
 import { HttpClient } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { of } from 'rxjs';
+import { Observable, of } from 'rxjs';
+import { ISystemInfo } from 'src/models/ISystemInfo';
 
 import { environment } from '../../environments/environment';
 
@@ -13,27 +14,35 @@ export class SystemService {
     private httpClient: HttpClient
   ) { }
 
-  public getInfo() {
+  public getInfo(): Observable<ISystemInfo> {
     if (environment.production) {
-      return this.httpClient.get(`/api/system/info`);
+      return this.httpClient.get(`/api/system/info`) as Observable<ISystemInfo>;
     } else {
       return of(
         {
-          "power": 11.640000343322754,
-          "voltage": 5207.5,
-          "current": 2235,
+          "power": 11.670000076293945,
+          "voltage": 5208.75,
+          "current": 2237.5,
           "fanSpeed": 82,
-          "hashRate": 250.09659830025382,
-          "bestDiff": "6.13k",
-          "freeHeap": 199604,
-          "coreVoltage": 1185,
+          "hashRate": 0,
+          "bestDiff": "0",
+          "freeHeap": 200504,
+          "coreVoltage": 1188,
           "ssid": "skimadtrees-secure",
           "wifiStatus": "Connected!",
-          "sharesAccepted": 62,
-          "sharesRejected": 62,
-          "uptimeSeconds": 274
+          "sharesAccepted": 1,
+          "sharesRejected": 0,
+          "uptimeSeconds": 38,
+          "ASICModel": "BM1366",
+          "stratumURL": "192.168.1.242",
+          "stratumPort": 3333,
+          "stratumUser": "bc1q99n3pu025yyu0jlywpmwzalyhm36tg5u37w20d.bitaxe-U1"
         }
       );
     }
+  }
+
+  public restart() {
+    return this.httpClient.post(`/api/system/restart`, {});
   }
 }

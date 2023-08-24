@@ -192,6 +192,13 @@ static esp_err_t rest_common_get_handler(httpd_req_t *req)
 //     return ESP_OK;
 // }
 
+
+static esp_err_t POST_restart(httpd_req_t *req)
+{
+    esp_restart();
+    return ESP_OK;
+}
+
 /* Simple handler for getting system handler */
 static esp_err_t GET_system_info(httpd_req_t *req)
 {
@@ -273,14 +280,14 @@ esp_err_t start_rest_server(void *pvParameters)
     };
     httpd_register_uri_handler(server, &temperature_data_get_uri);
 
-    // /* URI handler for light brightness control */
-    // httpd_uri_t light_brightness_post_uri = {
-    //     .uri = "/api/v1/light/brightness",
-    //     .method = HTTP_POST,
-    //     .handler = light_brightness_post_handler,
-    //     .user_ctx = rest_context
-    // };
-    // httpd_register_uri_handler(server, &light_brightness_post_uri);
+
+    httpd_uri_t system_restart_uri = {
+        .uri = "/api/system/restart",
+        .method = HTTP_POST,
+        .handler = POST_restart,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &system_restart_uri);
 
     /* URI handler for getting web server files */
     httpd_uri_t common_get_uri = {

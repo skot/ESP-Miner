@@ -1,7 +1,4 @@
 import { Component } from '@angular/core';
-import { Observable } from 'rxjs';
-
-import { SystemService } from './services/system.service';
 
 @Component({
   selector: 'app-root',
@@ -9,12 +6,10 @@ import { SystemService } from './services/system.service';
   styleUrls: ['./app.component.scss']
 })
 export class AppComponent {
+  constructor() {
 
-  public info$: Observable<any>;
-  public chartOptions: any;
-
-  constructor(private systemService: SystemService) {
-    this.info$ = this.systemService.getInfo();
 
   }
+
+
 }
