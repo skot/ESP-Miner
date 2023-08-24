@@ -45,4 +45,8 @@ export class SystemService {
   public restart() {
     return this.httpClient.post(`/api/system/restart`, {});
   }
+
+  public updateSystem(update: any) {
+    return this.httpClient.patch(`/api/system`, update);
+  }
 }

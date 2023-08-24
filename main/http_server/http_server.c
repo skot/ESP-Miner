@@ -16,6 +16,7 @@
 #include "esp_timer.h"
 #include "nvs_config.h"
 
+
 static const char *TAG = "http_server";
 
 static GlobalState *GLOBAL_STATE;
@@ -191,6 +192,42 @@ static esp_err_t rest_common_get_handler(httpd_req_t *req)
 //     httpd_resp_sendstr(req, "Post control value successfully");
 //     return ESP_OK;
 // }
+static esp_err_t PATCH_update_settings(httpd_req_t *req)
+{
+    int total_len = req->content_len;
+    int cur_len = 0;
+    char *buf = ((rest_server_context_t *)(req->user_ctx))->scratch;
+    int received = 0;
+    if (total_len >= SCRATCH_BUFSIZE) {
+        /* Respond with 500 Internal Server Error */
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
+        return ESP_FAIL;
+    }
+    while (cur_len < total_len) {
+        received = httpd_req_recv(req, buf + cur_len, total_len);
+        if (received <= 0) {
+            /* Respond with 500 Internal Server Error */
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to post control value");
+            return ESP_FAIL;
+        }
+        cur_len += received;
+    }
+    buf[total_len] = '\0';
+
+    cJSON *root = cJSON_Parse(buf);
+    char *stratumURL = cJSON_GetObjectItem(root, "stratumURL")->valuestring;
+    char *stratumUser = cJSON_GetObjectItem(root, "stratumUser")->valuestring;
+    uint16_t stratumPort = cJSON_GetObjectItem(root, "stratumPort")->valueint;
+
+
+    nvs_config_set_string(NVS_CONFIG_STRATUM_URL, stratumURL);
+    nvs_config_set_string(NVS_CONFIG_STRATUM_USER, stratumUser);
+    nvs_config_set_u16(NVS_CONFIG_STRATUM_PORT, stratumPort);
+
+    cJSON_Delete(root);
+    httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;
+}
 
 
 static esp_err_t POST_restart(httpd_req_t *req)
@@ -230,18 +267,7 @@ static esp_err_t GET_system_info(httpd_req_t *req)
     return ESP_OK;
 }
 
-/* Simple handler for getting temperature data */
-static esp_err_t temperature_data_get_handler(httpd_req_t *req)
-{
-    httpd_resp_set_type(req, "application/json");
-    cJSON *root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "raw", esp_random() % 20);
-    const char *sys_info = cJSON_Print(root);
-    httpd_resp_sendstr(req, sys_info);
-    free((void *)sys_info);
-    cJSON_Delete(root);
-    return ESP_OK;
-}\
+
 
 esp_err_t start_rest_server(void *pvParameters)
 {
@@ -271,15 +297,6 @@ esp_err_t start_rest_server(void *pvParameters)
     };
     httpd_register_uri_handler(server, &system_info_get_uri);
 
-    /* URI handler for fetching temperature data */
-    httpd_uri_t temperature_data_get_uri = {
-        .uri = "/api/temp/raw",
-        .method = HTTP_GET,
-        .handler = temperature_data_get_handler,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &temperature_data_get_uri);
-
 
     httpd_uri_t system_restart_uri = {
         .uri = "/api/system/restart",
@@ -288,6 +305,14 @@ esp_err_t start_rest_server(void *pvParameters)
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &system_restart_uri);
+
+    httpd_uri_t update_system_settings_uri = {
+        .uri = "/api/system",
+        .method = HTTP_PATCH,
+        .handler = PATCH_update_settings,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &update_system_settings_uri);
 
     /* URI handler for getting web server files */
     httpd_uri_t common_get_uri = {

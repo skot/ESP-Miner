@@ -1,5 +1,7 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Component } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { ToastrService } from 'ngx-toastr';
 import { SystemService } from 'src/app/services/system.service';
 
 @Component({
@@ -13,7 +15,8 @@ export class EditComponent {
 
   constructor(
     private fb: FormBuilder,
-    private systemService: SystemService
+    private systemService: SystemService,
+    private toastr: ToastrService
   ) {
     this.systemService.getInfo().subscribe(info => {
       this.form = this.fb.group({
@@ -21,6 +24,17 @@ export class EditComponent {
         stratumPort: [info.stratumPort, [Validators.required]],
         stratumUser: [info.stratumUser, [Validators.required]]
       });
+    });
+  }
+
+  public updateSystem() {
+    this.systemService.updateSystem(this.form.value).subscribe({
+      next: () => {
+        this.toastr.success('Success!', 'Saved.');
+      },
+      error: (err: HttpErrorResponse) => {
+        this.toastr.error('Error.', `Could not save. ${err.message}`);
+      }
     });
   }
 }

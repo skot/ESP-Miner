@@ -53,13 +53,40 @@ button {
     }
 
     &.btn-danger {
-        color: white;
-        background: red;
-        border: 1px solid darkred;
+        color: #121212;
+        background: #F48FB1;
+        border: 1px solid #F48FB1;
 
-
+        &:hover {
+            background: #f16c98;
+            color: #121212;
+            border-color: #f16c98;
+        }
     }
 
+    &.btn-secondary {
+        color: #ffffff;
+        background: #78909C;
+        border: 1px solid #78909C;
+
+        &:hover {
+            background: #69838f;
+            color: #ffffff;
+            border-color: #69838f;
+        }
+    }
+
+    &.btn-warning {
+        color: #121212;
+        background: #FFE082;
+        border: 1px solid #FFE082;
+
+        &:hover {
+            background: #ffd65c;
+            color: #121212;
+            border-color: #ffd65c;
+        }
+    }
 
 
 

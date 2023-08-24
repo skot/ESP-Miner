@@ -66,27 +66,27 @@
                 <table>
                     <tr>
                         <td>Power Consumption:</td>
-                        <td>{{info.power | number: '1.2-2'}}W</td>
+                        <td>{{info.power | number: '1.2-2'}} <small>W</small></td>
 
                     </tr>
                     <tr>
-                        <td>Input Volts:</td>
-                        <td>{{info.voltage/1000 | number: '1.2-2'}}V</td>
+                        <td>Input Voltage:</td>
+                        <td>{{info.voltage | number: '0.0-0'}} <small>mV</small></td>
 
                     </tr>
                     <tr>
-                        <td>Input Amps:</td>
-                        <td>{{info.current/1000 | number: '1.2-2'}}A</td>
+                        <td>Input Current:</td>
+                        <td>{{info.current | number: '0.0-0'}} <small>mA</small></td>
 
                     </tr>
                     <tr>
-                        <td>vCore Millivolts:</td>
-                        <td>{{info.coreVoltage}}mV</td>
+                        <td>Core Voltage:</td>
+                        <td>{{info.coreVoltage}} <small>mV</small></td>
 
                     </tr>
                     <tr>
-                        <td>Fan:</td>
-                        <td>{{info.fanSpeed}}%</td>
+                        <td>Fan Speed:</td>
+                        <td>{{info.fanSpeed}} <small>RPM</small></td>
 
                     </tr>
                 </table>
