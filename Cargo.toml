@@ -25,6 +25,7 @@ embassy-net = { git = "https://github.com/embassy-rs/embassy", rev = "fb27594", 
     "dhcpv4",
     "medium-ethernet",
 ] }
+embassy-sync = { version = "0.2.0" }
 embassy-time = { version = "0.1.1", package = "embassy-time", features = [
     "nightly",
     "tick-hz-1_000_000",
@@ -46,7 +47,7 @@ esp-wifi = { version = "0.1.0", git = "https://github.com/esp-rs/esp-wifi", rev 
     "esp32s3",
     "wifi",
 ] }
-esp32s3-hal = { version = "0.9.0", package = "esp32s3-hal", features = [
+esp32s3-hal = { version = "0.11.0", package = "esp32s3-hal", features = [
     "embassy",
     "embassy-time-timg0",
     "async",

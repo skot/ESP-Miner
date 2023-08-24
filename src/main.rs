@@ -2,8 +2,16 @@
 #![no_main]
 #![feature(type_alias_impl_trait)]
 
-use embassy_executor::{Executor, _export::StaticCell};
-use embassy_net::{tcp::TcpSocket, Config, Ipv4Address, Stack, StackResources};
+use embassy_executor::{Executor, Spawner, _export::StaticCell};
+use embassy_net::{
+    tcp::{TcpReader, TcpSocket, TcpWriter},
+    Config, Ipv4Address, Stack, StackResources,
+};
+use embassy_sync::{
+    blocking_mutex::raw::{CriticalSectionRawMutex, NoopRawMutex},
+    pubsub::{PubSubChannel, Publisher, Subscriber},
+    signal::Signal,
+};
 use embassy_time::{Duration, Timer};
 use embedded_svc::wifi::{ClientConfiguration, Configuration, Wifi};
 use emc2101::{EMC2101Async, Level};
@@ -19,7 +27,7 @@ use esp32s3_hal::{
     gpio::IO,
     i2c::I2C,
     interrupt,
-    peripherals::{Interrupt, Peripherals, I2C0},
+    peripherals::{Interrupt, Peripherals, I2C0, UART1},
     prelude::*,
     timer::TimerGroup,
     uart::TxRxPins,
@@ -173,16 +181,16 @@ fn main() -> ! {
 
     let executor = EXECUTOR.init(Executor::new());
     executor.run(|spawner| {
-        spawner.spawn(connection(controller)).ok();
-        spawner.spawn(net_task(&stack)).ok();
-        spawner.spawn(task(&stack)).ok();
+        spawner.spawn(wifi_task(controller)).ok();
+        spawner.spawn(stack_task(&stack)).ok();
+        spawner.spawn(network_task(&stack)).ok();
         spawner.spawn(emc2101_task(i2c)).ok();
         spawner.spawn(bm1397_task(bm_serial)).ok();
     });
 }
 
 #[embassy_executor::task]
-async fn connection(mut controller: WifiController<'static>) {
+async fn wifi_task(mut controller: WifiController<'static>) {
     println!("start connection task");
     println!("Device capabilities: {:?}", controller.get_capabilities());
     loop {
@@ -218,15 +226,23 @@ async fn connection(mut controller: WifiController<'static>) {
 }
 
 #[embassy_executor::task]
-async fn net_task(stack: &'static Stack<WifiDevice<'static>>) {
+async fn stack_task(stack: &'static Stack<WifiDevice<'static>>) {
     stack.run().await
 }
+#[derive(Clone)]
+struct Sv1Resp {
+    id: u64,
+    data: &'static [u8],
+}
+
+enum TcpState {
+    ErrorMaxRetry,
+}
+
+static TCP_SIGNAL: Signal<CriticalSectionRawMutex, TcpState> = Signal::new();
 
 #[embassy_executor::task]
-async fn task(stack: &'static Stack<WifiDevice<'static>>) {
-    let mut rx_buffer = [0; 4096];
-    let mut tx_buffer = [0; 4096];
-
+async fn network_task(stack: &'static Stack<WifiDevice<'static>>) {
     loop {
         if stack.is_link_up() {
             break;
@@ -246,42 +262,153 @@ async fn task(stack: &'static Stack<WifiDevice<'static>>) {
     loop {
         Timer::after(Duration::from_millis(1_000)).await;
 
+        let mut rx_buffer = [0; 4096];
+        let mut tx_buffer = [0; 4096];
         let mut socket = TcpSocket::new(&stack, &mut rx_buffer, &mut tx_buffer);
 
         socket.set_timeout(Some(embassy_net::SmolDuration::from_secs(10)));
 
-        let remote_endpoint = (Ipv4Address::new(142, 250, 185, 115), 80);
-        println!("connecting...");
+        let remote_endpoint = (Ipv4Address::new(68, 235, 52, 36), 21496);
+        println!("Connecting to public-pool.io...");
         let r = socket.connect(remote_endpoint).await;
         if let Err(e) = r {
             println!("connect error: {:?}", e);
             continue;
         }
         println!("connected!");
+
+        let (socket_rx, socket_tx) = socket.split();
+        let resp_channel = PubSubChannel::<NoopRawMutex, Sv1Resp, 4, 1, 1>::new();
+        let resp_sub = resp_channel.subscriber().unwrap();
+        let resp_pub = resp_channel.publisher().unwrap();
+        let spawner = Spawner::for_current_executor().await;
+        spawner.spawn(stratum_rx_task(socket_rx, resp_pub)).ok();
+        spawner.spawn(stratum_tx_task(socket_tx, resp_sub)).ok();
+
+        TCP_SIGNAL.wait().await;
+
+        Timer::after(Duration::from_millis(3000)).await;
+        // Not sure if getting out of this block will actually kill the spawned tasks?!?
+    }
+
+    #[embassy_executor::task]
+    async fn stratum_tx_task(
+        socket_tx: TcpWriter<'_>,
+        subscriber: Subscriber<'_, NoopRawMutex, Sv1Resp, 4, 1, 1>,
+    ) {
         let mut buf = [0; 1024];
+        let mut id = 0u64;
+        enum Sv1ClientSetupStates {
+            Configure,
+            Connect,
+            Authorize,
+        }
+        let mut state = Sv1ClientSetupStates::Configure;
+        let mut retry = 0u8;
+        // Setup loop
         loop {
+            let s = match state {
+                Sv1ClientSetupStates::Configure => stratum_v1::configure_request(id, &mut buf),
+                Sv1ClientSetupStates::Connect => {
+                    stratum_v1::connect_request(id, "bitaxe-rs", &mut buf)
+                }
+                Sv1ClientSetupStates::Authorize => stratum_v1::authorize_request(
+                    id,
+                    "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa.bitaxe",
+                    "x",
+                    &mut buf,
+                ),
+            };
+            if let Err(e) = s {
+                println!("create request error: {:?}", e);
+                continue;
+            }
+            let s = s.unwrap();
             use embedded_io::asynch::Write;
-            let r = socket
-                .write_all(b"GET / HTTP/1.0\r\nHost: www.mobile-j.de\r\n\r\n")
-                .await;
+            let r = socket_tx.write_all(&buf[..s]).await;
             if let Err(e) = r {
-                println!("write error: {:?}", e);
+                println!("write request error: {:?}", e);
+                retry = retry + 1;
+                if retry > 5 {
+                    TCP_SIGNAL.signal(TcpState::ErrorMaxRetry);
+                }
+                continue;
+            }
+            loop {
+                let resp = subscriber.next_message_pure().await;
+                if resp.id == id {
+                    continue;
+                }
+                let resp = match state {
+                    Sv1ClientSetupStates::Configure => {
+                        stratum_v1::parse_configure_response(&resp.data)
+                    }
+                    Sv1ClientSetupStates::Connect => stratum_v1::parse_connect_response(&resp.data),
+                    Sv1ClientSetupStates::Authorize => {
+                        stratum_v1::parse_authorize_response(&resp.data)
+                    }
+                };
+                if let Err(e) = resp {
+                    println!("parse response error: {:?}", e);
+                    break;
+                }
+                let resp = resp.unwrap();
+                if let Err(e) = resp.result {
+                    println!("response error: {:?}", e);
+                    state = match e.code {
+                        24 => Sv1ClientSetupStates::Authorize, // Unauthorized worker
+                        25 => Sv1ClientSetupStates::Connect,   // Not subscribed
+                        _ => state, // Other/Unknown, Job not found (=stale), Duplicate share, // Low difficulty share
+                    };
+                }
                 break;
             }
-            let n = match socket.read(&mut buf).await {
+            id = id + 1;
+            // everything is fine, change state
+            match state {
+                Sv1ClientSetupStates::Configure => state = Sv1ClientSetupStates::Connect,
+                Sv1ClientSetupStates::Connect => state = Sv1ClientSetupStates::Authorize,
+                Sv1ClientSetupStates::Authorize => break,
+            };
+        }
+        // Mine loop
+        loop {
+            todo!("implement mine sv1 TX loop");
+        }
+    }
+
+    #[embassy_executor::task]
+    async fn stratum_rx_task(
+        socket_rx: TcpReader<'_>,
+        publisher: Publisher<'_, NoopRawMutex, Sv1Resp, 4, 1, 1>,
+    ) {
+        let mut buf = [0; 1024];
+        loop {
+            let n = match socket_rx.read(&mut buf).await {
                 Ok(0) => {
-                    println!("read EOF");
-                    break;
+                    println!("read TCP EOF");
+                    continue;
                 }
                 Ok(n) => n,
                 Err(e) => {
-                    println!("read error: {:?}", e);
-                    break;
+                    println!("read TCP error: {:?}", e);
+                    continue;
                 }
             };
-            println!("{}", core::str::from_utf8(&buf[..n]).unwrap());
+            // println!("{}", core::str::from_utf8(&buf[..n]).unwrap());
+            let resp = stratum_v1::parse_id_response(&buf[..n]);
+            if let Err(e) = resp {
+                println!("parse stratum v1 error: {:?}", e);
+                continue;
+            }
+            match resp.unwrap() {
+                Some(id) => publisher.publish_immediate(Sv1Resp {
+                    id: resp.id,
+                    data: &buf[..n],
+                }),
+                None => todo!("send &buf[..n]"),
+            }
         }
-        Timer::after(Duration::from_millis(3000)).await;
     }
 }
 
@@ -324,8 +451,11 @@ async fn emc2101_task(i2c: I2C<'static, I2C0>) {
     loop {
         let bm_temp = emc2101.get_temp_external().await.unwrap();
         println!("BM1397 temperature: {}°C", bm_temp);
-        let fan_rpm = emc2101.get_fan_rpm().await.unwrap();
-        println!("FAN speed: {} rpm", fan_rpm);
+        #[cfg(feature = "emc2101-tach")]
+        {
+            let fan_rpm = emc2101.get_fan_rpm().await.unwrap();
+            println!("FAN speed: {} rpm", fan_rpm);
+        }
 
         Timer::after(Duration::from_millis(1000)).await;
     }
