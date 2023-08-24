@@ -10,5 +10,8 @@ set(SDKCONFIG "${CMAKE_BINARY_DIR}/sdkconfig")
 set(SDKCONFIG_DEFAULTS "sdkconfig.defaults")
 
 include($ENV{IDF_PATH}/tools/cmake/project.cmake)
+
+
+
 project(esp-miner)
 
