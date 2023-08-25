@@ -77,6 +77,7 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
     }
 }
 
+
 esp_netif_t *wifi_init_softap(void)
 {
     esp_netif_t *esp_netif_ap = esp_netif_create_default_wifi_ap();
@@ -100,6 +101,21 @@ esp_netif_t *wifi_init_softap(void)
 
     return esp_netif_ap;
 }
+
+void toggle_wifi_softap(void){
+    wifi_mode_t mode = WIFI_MODE_NULL;
+    ESP_ERROR_CHECK(esp_wifi_get_mode(&mode));
+
+    if(mode == WIFI_MODE_APSTA){
+        ESP_LOGI(TAG, "ESP_WIFI Access Point Off");
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    }else{
+        ESP_LOGI(TAG, "ESP_WIFI Access Point On");
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+
+    }
+}
+
 
 /* Initialize wifi station */
 esp_netif_t *wifi_init_sta(const char * wifi_ssid, const char * wifi_pass)
@@ -151,13 +167,15 @@ EventBits_t wifi_init(const char * wifi_ssid, const char * wifi_pass) {
 
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
 
-    /* Initialize AP */
-    ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
+        /* Initialize AP */
+    ESP_LOGI(TAG, "ESP_WIFI Access Point On");
     esp_netif_t *esp_netif_ap = wifi_init_softap();
 
     /* Initialize STA */
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     esp_netif_t *esp_netif_sta = wifi_init_sta(wifi_ssid, wifi_pass);
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 
     /* Start WiFi */
     ESP_ERROR_CHECK(esp_wifi_start() );

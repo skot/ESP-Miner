@@ -16,6 +16,7 @@
 #include "nvs_config.h"
 #include "http_server.h"
 #include "esp_netif.h"
+#include "user_input_task.h"
 
 
 
@@ -117,6 +118,7 @@ void app_main(void)
     xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void*)&GLOBAL_STATE, 10, NULL);
     xTaskCreate(ASIC_task, "asic", 8192, (void*)&GLOBAL_STATE, 10, NULL);
     xTaskCreate(ASIC_result_task, "asic result", 8192, (void*)&GLOBAL_STATE, 15, NULL);
+    xTaskCreate(USER_INPUT_task, "user input", 8192, (void*)&GLOBAL_STATE, 5, NULL);
 
     start_rest_server((void*)&GLOBAL_STATE);
 
