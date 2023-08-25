@@ -1,11 +1,11 @@
 :host {
-    display: block;
-    width: 100vw;
     height: 70px;
     background-color: #1f2d40;
     border-bottom: 1px solid #304562;
     position: fixed;
     top: 0;
+    right: 0;
+    left: 0;
 }
 
 .header-text {

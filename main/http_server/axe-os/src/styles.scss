@@ -20,6 +20,8 @@ body {
         margin-top: 0;
     }
 
+    line-break: anywhere;
+
 }
 
 button {
@@ -136,4 +138,24 @@ label {
 
 .mb-2 {
     margin-bottom: 2rem;
+}
+
+.p-fileupload-choose {
+    margin: 0;
+    display: inline-flex;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+    align-items: center;
+    vertical-align: bottom;
+    text-align: center;
+    overflow: hidden;
+    position: relative;
+    padding: 0.5rem 1rem;
+    font-size: 1rem;
+    transition: background-color 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+    border-radius: 3px;
+    color: #212529;
+    background: #64B5F6;
+    border: 1px solid #64B5F6;
 }

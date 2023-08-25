@@ -1,4 +1,4 @@
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpEvent, HttpEventType } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { Observable, of } from 'rxjs';
 import { ISystemInfo } from 'src/models/ISystemInfo';
@@ -49,4 +49,32 @@ export class SystemService {
   public updateSystem(update: any) {
     return this.httpClient.patch(`/api/system`, update);
   }
+
+  public performOTAUpdate(file: File) {
+    const reader = new FileReader();
+
+    reader.onload = (event: any) => {
+      const fileContent = event.target.result;
+
+      return this.httpClient.post(`/api/system/OTA`, fileContent, {
+        reportProgress: true,
+        observe: 'events',
+        responseType: 'text', // Specify the response type
+        headers: {
+          'Content-Type': 'application/octet-stream', // Set the content type
+        },
+      })
+        .subscribe((event: HttpEvent<any>) => {
+          if (event.type === HttpEventType.UploadProgress) {
+            //this.progress = Math.round((event.loaded / event.total) * 100);
+          } else if (event.type === HttpEventType.Response) {
+            // Handle the response here
+            console.log(event.body);
+          }
+        });
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+
 }

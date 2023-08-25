@@ -15,6 +15,9 @@
 #include "asic_result_task.h"
 #include "nvs_config.h"
 #include "http_server.h"
+#include "esp_netif.h"
+
+
 
 #define ASIC_MODEL CONFIG_ASIC_MODEL
 
@@ -64,9 +67,6 @@ void app_main(void)
         exit(EXIT_FAILURE);
     }
 
-
-
-
     ESP_LOGI(TAG, "Welcome to the bitaxe!");
     //wait between 0 and 5 seconds for multiple units
     vTaskDelay(rand() % 5001 / portTICK_PERIOD_MS);
@@ -84,7 +84,7 @@ void app_main(void)
     strncpy(GLOBAL_STATE.SYSTEM_MODULE.ssid, wifi_ssid, 20);
 
     //init and connect to wifi
-    EventBits_t result_bits = wifi_init_sta(wifi_ssid, wifi_pass);
+    EventBits_t result_bits = wifi_init(wifi_ssid, wifi_pass);
 
     if (result_bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Connected to SSID: %s", wifi_ssid);
@@ -119,6 +119,7 @@ void app_main(void)
     xTaskCreate(ASIC_result_task, "asic result", 8192, (void*)&GLOBAL_STATE, 15, NULL);
 
     start_rest_server((void*)&GLOBAL_STATE);
+
 
 }
 

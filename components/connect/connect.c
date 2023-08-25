@@ -8,7 +8,7 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
-
+#include "lwip/lwip_napt.h"
 #include "lwip/err.h"
 #include "lwip/sys.h"
 
@@ -77,23 +77,36 @@ static void event_handler(void* arg, esp_event_base_t event_base, int32_t event_
     }
 }
 
-EventBits_t wifi_init_sta(const char * wifi_ssid, const char * wifi_pass) {
-    s_wifi_event_group = xEventGroupCreate();
+esp_netif_t *wifi_init_softap(void)
+{
+    esp_netif_t *esp_netif_ap = esp_netif_create_default_wifi_ap();
 
-    ESP_ERROR_CHECK(esp_netif_init());
+    wifi_config_t wifi_ap_config = {
+        .ap = {
+            .ssid = "Bitaxe",
+            .ssid_len = strlen("Bitaxe"),
+            .channel = 1,
+            .max_connection = 30,
+            .authmode = WIFI_AUTH_OPEN,
+            .pmf_cfg = {
+                .required = false,
+            },
+        },
+    };
 
-    ESP_ERROR_CHECK(esp_event_loop_create_default());
-    esp_netif_create_default_wifi_sta();
 
-    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config));
 
-    esp_event_handler_instance_t instance_any_id;
-    esp_event_handler_instance_t instance_got_ip;
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, &instance_any_id));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL, &instance_got_ip));
 
-    wifi_config_t wifi_config = {
+    return esp_netif_ap;
+}
+
+/* Initialize wifi station */
+esp_netif_t *wifi_init_sta(const char * wifi_ssid, const char * wifi_pass)
+{
+    esp_netif_t *esp_netif_sta = esp_netif_create_default_wifi_sta();
+
+    wifi_config_t wifi_sta_config = {
         .sta = {
             /* Authmode threshold resets to WPA2 as default if password matches WPA2 standards (pasword len => 8).
              * If you want to connect the device to deprecated WEP/WPA networks, Please set the threshold value
@@ -105,14 +118,50 @@ EventBits_t wifi_init_sta(const char * wifi_ssid, const char * wifi_pass) {
             // .sae_h2e_identifier = EXAMPLE_H2E_IDENTIFIER,
         },
     };
-    strncpy((char *) wifi_config.sta.ssid, wifi_ssid, 31);
-    wifi_config.sta.ssid[31] = '\0';
-    strncpy((char *) wifi_config.sta.password, wifi_pass, 63);
-    wifi_config.sta.password[63] = '\0';
+    strncpy((char *) wifi_sta_config.sta.ssid, wifi_ssid, 31);
+    wifi_sta_config.sta.ssid[31] = '\0';
+    strncpy((char *) wifi_sta_config.sta.password, wifi_pass, 63);
+    wifi_sta_config.sta.password[63] = '\0';
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
-    ESP_ERROR_CHECK(esp_wifi_start());
+
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_sta_config) );
+
+    ESP_LOGI(TAG, "wifi_init_sta finished.");
+
+    return esp_netif_sta;
+}
+
+
+
+EventBits_t wifi_init(const char * wifi_ssid, const char * wifi_pass) {
+    s_wifi_event_group = xEventGroupCreate();
+
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    esp_event_handler_instance_t instance_any_id;
+    esp_event_handler_instance_t instance_got_ip;
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, &instance_any_id));
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL, &instance_got_ip));
+
+
+    /*Initialize WiFi */
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+
+    /* Initialize AP */
+    ESP_LOGI(TAG, "ESP_WIFI_MODE_AP");
+    esp_netif_t *esp_netif_ap = wifi_init_softap();
+
+    /* Initialize STA */
+    ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
+    esp_netif_t *esp_netif_sta = wifi_init_sta(wifi_ssid, wifi_pass);
+
+    /* Start WiFi */
+    ESP_ERROR_CHECK(esp_wifi_start() );
+
 
     ESP_LOGI(TAG, "wifi_init_sta finished.");
 

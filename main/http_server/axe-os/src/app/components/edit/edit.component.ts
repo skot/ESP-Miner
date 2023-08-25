@@ -37,4 +37,12 @@ export class EditComponent {
       }
     });
   }
+
+  handleFileInput(event: any) {
+    const file = event.target?.files.item(0) as File;
+
+    this.systemService.performOTAUpdate(file);
+
+
+  }
 }
