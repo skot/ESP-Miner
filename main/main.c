@@ -87,20 +87,28 @@ void app_main(void)
     start_rest_server((void*)&GLOBAL_STATE);
     EventBits_t result_bits = wifi_connect();
 
-    wifi_softap_off();
-
     if (result_bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Connected to SSID: %s", wifi_ssid);
         strncpy(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, "Connected!", 20);
     } else if (result_bits & WIFI_FAIL_BIT) {
         ESP_LOGE(TAG, "Failed to connect to SSID: %s", wifi_ssid);
         strncpy(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, "Failed to connect", 20);
-        esp_restart(); //this is pretty much fatal, so just restart
+        // User might be trying to configure with AP, just chill here
+        ESP_LOGI(TAG,"Finished, waiting for user input.");
+        while(1){
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+        }
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
         strncpy(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, "unexpected error", 20);
-        esp_restart(); //this is pretty much fatal, so just restart
+        // User might be trying to configure with AP, just chill here
+        ESP_LOGI(TAG,"Finished, waiting for user input.");
+        while(1){
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+        }
     }
+
+    wifi_softap_off();
 
     free(wifi_ssid);
     free(wifi_pass);
