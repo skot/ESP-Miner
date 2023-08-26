@@ -11,6 +11,7 @@ import { AppComponent } from './app.component';
 import { EditComponent } from './components/edit/edit.component';
 import { HeaderComponent } from './components/header/header.component';
 import { HomeComponent } from './components/home/home.component';
+import { LoadingComponent } from './components/loading/loading.component';
 
 const components = [
   AppComponent,
@@ -21,7 +22,8 @@ const components = [
   declarations: [
     ...components,
     EditComponent,
-    HomeComponent
+    HomeComponent,
+    LoadingComponent
   ],
   imports: [
     BrowserModule,

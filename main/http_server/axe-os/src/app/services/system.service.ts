@@ -1,7 +1,7 @@
 import { HttpClient, HttpEvent } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { ToastrService } from 'ngx-toastr';
-import { Observable, of } from 'rxjs';
+import { delay, Observable, of } from 'rxjs';
 import { ISystemInfo } from 'src/models/ISystemInfo';
 
 import { environment } from '../../environments/environment';
@@ -41,7 +41,7 @@ export class SystemService {
           "stratumPort": 3333,
           "stratumUser": "bc1q99n3pu025yyu0jlywpmwzalyhm36tg5u37w20d.bitaxe-U1"
         }
-      );
+      ).pipe(delay(1000));
     }
   }
 
