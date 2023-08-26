@@ -86,11 +86,6 @@ esp_err_t init_fs(void)
     return ESP_OK;
 }
 
-
-
-
-
-
 /* Function for stopping the webserver */
 void stop_webserver(httpd_handle_t server)
 {
@@ -99,8 +94,6 @@ void stop_webserver(httpd_handle_t server)
         httpd_stop(server);
     }
 }
-
-
 
 /* Set HTTP response content type according to file extension */
 static esp_err_t set_content_type_from_file(httpd_req_t *req, const char *filepath)
@@ -224,7 +217,6 @@ static esp_err_t POST_restart(httpd_req_t *req)
 /* Simple handler for getting system handler */
 static esp_err_t GET_system_info(httpd_req_t *req)
 {
-
     httpd_resp_set_type(req, "application/json");
 
     // Add CORS headers
@@ -232,7 +224,6 @@ static esp_err_t GET_system_info(httpd_req_t *req)
     httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
     httpd_resp_set_hdr(req, "Access-Control-Allow-Credentials", "true");
-
 
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "power", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power);
@@ -324,6 +315,7 @@ esp_err_t POST_OTA_update(httpd_req_t *req)
 
 		// Successful Upload: Flash firmware chunk
 		if (esp_ota_write(ota_handle, (const void *)buf, recv_len) != ESP_OK) {
+            esp_ota_abort(ota_handle);
 			httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Flash Error");
 			return ESP_FAIL;
 		}
@@ -348,9 +340,6 @@ esp_err_t POST_OTA_update(httpd_req_t *req)
 
 esp_err_t start_rest_server(void *pvParameters)
 {
-    //ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
-
-
     GLOBAL_STATE = (GlobalState*)pvParameters;
     const char *base_path = "";
 

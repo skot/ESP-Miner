@@ -95,9 +95,7 @@ esp_netif_t *wifi_init_softap(void)
         },
     };
 
-
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_ap_config));
-
 
     return esp_netif_ap;
 }
@@ -106,13 +104,12 @@ void toggle_wifi_softap(void){
     wifi_mode_t mode = WIFI_MODE_NULL;
     ESP_ERROR_CHECK(esp_wifi_get_mode(&mode));
 
-    if(mode == WIFI_MODE_APSTA){
+    if (mode == WIFI_MODE_APSTA) {
         ESP_LOGI(TAG, "ESP_WIFI Access Point Off");
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    }else{
+    } else {
         ESP_LOGI(TAG, "ESP_WIFI Access Point On");
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
-
     }
 }
 
@@ -120,7 +117,6 @@ void wifi_softap_off(void){
     ESP_LOGI(TAG, "ESP_WIFI Access Point Off");
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 }
-
 
 /* Initialize wifi station */
 esp_netif_t *wifi_init_sta(const char * wifi_ssid, const char * wifi_pass)
@@ -165,7 +161,6 @@ esp_netif_t *wifi_init_sta(const char * wifi_ssid, const char * wifi_pass)
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &event_handler, NULL, &instance_any_id));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &event_handler, NULL, &instance_got_ip));
 
-
     /*Initialize WiFi */
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
@@ -180,11 +175,8 @@ esp_netif_t *wifi_init_sta(const char * wifi_ssid, const char * wifi_pass)
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     esp_netif_t *esp_netif_sta = wifi_init_sta(wifi_ssid, wifi_pass);
 
-
-
     /* Start WiFi */
     ESP_ERROR_CHECK(esp_wifi_start() );
-
 
     ESP_LOGI(TAG, "wifi_init_sta finished.");
 

@@ -40,7 +40,8 @@ char * nvs_config_get_string(const char * key, const char * default_value)
     return out;
 }
 
-void nvs_config_set_string(const char * key, const char * value){
+void nvs_config_set_string(const char * key, const char * value)
+{
 
     nvs_handle handle;
     esp_err_t err;
@@ -86,7 +87,6 @@ uint16_t nvs_config_get_u16(const char * key, const uint16_t default_value)
     nvs_close(handle);
     return out;
 }
-
 
 void nvs_config_set_u16(const char * key, const uint16_t value){
 
