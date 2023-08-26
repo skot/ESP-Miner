@@ -18,7 +18,7 @@ void USER_INPUT_task(void * pvParameters){
             ESP_LOGI(TAG, "BUTTON PRESSED");
             button_being_pressed = true;
             toggle_wifi_softap();
-        }else if(gpio_get_level(BUTTON_BOOT) == 1 && button_being_pressed == true){
+        } else if (gpio_get_level(BUTTON_BOOT) == 1 && button_being_pressed == true){
             button_being_pressed = false;
         }
 
