@@ -28,4 +28,6 @@ typedef enum {
 } wifi_status_t;
 
 void toggle_wifi_softap(void);
-EventBits_t wifi_init(const char * ssid, const char * pass);
+void wifi_softap_off(void);
+void wifi_init(const char * wifi_ssid, const char * wifi_pass);
+EventBits_t wifi_connect(void);

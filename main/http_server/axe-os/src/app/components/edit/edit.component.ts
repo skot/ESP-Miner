@@ -26,7 +26,9 @@ export class EditComponent {
       this.form = this.fb.group({
         stratumURL: [info.stratumURL, [Validators.required]],
         stratumPort: [info.stratumPort, [Validators.required]],
-        stratumUser: [info.stratumUser, [Validators.required]]
+        stratumUser: [info.stratumUser, [Validators.required]],
+        ssid: [info.ssid, [Validators.required]],
+        wifiPass: [info.wifiPass, [Validators.required]],
       });
     });
   }

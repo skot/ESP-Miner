@@ -75,8 +75,6 @@ void app_main(void)
 
     xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void*)&GLOBAL_STATE, 3, NULL);
 
-    ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
-
     //pull the wifi credentials out of NVS
     char * wifi_ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, WIFI_SSID);
     char * wifi_pass = nvs_config_get_string(NVS_CONFIG_WIFI_PASS, WIFI_PASS);
@@ -85,7 +83,11 @@ void app_main(void)
     strncpy(GLOBAL_STATE.SYSTEM_MODULE.ssid, wifi_ssid, 20);
 
     //init and connect to wifi
-    EventBits_t result_bits = wifi_init(wifi_ssid, wifi_pass);
+    wifi_init(wifi_ssid, wifi_pass);
+    start_rest_server((void*)&GLOBAL_STATE);
+    EventBits_t result_bits = wifi_connect();
+
+    wifi_softap_off();
 
     if (result_bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "Connected to SSID: %s", wifi_ssid);
@@ -118,9 +120,8 @@ void app_main(void)
     xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void*)&GLOBAL_STATE, 10, NULL);
     xTaskCreate(ASIC_task, "asic", 8192, (void*)&GLOBAL_STATE, 10, NULL);
     xTaskCreate(ASIC_result_task, "asic result", 8192, (void*)&GLOBAL_STATE, 15, NULL);
-    xTaskCreate(USER_INPUT_task, "user input", 8192, (void*)&GLOBAL_STATE, 5, NULL);
 
-    start_rest_server((void*)&GLOBAL_STATE);
+    xTaskCreate(USER_INPUT_task, "user input", 8192, (void*)&GLOBAL_STATE, 5, NULL);
 
 
 }

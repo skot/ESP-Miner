@@ -199,11 +199,15 @@ static esp_err_t PATCH_update_settings(httpd_req_t *req)
     char *stratumURL = cJSON_GetObjectItem(root, "stratumURL")->valuestring;
     char *stratumUser = cJSON_GetObjectItem(root, "stratumUser")->valuestring;
     uint16_t stratumPort = cJSON_GetObjectItem(root, "stratumPort")->valueint;
+    char *ssid = cJSON_GetObjectItem(root, "ssid")->valuestring;
+    char *wifiPass = cJSON_GetObjectItem(root, "wifiPass")->valuestring;
 
 
     nvs_config_set_string(NVS_CONFIG_STRATUM_URL, stratumURL);
     nvs_config_set_string(NVS_CONFIG_STRATUM_USER, stratumUser);
     nvs_config_set_u16(NVS_CONFIG_STRATUM_PORT, stratumPort);
+    nvs_config_set_string(NVS_CONFIG_WIFI_SSID, ssid);
+    nvs_config_set_string(NVS_CONFIG_WIFI_PASS, wifiPass);
 
     cJSON_Delete(root);
     httpd_resp_send_chunk(req, NULL, 0);
@@ -239,7 +243,8 @@ static esp_err_t GET_system_info(httpd_req_t *req)
     cJSON_AddStringToObject(root, "bestDiff", GLOBAL_STATE->SYSTEM_MODULE.best_diff_string);
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "coreVoltage", ADC_get_vcore());
-    cJSON_AddStringToObject(root, "ssid", GLOBAL_STATE->SYSTEM_MODULE.ssid);
+    cJSON_AddStringToObject(root, "ssid",  nvs_config_get_string(NVS_CONFIG_WIFI_SSID, CONFIG_ESP_WIFI_SSID));
+    cJSON_AddStringToObject(root, "wifiPass", nvs_config_get_string(NVS_CONFIG_WIFI_PASS, CONFIG_ESP_WIFI_PASSWORD));
     cJSON_AddStringToObject(root, "wifiStatus", GLOBAL_STATE->SYSTEM_MODULE.wifi_status);
     cJSON_AddNumberToObject(root, "sharesAccepted", GLOBAL_STATE->SYSTEM_MODULE.shares_accepted);
     cJSON_AddNumberToObject(root, "sharesRejected", GLOBAL_STATE->SYSTEM_MODULE.shares_rejected);

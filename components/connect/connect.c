@@ -116,6 +116,11 @@ void toggle_wifi_softap(void){
     }
 }
 
+void wifi_softap_off(void){
+    ESP_LOGI(TAG, "ESP_WIFI Access Point Off");
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+}
+
 
 /* Initialize wifi station */
 esp_netif_t *wifi_init_sta(const char * wifi_ssid, const char * wifi_pass)
@@ -149,7 +154,7 @@ esp_netif_t *wifi_init_sta(const char * wifi_ssid, const char * wifi_pass)
 
 
 
-EventBits_t wifi_init(const char * wifi_ssid, const char * wifi_pass) {
+ void wifi_init(const char * wifi_ssid, const char * wifi_pass) {
     s_wifi_event_group = xEventGroupCreate();
 
     ESP_ERROR_CHECK(esp_netif_init());
@@ -175,7 +180,7 @@ EventBits_t wifi_init(const char * wifi_ssid, const char * wifi_pass) {
     ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
     esp_netif_t *esp_netif_sta = wifi_init_sta(wifi_ssid, wifi_pass);
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+
 
     /* Start WiFi */
     ESP_ERROR_CHECK(esp_wifi_start() );
@@ -183,7 +188,11 @@ EventBits_t wifi_init(const char * wifi_ssid, const char * wifi_pass) {
 
     ESP_LOGI(TAG, "wifi_init_sta finished.");
 
-    /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
+    return;
+}
+
+EventBits_t wifi_connect(void){
+        /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
      * number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see above) */
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
             WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,

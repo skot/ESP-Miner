@@ -31,6 +31,7 @@ export class SystemService {
           "freeHeap": 200504,
           "coreVoltage": 1188,
           "ssid": "skimadtrees-secure",
+          "wifiPass": "password",
           "wifiStatus": "Connected!",
           "sharesAccepted": 1,
           "sharesRejected": 0,
