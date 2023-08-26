@@ -25,12 +25,15 @@
 </div>
 
 <div class="card">
-    <h2>Update Firmware</h2>
+    <h2>Update Firmware <span *ngIf="firmwareUpdateProgress != null">{{firmwareUpdateProgress}}%</span></h2>
+    <input type="file" id="file" (change)="otaUpdate($event)" accept=".bin">
+    <br>
+    <small>(esp-miner.bin)</small>
+</div>
 
-    <!-- <p-fileUpload mode="basic" chooseLabel="Choose esp-miner.bin" name="ota" url="/api/system/OTA" accept=".bin"
-        [auto]="true" [maxFileSize]="1000000" (onUpload)="onUpload($event)"></p-fileUpload> -->
-
-
-    <input type="file" id="file" (change)="handleFileInput($event)">
-
+<div class="card">
+    <h2>Update Website <span *ngIf="websiteUpdateProgress != null">{{websiteUpdateProgress}}%</span></h2>
+    <input type="file" id="file" (change)="otaWWWUpdate($event)" accept=".bin">
+    <br>
+    <small>(www.bin)</small>
 </div>

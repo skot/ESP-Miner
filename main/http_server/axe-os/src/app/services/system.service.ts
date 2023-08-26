@@ -1,5 +1,6 @@
-import { HttpClient, HttpEvent, HttpEventType } from '@angular/common/http';
+import { HttpClient, HttpEvent } from '@angular/common/http';
 import { Injectable } from '@angular/core';
+import { ToastrService } from 'ngx-toastr';
 import { Observable, of } from 'rxjs';
 import { ISystemInfo } from 'src/models/ISystemInfo';
 
@@ -11,7 +12,8 @@ import { environment } from '../../environments/environment';
 export class SystemService {
 
   constructor(
-    private httpClient: HttpClient
+    private httpClient: HttpClient,
+    private toastrService: ToastrService
   ) { }
 
   public getInfo(): Observable<ISystemInfo> {
@@ -50,30 +52,43 @@ export class SystemService {
     return this.httpClient.patch(`/api/system`, update);
   }
 
+
+  private otaUpdate(file: File, url: string) {
+    return new Observable<HttpEvent<string>>((subscriber) => {
+      const reader = new FileReader();
+
+      reader.onload = (event: any) => {
+        const fileContent = event.target.result;
+
+        return this.httpClient.post(url, fileContent, {
+          reportProgress: true,
+          observe: 'events',
+          responseType: 'text', // Specify the response type
+          headers: {
+            'Content-Type': 'application/octet-stream', // Set the content type
+          },
+        })
+          .subscribe({
+            next: (e) => {
+              subscriber.next(e)
+            },
+            error: (err) => {
+              subscriber.error(err)
+            },
+            complete: () => {
+              subscriber.complete();
+            }
+          });
+      };
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
   public performOTAUpdate(file: File) {
-    const reader = new FileReader();
-
-    reader.onload = (event: any) => {
-      const fileContent = event.target.result;
-
-      return this.httpClient.post(`/api/system/OTA`, fileContent, {
-        reportProgress: true,
-        observe: 'events',
-        responseType: 'text', // Specify the response type
-        headers: {
-          'Content-Type': 'application/octet-stream', // Set the content type
-        },
-      })
-        .subscribe((event: HttpEvent<any>) => {
-          if (event.type === HttpEventType.UploadProgress) {
-            //this.progress = Math.round((event.loaded / event.total) * 100);
-          } else if (event.type === HttpEventType.Response) {
-            // Handle the response here
-            console.log(event.body);
-          }
-        });
-    };
-    reader.readAsArrayBuffer(file);
+    return this.otaUpdate(file, `/api/system/OTA`);
+  }
+  public performWWWOTAUpdate(file: File) {
+    return this.otaUpdate(file, `/api/system/OTAWWW`);
   }
 
 

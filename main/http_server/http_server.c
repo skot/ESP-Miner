@@ -172,38 +172,7 @@ static esp_err_t rest_common_get_handler(httpd_req_t *req)
     return ESP_OK;
 }
 
-// /* Simple handler for light brightness control */
-// static esp_err_t light_brightness_post_handler(httpd_req_t *req)
-// {
-//     int total_len = req->content_len;
-//     int cur_len = 0;
-//     char *buf = ((rest_server_context_t *)(req->user_ctx))->scratch;
-//     int received = 0;
-//     if (total_len >= SCRATCH_BUFSIZE) {
-//         /* Respond with 500 Internal Server Error */
-//         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
-//         return ESP_FAIL;
-//     }
-//     while (cur_len < total_len) {
-//         received = httpd_req_recv(req, buf + cur_len, total_len);
-//         if (received <= 0) {
-//             /* Respond with 500 Internal Server Error */
-//             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to post control value");
-//             return ESP_FAIL;
-//         }
-//         cur_len += received;
-//     }
-//     buf[total_len] = '\0';
 
-//     cJSON *root = cJSON_Parse(buf);
-//     int red = cJSON_GetObjectItem(root, "red")->valueint;
-//     int green = cJSON_GetObjectItem(root, "green")->valueint;
-//     int blue = cJSON_GetObjectItem(root, "blue")->valueint;
-//     ESP_LOGI(TAG, "Light control: red = %d, green = %d, blue = %d", red, green, blue);
-//     cJSON_Delete(root);
-//     httpd_resp_sendstr(req, "Post control value successfully");
-//     return ESP_OK;
-// }
 static esp_err_t PATCH_update_settings(httpd_req_t *req)
 {
     int total_len = req->content_len;
@@ -253,6 +222,14 @@ static esp_err_t GET_system_info(httpd_req_t *req)
 {
 
     httpd_resp_set_type(req, "application/json");
+
+    // Add CORS headers
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+    httpd_resp_set_hdr(req, "Access-Control-Allow-Credentials", "true");
+
+
     cJSON *root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "power", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power);
     cJSON_AddNumberToObject(root, "voltage", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.voltage);
@@ -276,6 +253,42 @@ static esp_err_t GET_system_info(httpd_req_t *req)
     httpd_resp_sendstr(req, sys_info);
     free((void *)sys_info);
     cJSON_Delete(root);
+    return ESP_OK;
+}
+
+esp_err_t POST_WWW_update(httpd_req_t *req)
+{
+    char buf[1000];
+    int remaining = req->content_len;
+
+    const esp_partition_t *www_partition = esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "www");
+    if (www_partition == NULL) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "WWW partition not found");
+        return ESP_FAIL;
+    }
+
+    // Erase the entire www partition before writing
+    ESP_ERROR_CHECK(esp_partition_erase_range(www_partition, 0, www_partition->size));
+
+    while (remaining > 0) {
+        int recv_len = httpd_req_recv(req, buf, MIN(remaining, sizeof(buf)));
+
+        if (recv_len == HTTPD_SOCK_ERR_TIMEOUT) {
+            continue;
+        } else if (recv_len <= 0) {
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Protocol Error");
+            return ESP_FAIL;
+        }
+
+        if (esp_partition_write(www_partition, www_partition->size - remaining, (const void *)buf, recv_len) != ESP_OK) {
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Write Error");
+            return ESP_FAIL;
+        }
+
+        remaining -= recv_len;
+    }
+
+    httpd_resp_sendstr(req, "WWW update complete\n");
     return ESP_OK;
 }
 
@@ -384,6 +397,14 @@ esp_err_t start_rest_server(void *pvParameters)
         .user_ctx = NULL
     };
     httpd_register_uri_handler(server, &update_post_ota_firmware);
+
+    httpd_uri_t update_post_ota_www = {
+        .uri	  = "/api/system/OTAWWW",
+        .method   = HTTP_POST,
+        .handler  = POST_WWW_update,
+        .user_ctx = NULL
+    };
+    httpd_register_uri_handler(server, &update_post_ota_www);
 
 
     /* URI handler for getting web server files */
