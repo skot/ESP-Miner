@@ -10,7 +10,6 @@ export class LoadingService {
 
   constructor() { }
 
-
   public lockUIUntilComplete() {
     return <T>(source: Observable<T>): Observable<T> => {
       return new Observable(subscriber => {

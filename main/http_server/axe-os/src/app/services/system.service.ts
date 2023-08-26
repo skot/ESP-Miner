@@ -1,6 +1,5 @@
 import { HttpClient, HttpEvent } from '@angular/common/http';
 import { Injectable } from '@angular/core';
-import { ToastrService } from 'ngx-toastr';
 import { delay, Observable, of } from 'rxjs';
 import { ISystemInfo } from 'src/models/ISystemInfo';
 
@@ -12,8 +11,7 @@ import { environment } from '../../environments/environment';
 export class SystemService {
 
   constructor(
-    private httpClient: HttpClient,
-    private toastrService: ToastrService
+    private httpClient: HttpClient
   ) { }
 
   public getInfo(): Observable<ISystemInfo> {
@@ -68,18 +66,17 @@ export class SystemService {
           headers: {
             'Content-Type': 'application/octet-stream', // Set the content type
           },
-        })
-          .subscribe({
-            next: (e) => {
-              subscriber.next(e)
-            },
-            error: (err) => {
-              subscriber.error(err)
-            },
-            complete: () => {
-              subscriber.complete();
-            }
-          });
+        }).subscribe({
+          next: (e) => {
+            subscriber.next(e)
+          },
+          error: (err) => {
+            subscriber.error(err)
+          },
+          complete: () => {
+            subscriber.complete();
+          }
+        });
       };
       reader.readAsArrayBuffer(file);
     });

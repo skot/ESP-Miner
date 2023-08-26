@@ -89,7 +89,8 @@ export class EditComponent {
     }
 
     this.systemService.performWWWOTAUpdate(file)
-      .pipe(this.loadingService.lockUIUntilComplete()).subscribe({
+      .pipe(this.loadingService.lockUIUntilComplete())
+      .subscribe({
         next: (event) => {
           if (event.type === HttpEventType.UploadProgress) {
             this.websiteUpdateProgress = Math.round((event.loaded / (event.total as number)) * 100);
@@ -109,6 +110,5 @@ export class EditComponent {
           this.websiteUpdateProgress = null;
         }
       });
-
   }
 }
