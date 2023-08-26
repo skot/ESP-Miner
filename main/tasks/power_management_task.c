@@ -32,18 +32,12 @@ static float _fbound(float value, float lower_bound, float upper_bound)
 	return value;
 }
 
-// void _power_init(PowerManagementModule * power_management){
-//     power_management->frequency_multiplier = 1;
-//     power_management->frequency_value = ASIC_FREQUENCY;
-
-// }
 
 void POWER_MANAGEMENT_task(void * pvParameters){
 
     GlobalState *GLOBAL_STATE = (GlobalState*)pvParameters;
-    //bm1397Module * bm1397 = &GLOBAL_STATE->BM1397_MODULE;
+
     PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
-   // _power_init(power_management);
 
     int last_frequency_increase = 0;
     while(1){
@@ -61,7 +55,6 @@ void POWER_MANAGEMENT_task(void * pvParameters){
             // We'll throttle between 4.9v and 3.5v
             float voltage_multiplier =  _fbound((power_management->voltage - VOLTAGE_MIN_THROTTLE) * (1/(float)VOLTAGE_RANGE), 0, 1);
 
-
             // Temperature
             float temperature_multiplier = 1;
             float over_temp = -(THROTTLE_TEMP - power_management->chip_temp);
@@ -78,10 +71,7 @@ void POWER_MANAGEMENT_task(void * pvParameters){
                 }
             }
 
-
-
             power_management->frequency_multiplier = lowest_multiplier;
-
 
             float target_frequency = _fbound(power_management->frequency_multiplier * ASIC_FREQUENCY, 0, ASIC_FREQUENCY);
 
@@ -94,7 +84,6 @@ void POWER_MANAGEMENT_task(void * pvParameters){
                 // TODO recover gracefully?
                 esp_restart();
             }
-
 
             if(power_management->frequency_value > target_frequency){
                 power_management->frequency_value = target_frequency;
@@ -116,7 +105,6 @@ void POWER_MANAGEMENT_task(void * pvParameters){
                 }
             }
         }
-
 
         //ESP_LOGI(TAG, "target %f, Freq %f, Volt %f, Power %f", target_frequency, power_management->frequency_value, power_management->voltage, power_management->power);
         vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
