@@ -27,8 +27,11 @@ static SystemTaskModule SYSTEM_TASK_MODULE = {
 
 void dns_found_cb(const char *name, const ip_addr_t *ipaddr, void *callback_arg)
 {
-    ip_Addr = *ipaddr;
-    bDNSFound = true;
+    if(ipaddr != NULL)
+    {
+        ip_Addr = *ipaddr;
+        bDNSFound = true;
+    }
 }
 
 void stratum_task(void *pvParameters)
@@ -53,9 +56,11 @@ void stratum_task(void *pvParameters)
         // it's a hostname. Lookup the ip address.
         IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
         ESP_LOGI(TAG, "Get IP for URL: %s\n", stratum_url);
-        dns_gethostbyname(stratum_url, &ip_Addr, dns_found_cb, NULL);
         while (!bDNSFound)
-            ;
+        {
+            dns_gethostbyname(stratum_url, &ip_Addr, dns_found_cb, NULL);
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+        }
     }
 
     // make IP address string from ip_Addr
