@@ -18,7 +18,7 @@
 
 static const char *TAG = "stratum_task";
 static ip_addr_t ip_Addr;
-static uint8_t bDNSFound = 0;
+static int8_t bDNSFound = 0;
 
 static StratumApiV1Message stratum_api_v1_message = {};
 
