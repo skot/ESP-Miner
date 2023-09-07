@@ -264,6 +264,22 @@ static void _send_read_address(void)
     unsigned char read_address[2] = {0x00, 0x00};
     // send serial data
     _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_READ), read_address, 2, false);
+
+    int received = SERIAL_rx(asic_response_buffer, 9, 500);
+
+    if (received == 9)
+    {
+        //verify the chip ID    
+        if ((asic_response_buffer[2] == 0x13) && (asic_response_buffer[3] == 0x97))
+        {
+            ESP_LOGI(TAG, "BM1397 Detected!!!!");
+            return true;
+        }
+    }
+
+    ESP_LOGE(TAG, "Fail to receive the chip ID");
+    
+    return false;
 }
 
 void BM1397_init(u_int64_t frequency)
@@ -275,11 +291,13 @@ void BM1397_init(u_int64_t frequency)
     esp_rom_gpio_pad_select_gpio(BM1397_RST_PIN);
     gpio_set_direction(BM1397_RST_PIN, GPIO_MODE_OUTPUT);
 
-    // reset the bm1397
-    _reset();
+    //verify if the BM1397 is prenset
+    do{
+        //reset the bm1397
+        _reset();
 
-    // send the init command
-    _send_read_address();
+        //send the init command
+    } while(false==_send_read_address());
 
     _send_init(frequency);
 }
