@@ -18,7 +18,7 @@
 
 static const char *TAG = "stratum_task";
 static ip_addr_t ip_Addr;
-static bool bDNSFound = false;
+static int8_t bDNSFound = 0;
 
 static StratumApiV1Message stratum_api_v1_message = {};
 
@@ -27,8 +27,16 @@ static SystemTaskModule SYSTEM_TASK_MODULE = {
 
 void dns_found_cb(const char *name, const ip_addr_t *ipaddr, void *callback_arg)
 {
-    ip_Addr = *ipaddr;
-    bDNSFound = true;
+    if (ipaddr != NULL)
+    {
+        ip_Addr = *ipaddr;
+        bDNSFound = 1;
+    }
+    else
+    {
+        // it fails to solve the DNS
+        bDNSFound = -1;
+    }
 }
 
 void stratum_task(void *pvParameters)
@@ -46,7 +54,7 @@ void stratum_task(void *pvParameters)
     // check to see if the STRATUM_URL is an ip address already
     if (inet_pton(AF_INET, stratum_url, &ip_Addr) == 1)
     {
-        bDNSFound = true;
+        bDNSFound = 1;
     }
     else
     {
@@ -54,8 +62,20 @@ void stratum_task(void *pvParameters)
         IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
         ESP_LOGI(TAG, "Get IP for URL: %s\n", stratum_url);
         dns_gethostbyname(stratum_url, &ip_Addr, dns_found_cb, NULL);
-        while (!bDNSFound)
-            ;
+        while (true)
+        {
+            vTaskDelay(500 / portTICK_PERIOD_MS);
+
+            // try again
+            if (bDNSFound == -1)
+            {
+                bDNSFound = 0;
+                dns_gethostbyname(stratum_url, &ip_Addr, dns_found_cb, NULL);
+            }
+
+            if (bDNSFound == 1)
+                break;
+        }
     }
 
     // make IP address string from ip_Addr
