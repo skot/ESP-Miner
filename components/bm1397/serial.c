@@ -115,7 +115,7 @@ void *SERIAL_rx_aa55(uint8_t *data,const int length) {
         if (len+received > 2) {
             // valid start
             if (data[0] == 0xAA && data[1] == 0x55) {
-                len+=received;
+                len += received;
             } else {
                 for(int count = 1; count < len + received; ++count) {
                     if(*(data+count) == 0xAA) {
