@@ -117,7 +117,7 @@ void *SERIAL_rx_aa55(uint8_t *data,const int length) {
             if (data[0] == 0xAA && data[1] == 0x55) {
                 len+=received;
             } else {
-                for(int count=1; count < len+received; ++count) {
+                for(int count = 1; count < len + received; ++count) {
                     if(*(data+count) == 0xAA) {
                         // move to head and adjust read length
                         memmove(data, data+count, len+received-count);
