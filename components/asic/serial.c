@@ -79,21 +79,6 @@ int16_t SERIAL_rx(uint8_t *buf, uint16_t size, uint16_t timeout_ms)
     return bytes_read;
 }
 
-void SERIAL_debug_rx(void)
-{
-    int ret;
-    uint8_t buf[CHUNK_SIZE];
-
-    ret = SERIAL_rx(buf, 100, 20);
-    if (ret < 0)
-    {
-        fprintf(stderr, "unable to read data\n");
-        return;
-    }
-
-    memset(buf, 0, 1024);
-}
-
 void SERIAL_clear_buffer(void)
 {
     uart_flush(UART_NUM_1);
