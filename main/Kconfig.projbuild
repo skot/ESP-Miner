@@ -11,7 +11,7 @@ menu "Bitaxe Configuration"
         range 50 800
         default 250
         help
-            The BM1397 hash frequency
+            The asic hash frequency
 endmenu
 
 menu "Stratum Configuration"
