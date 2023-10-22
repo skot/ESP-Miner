@@ -135,11 +135,11 @@ void BM1366_send_hash_frequency(unsigned int khz)
 
     // refdiver is 2 or 1
     // postdivider 2 is 1 to 7
-    // postdivider 1 is 1 to 7 and less than postdivider 2
+    // postdivider 1 is 1 to 7 and <= postdivider 2
     // fbdiv is 144 to 235
     for (rd = 2; rd > 0 && !fbdiv; rd--) {
         for (pd1 = 7; pd1 > 0 && !fbdiv; pd1--) {
-            for (pd2 = 1; pd2 < pd1; pd2++) {
+            for (pd2 = 1; pd2 <= pd1; pd2++) {
                 k_fd = khz * rd * pd1 * pd2 / 25;
                 if (k_fd % 1000)
                     continue; // Not a round value
