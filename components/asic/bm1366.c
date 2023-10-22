@@ -186,13 +186,13 @@ void BM1366_send_hash_frequency(unsigned int khz)
 
 static void do_frequency_ramp_up(unsigned int end_khz)
 {
-    unsigned int khz, start_khz = 56250, step_khz = 6250;
+    unsigned int khz = 0, start_khz = 56250, step_khz = 6250;
 
-    for (khz = start_khz; khz < end_khz; khz += step_khz)
+    for (khz = start_khz; khz <= end_khz; khz += step_khz)
         BM1366_send_hash_frequency(khz);
 
     // In case end_khz is not dividable by step_khz, set explicitly
-    if ((khz - step_khz) != end_khz)
+    if (khz != end_khz)
         BM1366_send_hash_frequency(end_khz);
 }
 
@@ -306,9 +306,7 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
         _send_BM1366((TYPE_CMD | GROUP_SINGLE | CMD_WRITE), set_3c_register_third, 6, false);
     }
 
-    do_frequency_ramp_up(485000);
-
-    BM1366_send_hash_frequency(frequency * 1000);
+    do_frequency_ramp_up(frequency * 1000);
 
     unsigned char init794[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x15, 0x1C, 0x02};
     _send_simple(init794, 11);
