@@ -35,7 +35,7 @@ void BM1366_send_work(void * GLOBAL_STATE, bm_job * next_bm_job);
 void BM1366_set_job_difficulty_mask(int);
 int BM1366_set_max_baud(void);
 int BM1366_set_default_baud(void);
-void BM1366_send_hash_frequency(float frequency);
+void BM1366_send_hash_frequency(unsigned int khz);
 task_result * BM1366_proccess_work(void * GLOBAL_STATE);
 
 #endif /* BM1366_H_ */

@@ -126,62 +126,52 @@ static void _set_chip_address(uint8_t chipAddr)
     _send_BM1366((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, false);
 }
 
-void BM1366_send_hash_frequency(float target_freq)
+void BM1366_send_hash_frequency(unsigned int khz)
 {
-    // default 200Mhz if it fails
-    unsigned char freqbuf[9] = {0x00, 0x08, 0x40, 0xA0, 0x02, 0x41}; // freqbuf - pll0_parameter
-    float newf = 200.0;
-
-    uint8_t fb_divider = 0;
-    uint8_t post_divider1 = 0, post_divider2 = 0;
-    uint8_t ref_divider = 0;
-    float min_difference = 10;
+    unsigned int newf = 200000;
+    uint8_t cmd[] = {0x00, 0x08, 0x40, 0xA0, 0x02, 0x41};   // 200MHz fallback
+    int rd, k_fd, pd1, pd2;
+    uint8_t refdiv, postdiv1, postdiv2, fbdiv = 0;
 
     // refdiver is 2 or 1
     // postdivider 2 is 1 to 7
     // postdivider 1 is 1 to 7 and less than postdivider 2
     // fbdiv is 144 to 235
-    for (uint8_t refdiv_loop = 2; refdiv_loop > 0 && fb_divider == 0; refdiv_loop--) {
-        for (uint8_t postdiv1_loop = 7; postdiv1_loop > 0 && fb_divider == 0; postdiv1_loop--) {
-            for (uint8_t postdiv2_loop = 1; postdiv2_loop < postdiv1_loop && fb_divider == 0; postdiv2_loop++) {
-                int temp_fb_divider = round(((float) (postdiv1_loop * postdiv2_loop * target_freq * refdiv_loop) / 25.0));
-
-                if (temp_fb_divider >= 144 && temp_fb_divider <= 235) {
-                    float temp_freq = 25.0 * (float) temp_fb_divider / (float) (refdiv_loop * postdiv2_loop * postdiv1_loop);
-                    float freq_diff = fabs(target_freq - temp_freq);
-
-                    if (freq_diff < min_difference) {
-                        fb_divider = temp_fb_divider;
-                        post_divider1 = postdiv1_loop;
-                        post_divider2 = postdiv2_loop;
-                        ref_divider = refdiv_loop;
-                        min_difference = freq_diff;
-                        break;
-                    }
-                }
+    for (rd = 2; rd > 0 && !fbdiv; rd--) {
+        for (pd1 = 7; pd1 > 0 && !fbdiv; pd1--) {
+            for (pd2 = 1; pd2 < pd1; pd2++) {
+                k_fd = khz * rd * pd1 * pd2 / 25;
+                if (k_fd % 1000)
+                    continue; // Not a round value
+                if (k_fd < 144000 || k_fd > 235000)
+                    continue; // Out of acceptable range
+                fbdiv = k_fd / 1000;
+                refdiv = rd;
+                postdiv1 = pd1;
+                postdiv2 = pd2;
+                break;
             }
         }
     }
 
-    if (fb_divider == 0) {
-        puts("Finding dividers failed, using default value (200Mhz)");
+    if (fbdiv == 0) {
+        puts("Finding dividers failed, using default value (200000 Khz)");
     } else {
-        newf = 25.0 / (float) (ref_divider * fb_divider) / (float) (post_divider1 * post_divider2);
-        printf("final refdiv: %d, fbdiv: %d, postdiv1: %d, postdiv2: %d, min diff value: %f\n", ref_divider, fb_divider,
-               post_divider1, post_divider2, min_difference);
+        newf = (25000 * fbdiv) / (refdiv * postdiv1 * postdiv2);
+        printf("final refdiv: %d, fbdiv: %d, postdiv1: %d, postdiv2: %d, min diff value: %u\n",
+            refdiv, fbdiv, postdiv1, postdiv2, k_pll_div_lowest / 1000);
 
-        freqbuf[3] = fb_divider;
-        freqbuf[4] = ref_divider;
-        freqbuf[5] = (((post_divider1 - 1) & 0xf) << 4) + ((post_divider2 - 1) & 0xf);
+        if ((fbdiv / refdiv) >= 96)
+            cmd[2] = 0x50;
 
-        if (fb_divider * 25 / (float) ref_divider >= 2400) {
-            freqbuf[2] = 0x50;
-        }
+        cmd[3] = fbdiv;
+        cmd[4] = refdiv;
+        cmd[5] = (postdiv1 - 1) << 4 | (postdiv2 - 1);
+        ESP_LOGI(TAG, "Setting Frequency to %ukHz (%u)", khz, newf);
     }
 
-    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), freqbuf, 6, false);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), cmd, 6, false);
 
-    ESP_LOGI(TAG, "Setting Frequency to %.2fMHz (%.2f)", target_freq, newf);
 }
 
 static void do_frequency_ramp_up()
@@ -511,7 +501,7 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
 
     do_frequency_ramp_up();
 
-    BM1366_send_hash_frequency(frequency);
+    BM1366_send_hash_frequency(frequency * 1000);
 
     unsigned char init794[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x10, 0x00, 0x00, 0x15, 0x1C, 0x02};
     _send_simple(init794, 11);
