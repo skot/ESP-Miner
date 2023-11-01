@@ -11,7 +11,7 @@ bool INA260_installed(void)
     return i2c_master_register_read(INA260_I2CADDR_DEFAULT, INA260_REG_BUSVOLTAGE, data, 2) == ESP_OK;
 }
 
-float INA260_read_current(void)
+uint16_t INA260_read_current(void)
 {
     uint8_t data[2];
 
@@ -21,7 +21,7 @@ float INA260_read_current(void)
     return (uint16_t)(data[1] | (data[0] << 8)) * 1.25;
 }
 
-float INA260_read_voltage(void)
+uint16_t INA260_read_voltage(void)
 {
     uint8_t data[2];
 
@@ -31,7 +31,7 @@ float INA260_read_voltage(void)
     return (uint16_t)(data[1] | (data[0] << 8)) * 1.25;
 }
 
-float INA260_read_power(void)
+uint16_t INA260_read_power(void)
 {
     uint8_t data[2];
 
