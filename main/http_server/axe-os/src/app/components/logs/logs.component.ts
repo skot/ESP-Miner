@@ -34,7 +34,7 @@ export class LogsComponent implements OnDestroy, AfterViewChecked {
         return this.systemService.getInfo()
       }),
       map(info => {
-        info.power = parseFloat(info.power.toFixed(1))
+        info.power = parseFloat((info.power / 1000).toFixed(1))
         info.voltage = parseFloat((info.voltage / 1000).toFixed(1));
         info.current = parseFloat((info.current / 1000).toFixed(1));
         info.coreVoltageActual = parseFloat((info.coreVoltageActual / 1000).toFixed(2));

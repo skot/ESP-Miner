@@ -130,7 +130,7 @@ static void _update_hashrate(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
-            float efficiency = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power / (module->current_hashrate / 1000.0);
+            float efficiency = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power_mw / module->current_hashrate;
             OLED_clearLine(0);
             memset(module->oled_buf, 0, 20);
             snprintf(module->oled_buf, 20, "Gh%s: %.1f J/Th: %.1f", module->historical_hashrate_init < HISTORY_LENGTH ? "*" : "",
@@ -217,11 +217,12 @@ static void _update_system_info(GlobalState * GLOBAL_STATE)
                 OLED_writeString(0, 1, module->oled_buf);
 
                 memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, " Pwr: %.3f W", power_management->power);
+                snprintf(module->oled_buf, 20, " Pwr: %d mW", power_management->power_mw);
                 OLED_writeString(0, 2, module->oled_buf);
 
                 memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, " %i mV: %i mA", (int) power_management->voltage, (int) power_management->current);
+                snprintf(module->oled_buf, 20, " %i mV: %i mA",
+                    power_management->voltage_mv, power_management->current_ma);
                 OLED_writeString(0, 3, module->oled_buf);
             }
             break;

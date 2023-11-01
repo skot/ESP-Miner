@@ -121,14 +121,14 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             case DEVICE_ULTRA:
             case DEVICE_SUPRA:
 				if (GLOBAL_STATE->board_version == 402) {
-                    power_management->voltage = TPS546_get_vin() * 1000;
-                    power_management->current = TPS546_get_iout() * 1000;
+                    power_management->voltage_mv = TPS546_get_vin();
+                    power_management->current_ma = TPS546_get_iout();
                     // calculate regulator power (in milliwatts)
-                    power_management->power = (TPS546_get_vout() * power_management->current) / 1000;
+                    power_management->power_mw = (TPS546_get_vout() * power_management->current_ma);
 				} else if (INA260_installed() == true) {
-                    power_management->voltage = INA260_read_voltage();
-                    power_management->current = INA260_read_current();
-                    power_management->power = INA260_read_power() / 1000;
+                    power_management->voltage_mv = INA260_read_voltage();
+                    power_management->current_ma = INA260_read_current();
+                    power_management->power_mw = INA260_read_power();
 				}
             
                 power_management->fan_rpm = EMC2101_get_fan_speed();
@@ -146,7 +146,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     power_management->chip_temp_avg = EMC2101_get_external_temp();
 
                     if ((power_management->chip_temp_avg > THROTTLE_TEMP) &&
-                        (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
+                        (power_management->frequency_value > 50 || power_management->voltage_mv > 1000)) {
                         ESP_LOGE(TAG, "OVERHEAT ASIC %fC", power_management->chip_temp_avg );
 
                         EMC2101_set_fan_speed(1);
@@ -178,12 +178,12 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 					}
 
                     // EMC2101 will give bad readings if the ASIC is turned off
-                    if(power_management->voltage < TPS546_INIT_VOUT_MIN){
+                    if(power_management->voltage_mv < TPS546_INIT_VOUT_MIN){
                         break;
                     }
 
                     if ((power_management->vr_temp > TPS546_THROTTLE_TEMP || power_management->chip_temp_avg > THROTTLE_TEMP) &&
-                        (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
+                        (power_management->frequency_value > 50 || power_management->voltage_mv > 1000)) {
                         ESP_LOGE(TAG, "OVERHEAT  VR: %fC ASIC %fC", power_management->vr_temp, power_management->chip_temp_avg );
 
                         EMC2101_set_fan_speed(1);
@@ -201,7 +201,6 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 					}
 
                     break;
-
                 default:
             }
         }
@@ -237,4 +236,3 @@ void POWER_MANAGEMENT_task(void * pvParameters)
         vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
     }
 }
-
