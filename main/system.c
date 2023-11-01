@@ -303,7 +303,7 @@ static void _update_connection(GlobalState * GLOBAL_STATE)
                 OLED_writeString(0, 2, module->oled_buf);
 
                 char ap_ssid[13];
-                generate_ssid(ap_ssid);
+                generate_ssid(ap_ssid, sizeof(ap_ssid));
                 memset(module->oled_buf, 0, 20);
                 snprintf(module->oled_buf, 20, ap_ssid);
                 OLED_writeString(0, 3, module->oled_buf);
@@ -356,7 +356,7 @@ static void show_ap_information(const char * error, GlobalState * GLOBAL_STATE)
                 }
                 OLED_writeString(0, 1, "Configuration SSID:");
                 char ap_ssid[13];
-                generate_ssid(ap_ssid);
+                generate_ssid(ap_ssid, sizeof(ap_ssid));
                 OLED_writeString(0, 2, ap_ssid);
             }
             break;
