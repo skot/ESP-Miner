@@ -438,7 +438,7 @@ void BM1366_send_work(void * pvParameters, bm_job * next_bm_job)
     // ESP_LOGI(TAG, "Added Job: %i", job.job_id);
     pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
 
-    _send_BM1366((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), &job, sizeof(BM1366_job), false);
+    _send_BM1366((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(BM1366_job), false);
 }
 
 asic_result * BM1366_receive_work(void)
