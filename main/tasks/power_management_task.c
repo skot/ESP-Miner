@@ -161,4 +161,3 @@ static void automatic_fan_speed(float chip_temp)
 
     EMC2101_set_fan_speed((float) result / 100);
 }
-
