@@ -144,11 +144,11 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 }
 
 // Set the fan speed between 33% min and 100% max based on chip temperature as input.
-// The fan speed increases from 33% to 100% proportionally to the temperature increase from 40 and THROTTLE_TEMP
+// The fan speed increases from 33% to 100% proportionally to the temperature increase from 50 and THROTTLE_TEMP
 static void automatic_fan_speed(float chip_temp)
 {
     double result = 0.0;
-    double min_temp = 40.0;
+    double min_temp = 50.0;
     double min_fan_speed = 33.0;
 
     if (chip_temp < min_temp) {
