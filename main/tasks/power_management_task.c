@@ -143,7 +143,8 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     }
 }
 
-// all values input below 60 result in 38 but increases exponentially such that an input of 70 results in 100
+// Fan speed between 25 min and 100 max based on input,
+// proportial to temp increase between 50 and THROTTLE_TEMP
 static void automatic_fan_speed(float chip_temp)
 {
     double result = 0.0;
@@ -155,7 +156,7 @@ static void automatic_fan_speed(float chip_temp)
         result = 100;
     } else {
         double range = THROTTLE_TEMP - min_temp;
-        result = ((chip_temp - min_temp) / range) * 100;
+        result = ((chip_temp - min_temp) / range) * 75 + 25;
     }
 
     EMC2101_set_fan_speed((float) result / 100);
