@@ -44,6 +44,7 @@
 #define FAST_UART_CONFIGURATION 0x28
 #define TICKET_MASK 0x14
 #define MISC_CONTROL 0x18
+#define VERSION_MASK 0xA4
 
 typedef struct __attribute__((__packed__))
 {
@@ -502,6 +503,8 @@ static void _send_init(uint64_t frequency)
 
     unsigned char init795[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0xA4, 0x90, 0x00, 0xFF, 0xFF, 0x1C};
     _send_simple(init795, 11);
+
+    BM1366_set_version_mask(0x1fffe000); //need to initialise it somewhere aswell
 }
 
 // reset the BM1366 via the RTS line
@@ -599,12 +602,37 @@ void BM1366_set_job_difficulty_mask(int difficulty)
     _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), job_difficulty_mask, 6, false);
 }
 
+void BM1366_set_version_mask(uint32_t version_mask_int)
+{
+    int nibble_size = 0xFF;
+    int vmask0 = version_mask_int % nibble_size;
+    int vmask1 = version_mask_int >> 8 %nibble_size;
+    int vmask2 = version_mask_int >> 16 % nibble_size;
+    int vmask3 = version_mask_int >> 24 % nibble_size;
+    unsigned char version_mask[9] = {0x00, VERSION_MASK, vmask0, vmask1, vmask2, vmask3};
+
+    ESP_LOGI(TAG, "Setting job ASIC version_mask to %08x", version_mask_int);
+
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), version_mask, 6, false);
+}
+
+void update_asic_version_mask_to_stratum(uint32_t asic_version_mask_int,uint32_t stratum_version_mask_int) {
+    //here we are checking the last known update to the version mask, otherwise many register reads would be needed
+    if (asic_version_mask_int != version_mask_int):
+        BM1366_set_version_mask(stratum_version_mask_int);
+}
+
+
 static uint8_t id = 0;
 
 void BM1366_send_work(void * pvParameters, bm_job * next_bm_job)
 {
 
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
+
+    update_asic_version_mask_to_stratum(GLOBAL_STATE->asic_version_mask,GLOBAL_STATE->version_mask);
+    //we now have confidence the version mask is the same as stratum and a cheap way to check
+    GLOBAL_STATE->asic_version_mask = GLOBAL_STATE->version_mask; 
 
     BM1366_job job;
     id = (id + 8) % 128;
@@ -679,8 +707,23 @@ task_result * BM1366_proccess_work(void * pvParameters)
 
     uint32_t rolled_version = GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[rx_job_id]->version;
 
-    // // // shift the 16 bit value left 13
+    // copied from bm1397.c this correctly uses the stratum version mask for minimum increment
+    for (int i = 0; i < rx_midstate_index; i++)
+    {
+        rolled_version = increment_bitmask(rolled_version, GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[rx_job_id]->version_mask);
+    }
+
+    // // // shift the 16 bit value left 13, I suspect repeating work is here if 1366 is rolling by itself
+    // it is not known how the bm1366 rolls or how many times it rolls
+    // the safe bet for new work is extranonce rolling
     rolled_version = (reverse_uint16(asic_result->version) << 13) | rolled_version;
+
+    // edge case of maximum should be somewhere even if not going to hit it
+    // rolled_version = rolled_version % (maximum version value)
+    // if rolled_version>=(maximum version value)
+    //      extranonce_increment() 
+    //      rolled_version = minimum_version_value
+    
 
     result.job_id = rx_job_id;
     result.nonce = asic_result->nonce;

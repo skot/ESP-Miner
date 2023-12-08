@@ -45,6 +45,7 @@ typedef struct
 
     uint32_t stratum_difficulty;
     uint32_t version_mask;
+    uint32_t asic_version_mask; // should be in one of the asic structs
 
     int sock;
 
