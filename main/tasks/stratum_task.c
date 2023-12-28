@@ -40,8 +40,11 @@ void stratum_task(void *pvParameters)
     int addr_family = 0;
     int ip_protocol = 0;
 
-    char *stratum_url = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, STRATUM_URL);
-    uint16_t port = nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, PORT);
+    // char *stratum_url = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, STRATUM_URL);
+    // uint16_t port = nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, PORT);
+
+    char *stratum_url = GLOBAL_STATE->SYSTEM_MODULE.pool_url;
+    uint16_t port = GLOBAL_STATE->SYSTEM_MODULE.pool_port;
 
     // check to see if the STRATUM_URL is an ip address already
     if (inet_pton(AF_INET, stratum_url, &ip_Addr) == 1)
@@ -65,7 +68,7 @@ void stratum_task(void *pvParameters)
              ip4_addr3(&ip_Addr.u_addr.ip4),
              ip4_addr4(&ip_Addr.u_addr.ip4));
     ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d (%s)\n", stratum_url, port, host_ip);
-    free(stratum_url);
+    //free(stratum_url);
 
     while (1)
     {
@@ -88,9 +91,13 @@ void stratum_task(void *pvParameters)
         int err = connect(GLOBAL_STATE->sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
         if (err != 0)
         {
-            ESP_LOGE(TAG, "Socket unable to connect: errno %d", errno);
-            esp_restart();
-            break;
+            ESP_LOGE(TAG, "Socket unable to connect to %s:%d (errno %d)", stratum_url, port, errno);
+            // close the socket
+            shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
+            close(GLOBAL_STATE->sock);
+            // instead of restarting, retry this every 5 seconds
+            vTaskDelay(5000 / portTICK_PERIOD_MS);
+            continue;
         }
 
         STRATUM_V1_configure_version_rolling(GLOBAL_STATE->sock, &GLOBAL_STATE->version_mask);
