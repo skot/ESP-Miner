@@ -27,8 +27,12 @@ static SystemTaskModule SYSTEM_TASK_MODULE = {
 
 void dns_found_cb(const char *name, const ip_addr_t *ipaddr, void *callback_arg)
 {
-    ip_Addr = *ipaddr;
-    bDNSFound = true;
+    if (ipaddr != NULL) {
+        ip_Addr = *ipaddr;
+        bDNSFound = true;
+    } else {
+        ESP_LOGE(TAG, "DNS lookup failed\n");
+    }
 }
 
 void stratum_task(void *pvParameters)
@@ -44,12 +48,9 @@ void stratum_task(void *pvParameters)
     uint16_t port = nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, PORT);
 
     // check to see if the STRATUM_URL is an ip address already
-    if (inet_pton(AF_INET, stratum_url, &ip_Addr) == 1)
-    {
+    if (inet_pton(AF_INET, stratum_url, &ip_Addr) == 1) {
         bDNSFound = true;
-    }
-    else
-    {
+    } else {
         // it's a hostname. Lookup the ip address.
         IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
         ESP_LOGI(TAG, "Get IP for URL: %s\n", stratum_url);
