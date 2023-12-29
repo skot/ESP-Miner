@@ -19,6 +19,7 @@
 static const char *TAG = "stratum_task";
 static ip_addr_t ip_Addr;
 static bool bDNSFound = false;
+static bool bDNSInvalid = false;
 
 static StratumApiV1Message stratum_api_v1_message = {};
 
@@ -27,9 +28,13 @@ static SystemTaskModule SYSTEM_TASK_MODULE = {
 
 void dns_found_cb(const char *name, const ip_addr_t *ipaddr, void *callback_arg)
 {
-    ip_Addr = *ipaddr;
     bDNSFound = true;
-}
+    if (ipaddr != NULL) {
+        ip_Addr = *ipaddr;
+    } else {
+        bDNSInvalid = true;
+    }
+ }
 
 void stratum_task(void *pvParameters)
 {
@@ -54,11 +59,17 @@ void stratum_task(void *pvParameters)
     else
     {
         // it's a hostname. Lookup the ip address.
-        IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
+        //IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
         ESP_LOGI(TAG, "Get IP for URL: %s\n", stratum_url);
         dns_gethostbyname(stratum_url, &ip_Addr, dns_found_cb, NULL);
-        while (!bDNSFound)
-            ;
+        while (!bDNSFound);
+
+        if (bDNSInvalid) {
+            ESP_LOGE(TAG, "DNS lookup failed for URL: %s\n", stratum_url);
+            //set ip_Addr to 0.0.0.0 so that connect() will fail
+            IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
+        }
+
     }
 
     // make IP address string from ip_Addr
