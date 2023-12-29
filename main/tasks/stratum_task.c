@@ -45,9 +45,6 @@ void stratum_task(void *pvParameters)
     int addr_family = 0;
     int ip_protocol = 0;
 
-    // char *stratum_url = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, STRATUM_URL);
-    // uint16_t port = nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, PORT);
-
     char *stratum_url = GLOBAL_STATE->SYSTEM_MODULE.pool_url;
     uint16_t port = GLOBAL_STATE->SYSTEM_MODULE.pool_port;
 
@@ -58,8 +55,6 @@ void stratum_task(void *pvParameters)
     }
     else
     {
-        // it's a hostname. Lookup the ip address.
-        //IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
         ESP_LOGI(TAG, "Get IP for URL: %s\n", stratum_url);
         dns_gethostbyname(stratum_url, &ip_Addr, dns_found_cb, NULL);
         while (!bDNSFound);
@@ -79,7 +74,6 @@ void stratum_task(void *pvParameters)
              ip4_addr3(&ip_Addr.u_addr.ip4),
              ip4_addr4(&ip_Addr.u_addr.ip4));
     ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d (%s)\n", stratum_url, port, host_ip);
-    //free(stratum_url);
 
     while (1)
     {
