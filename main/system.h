@@ -29,6 +29,8 @@ typedef struct
     char wifi_status[20];
     char * pool_url;
     uint16_t pool_port;
+    char * pool_cert;
+    uint8_t is_tls;
 
     uint32_t lastClockSync;
 } SystemModule;

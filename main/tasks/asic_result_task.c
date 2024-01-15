@@ -52,7 +52,7 @@ void ASIC_result_task(void *pvParameters)
                 );
 
             STRATUM_V1_submit_share(
-                GLOBAL_STATE->sock,
+                GLOBAL_STATE->transport,
                 user,
                 GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->jobid,
                 GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->extranonce2,

@@ -25,16 +25,6 @@ static StratumApiV1Message stratum_api_v1_message = {};
 
 static SystemTaskModule SYSTEM_TASK_MODULE = {.stratum_difficulty = 8192};
 
-void dns_found_cb(const char * name, const ip_addr_t * ipaddr, void * callback_arg)
-{
-    bDNSFound = true;
-    if (ipaddr != NULL) {
-        ip_Addr = *ipaddr;
-    } else {
-        bDNSInvalid = true;
-    }
- }
-
 void stratum_task(void * pvParameters)
 {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
@@ -44,78 +34,50 @@ void stratum_task(void * pvParameters)
     int addr_family = 0;
     int ip_protocol = 0;
 
-
-    char *stratum_url = GLOBAL_STATE->SYSTEM_MODULE.pool_url;
+    char * stratum_url = GLOBAL_STATE->SYSTEM_MODULE.pool_url;
     uint16_t port = GLOBAL_STATE->SYSTEM_MODULE.pool_port;
+    uint8_t is_tls = GLOBAL_STATE->SYSTEM_MODULE.is_tls;
+    char * stratum_cert = GLOBAL_STATE->SYSTEM_MODULE.pool_cert;
 
-    // check to see if the STRATUM_URL is an ip address already
-    if (inet_pton(AF_INET, stratum_url, &ip_Addr) == 1) {
-        bDNSFound = true;
+    GLOBAL_STATE->transport = STRATUM_V1_transport_init(is_tls, stratum_cert);
+    if(GLOBAL_STATE->transport == NULL) {
+        ESP_LOGE(TAG, "Transport initialization failed.");
+        vTaskDelete(NULL);
     }
+    if(is_tls)
+        ESP_LOGI(TAG, "Connecting to: stratum+tls://%s:%d\n", stratum_url, port);
     else
-    {
-        ESP_LOGI(TAG, "Get IP for URL: %s\n", stratum_url);
-        dns_gethostbyname(stratum_url, &ip_Addr, dns_found_cb, NULL);
-        while (!bDNSFound);
+        ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d\n", stratum_url, port);
 
-        if (bDNSInvalid) {
-            ESP_LOGE(TAG, "DNS lookup failed for URL: %s\n", stratum_url);
-            //set ip_Addr to 0.0.0.0 so that connect() will fail
-            IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
-        }
-
-    }
-
-    // make IP address string from ip_Addr
-    snprintf(host_ip, sizeof(host_ip), "%d.%d.%d.%d", ip4_addr1(&ip_Addr.u_addr.ip4), ip4_addr2(&ip_Addr.u_addr.ip4),
-             ip4_addr3(&ip_Addr.u_addr.ip4), ip4_addr4(&ip_Addr.u_addr.ip4));
-    ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d (%s)\n", stratum_url, port, host_ip);
 
     while (1) {
-        struct sockaddr_in dest_addr;
-        dest_addr.sin_addr.s_addr = inet_addr(host_ip);
-        dest_addr.sin_family = AF_INET;
-        dest_addr.sin_port = htons(port);
-        addr_family = AF_INET;
-        ip_protocol = IPPROTO_IP;
-
-        GLOBAL_STATE->sock = socket(addr_family, SOCK_STREAM, ip_protocol);
-        if (GLOBAL_STATE->sock < 0) {
-            ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-            esp_restart();
-            break;
-        }
-        ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, port);
-
-        int err = connect(GLOBAL_STATE->sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
-        if (err != 0)
-        {
-            ESP_LOGE(TAG, "Socket unable to connect to %s:%d (errno %d)", stratum_url, port, errno);
+        esp_err_t ret = STRATUM_V1_transport_connect(stratum_url, port, GLOBAL_STATE->transport);
+        if (ret != ESP_OK) {
+            ESP_LOGE(TAG, "Socket unable to connect to %s:%d (errno %d)", stratum_url, port, ret);
             // close the socket
-            shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
-            close(GLOBAL_STATE->sock);
+            STRATUM_V1_transport_close(GLOBAL_STATE->transport);
             // instead of restarting, retry this every 5 seconds
             vTaskDelay(5000 / portTICK_PERIOD_MS);
             continue;
         }
 
-        STRATUM_V1_configure_version_rolling(GLOBAL_STATE->sock, &GLOBAL_STATE->version_mask);
+        STRATUM_V1_configure_version_rolling(GLOBAL_STATE->transport, &GLOBAL_STATE->version_mask);
 
-        STRATUM_V1_subscribe(GLOBAL_STATE->sock, &GLOBAL_STATE->extranonce_str, &GLOBAL_STATE->extranonce_2_len,
+        STRATUM_V1_subscribe(GLOBAL_STATE->transport, &GLOBAL_STATE->extranonce_str, &GLOBAL_STATE->extranonce_2_len,
                              GLOBAL_STATE->asic_model);
 
         // This should come before the final step of authenticate so the first job is sent with the proper difficulty set
-        STRATUM_V1_suggest_difficulty(GLOBAL_STATE->sock, STRATUM_DIFFICULTY);
+        STRATUM_V1_suggest_difficulty(GLOBAL_STATE->transport, STRATUM_DIFFICULTY);
 
         char * username = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, STRATUM_USER);
-        STRATUM_V1_authenticate(GLOBAL_STATE->sock, username);
+        STRATUM_V1_authenticate(GLOBAL_STATE->transport, username);
         free(username);
 
         ESP_LOGI(TAG, "Extranonce: %s", GLOBAL_STATE->extranonce_str);
         ESP_LOGI(TAG, "Extranonce 2 length: %d", GLOBAL_STATE->extranonce_2_len);
 
         while (1) {
-            char * line = STRATUM_V1_receive_jsonrpc_line(GLOBAL_STATE->sock);
+            char * line = STRATUM_V1_receive_jsonrpc_line(GLOBAL_STATE->transport);
             ESP_LOGI(TAG, "rx: %s", line); // debug incoming stratum messages
             STRATUM_V1_parse(&stratum_api_v1_message, line);
             free(line);
@@ -164,10 +126,9 @@ void stratum_task(void * pvParameters)
             }
         }
 
-        if (GLOBAL_STATE->sock != -1) {
+        if (GLOBAL_STATE->transport != NULL) {
             ESP_LOGE(TAG, "Shutting down socket and restarting...");
-            shutdown(GLOBAL_STATE->sock, 0);
-            close(GLOBAL_STATE->sock);
+            STRATUM_V1_transport_close(GLOBAL_STATE->transport);
         }
     }
     vTaskDelete(NULL);

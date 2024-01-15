@@ -35,6 +35,12 @@ menu "Stratum Configuration"
         help
             Stratum user to use with pool
 
+    config STRATUM_CERT
+        string "Stratum cert"
+        default ""
+        help
+            Stratum cert to use with pool
+
     config STRATUM_PW
         string "Stratum password"
         default "x"

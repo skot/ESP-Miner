@@ -46,7 +46,7 @@ typedef struct
     uint32_t stratum_difficulty;
     uint32_t version_mask;
 
-    int sock;
+    esp_transport_handle_t transport;
 
 } GlobalState;
 

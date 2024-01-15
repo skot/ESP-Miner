@@ -11,6 +11,8 @@
 #define NVS_CONFIG_STRATUM_PORT "stratumport"
 #define NVS_CONFIG_STRATUM_USER "stratumuser"
 #define NVS_CONFIG_STRATUM_PASS "stratumpass"
+#define NVS_CONFIG_STRATUM_TLS "stratumtls"
+#define NVS_CONFIG_STRATUM_CERT "stratumcert"
 #define NVS_CONFIG_ASIC_FREQ "asicfrequency"
 #define NVS_CONFIG_ASIC_VOLTAGE "asicvoltage"
 #define NVS_CONFIG_ASIC_MODEL "asicmodel"

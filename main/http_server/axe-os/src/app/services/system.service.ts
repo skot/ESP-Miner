@@ -41,6 +41,8 @@ export class SystemService {
           stratumURL: "public-pool.io",
           stratumPort: 21496,
           stratumUser: "bc1q99n3pu025yyu0jlywpmwzalyhm36tg5u37w20d.bitaxe-U1",
+          stratumTLS: 0,
+          stratumCert: "",
           frequency: 485,
           version: "2.0",
           flipscreen: 1,

@@ -6,6 +6,8 @@ stratumurl,data,string,public-pool.io
 stratumport,data,u16,21496
 stratumuser,data,string,1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa.bitaxe
 stratumpass,data,string,x
+stratumcert,data,string,
+stratumtls,data,u16,0
 asicfrequency,data,u16,485
 asicvoltage,data,u16,1320
 asicmodel,data,string,BM1366
