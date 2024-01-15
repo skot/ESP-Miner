@@ -264,7 +264,7 @@ int STRATUM_V1_subscribe(esp_transport_handle_t transport, char ** extranonce, i
 {
     // Subscribe
     char subscribe_msg[BUFFER_SIZE];
-    sprintf(subscribe_msg, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"bitaxe %s\"]}\n", send_uid++, model);
+    sprintf(subscribe_msg, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"bitaxe/%s\"]}\n", send_uid++, model);
     debug_stratum_tx(subscribe_msg);
     esp_transport_write(transport, subscribe_msg, strlen(subscribe_msg), TRANSPORT_TIMEOUT_MS);
     char * line;
@@ -298,10 +298,11 @@ int STRATUM_V1_suggest_difficulty(esp_transport_handle_t transport, uint32_t dif
     return 1;
 }
 
-int STRATUM_V1_authenticate(esp_transport_handle_t transport, const char * username)
+int STRATUM_V1_authenticate(esp_transport_handle_t transport, const char * username, const char * pass)
 {
     char authorize_msg[BUFFER_SIZE];
-    sprintf(authorize_msg, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"x\"]}\n", send_uid++, username);
+    sprintf(authorize_msg, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}\n", send_uid++, username,
+            pass);
     debug_stratum_tx(authorize_msg);
 
     esp_transport_write(transport, authorize_msg, strlen(authorize_msg), TRANSPORT_TIMEOUT_MS);
@@ -336,17 +337,24 @@ void STRATUM_V1_configure_version_rolling(esp_transport_handle_t transport, uint
     ESP_LOGI(TAG, "tx: %s", configure_msg);
     esp_transport_write(transport, configure_msg, strlen(configure_msg), TRANSPORT_TIMEOUT_MS);
 
-    char * line;
-    line = STRATUM_V1_receive_jsonrpc_line(transport);
+    char * line = STRATUM_V1_receive_jsonrpc_line(transport);
+    cJSON * json = cJSON_Parse(line);
 
     ESP_LOGI(TAG, "Received result %s", line);
-    StratumApiV1Message stratum_api_v1_message;
-    STRATUM_V1_parse(&stratum_api_v1_message, line);
-    if (stratum_api_v1_message.method == MINING_SET_VERSION_MASK || stratum_api_v1_message.method == STRATUM_RESULT_VERSION_MASK) {
-        *version_mask = stratum_api_v1_message.version_mask;
-        ESP_LOGI(TAG, "Set version mask: %08lx", *version_mask);
+
+    cJSON * result = cJSON_GetObjectItem(json, "result");
+    if (result != NULL) {
+        cJSON * version_rolling_enabled = cJSON_GetObjectItem(result, "version-rolling");
+        if (cJSON_IsBool(version_rolling_enabled) && cJSON_IsTrue(version_rolling_enabled)) {
+            cJSON * mask = cJSON_GetObjectItem(result, "version-rolling.mask");
+            uint32_t version_mask = strtoul(mask->valuestring, NULL, 16);
+            ESP_LOGI(TAG, "Set version mask: %08lx", version_mask);
+        }
+    }else{
+        printf("configure_version result null\n");
     }
 
+    cJSON_Delete(json);
     free(line);
 
     return;

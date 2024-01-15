@@ -60,6 +60,7 @@ export class EditComponent implements OnInit {
           stratumUser: [info.stratumUser, [Validators.required]],
           stratumTLS: [info.stratumTLS == 1],
           stratumCert: [info.stratumCert],
+          stratumPassword: ['password', [Validators.required]],
           ssid: [info.ssid, [Validators.required]],
           wifiPass: ['password'],
           coreVoltage: [info.coreVoltage, [Validators.required]],
@@ -108,6 +109,9 @@ export class EditComponent implements OnInit {
 
     if (form.wifiPass === 'password') {
       delete form.wifiPass;
+    }
+    if (form.stratumPassword === 'password') {
+      delete form.stratumPassword;
     }
 
     this.systemService.updateSystem(this.uri, form)

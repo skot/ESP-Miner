@@ -33,9 +33,13 @@
             <input formControlName="stratumTLS" type="checkbox">
         </div>
         <div class="form-group" *ngIf="form?.get('stratumTLS')?.value">
-            <label>Cert: </label>
+            <label>Stratum Certificate: </label>
             <textarea formControlName="stratumCert" rows="10"></textarea>
         </div>
+            <label>Stratum Password: </label>
+            <input formControlName="stratumPassword" type="password">
+        </div>
+
         <ng-container *ngIf="!devToolsOpen && ASICModel == eASICModel.BM1366">
 
             <div class="form-group">

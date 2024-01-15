@@ -45,6 +45,7 @@ export class SystemService {
           stratumCert: "",
           frequency: 485,
           version: "2.0",
+          boardVersion: "204",
           flipscreen: 1,
           invertscreen: 0,
           invertfanpolarity: 1,

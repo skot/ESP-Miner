@@ -264,6 +264,9 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "stratumUser")) != NULL) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_USER, item->valuestring);
     }
+    if ((item = cJSON_GetObjectItem(root, "stratumPassword")) != NULL) {
+        nvs_config_set_string(NVS_CONFIG_STRATUM_PASS, item->valuestring);
+    }
     if ((item = cJSON_GetObjectItem(root, "stratumPort")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_STRATUM_PORT, item->valueint);
     }
@@ -342,8 +345,9 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     char * stratumURL = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, CONFIG_STRATUM_URL);
     char * stratumUser = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, CONFIG_STRATUM_USER);
     char * stratumCert = nvs_config_get_string(NVS_CONFIG_STRATUM_CERT, CONFIG_STRATUM_CERT);
+    char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, 'unknown');
 
-    cJSON * root = cJSON_CreateObject();
+        cJSON * root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "power", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power);
     cJSON_AddNumberToObject(root, "voltage", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.voltage);
     cJSON_AddNumberToObject(root, "current", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.current);
@@ -369,6 +373,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddStringToObject(root, "stratumCert", stratumCert);
 
     cJSON_AddStringToObject(root, "version", esp_app_get_description()->version);
+    cJSON_AddStringToObject(root, "boardVersion", board_version);
     cJSON_AddStringToObject(root, "runningPartition", esp_ota_get_running_partition()->label);
 
     cJSON_AddNumberToObject(root, "flipscreen", nvs_config_get_u16(NVS_CONFIG_FLIP_SCREEN, 1));
@@ -382,8 +387,9 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     free(stratumURL);
     free(stratumUser);
     free(stratumCert);
+    free(board_version);
 
-    const char * sys_info = cJSON_Print(root);
+        const char * sys_info = cJSON_Print(root);
     httpd_resp_sendstr(req, sys_info);
     free(sys_info);
     cJSON_Delete(root);

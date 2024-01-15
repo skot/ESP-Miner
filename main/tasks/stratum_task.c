@@ -61,20 +61,29 @@ void stratum_task(void * pvParameters)
             continue;
         }
 
-        STRATUM_V1_configure_version_rolling(GLOBAL_STATE->transport, &GLOBAL_STATE->version_mask);
-
+        // mining.subscribe
         STRATUM_V1_subscribe(GLOBAL_STATE->transport, &GLOBAL_STATE->extranonce_str, &GLOBAL_STATE->extranonce_2_len,
                              GLOBAL_STATE->asic_model);
 
+
+        // mining.configure
+        STRATUM_V1_configure_version_rolling(GLOBAL_STATE->transport, &GLOBAL_STATE->version_mask);
+
+
         // This should come before the final step of authenticate so the first job is sent with the proper difficulty set
+        //mining.suggest_difficulty
         STRATUM_V1_suggest_difficulty(GLOBAL_STATE->transport, STRATUM_DIFFICULTY);
 
         char * username = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, STRATUM_USER);
-        STRATUM_V1_authenticate(GLOBAL_STATE->transport, username);
+        char * password = nvs_config_get_string(NVS_CONFIG_STRATUM_PASS, STRATUM_PW);
+        STRATUM_V1_authenticate(GLOBAL_STATE->transport, username, password);
+        free(password);
         free(username);
 
-        ESP_LOGI(TAG, "Extranonce: %s", GLOBAL_STATE->extranonce_str);
-        ESP_LOGI(TAG, "Extranonce 2 length: %d", GLOBAL_STATE->extranonce_2_len);
+
+
+        //ESP_LOGI(TAG, "Extranonce: %s", GLOBAL_STATE->extranonce_str);
+        //ESP_LOGI(TAG, "Extranonce 2 length: %d", GLOBAL_STATE->extranonce_2_len);
 
         while (1) {
             char * line = STRATUM_V1_receive_jsonrpc_line(GLOBAL_STATE->transport);

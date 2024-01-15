@@ -70,7 +70,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json);
 
 void STRATUM_V1_free_mining_notify(mining_notify * params);
 
-int STRATUM_V1_authenticate(esp_transport_handle_t transport, const char * username);
+int STRATUM_V1_authenticate(esp_transport_handle_t transport, const char * username, const char *pass);
 
 void STRATUM_V1_configure_version_rolling(esp_transport_handle_t transport, uint32_t * version_mask);
 
