@@ -28,3 +28,6 @@ html_doc/
 components/components/*
 config.bin
 config.cvs
+
+# ctags file
+tags
