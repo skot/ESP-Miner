@@ -29,3 +29,6 @@ components/components/*
 config.bin
 config.cvs
 managed_components/*
+
+# ctags file
+tags
