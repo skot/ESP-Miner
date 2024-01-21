@@ -4,6 +4,7 @@
 
 #include "i2c_master.h"
 #include "EMC2101.h"
+#include "EMC2302.h"
 #include "INA260.h"
 #include "adc.h"
 #include "connect.h"
@@ -90,8 +91,15 @@ static void _init_system(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
-        case DEVICE_SUPRA:
+        case DEVICE_ULTRA:
             EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            EMC2101_set_fan_speed(1);
+            break;
+        case DEVICE_HEX:
+            // Fan Tests
+            EMC2302_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            EMC2302_set_fan_speed(0, (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
+            EMC2302_set_fan_speed(1, (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
             break;
         default:
     }
