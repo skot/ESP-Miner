@@ -13,6 +13,11 @@
 
 #define STRATUM_USER CONFIG_STRATUM_USER
 
+/* Use platform ID to decide which drivers to use */
+#define PLATFORM_BITAXE 0x01
+#define PLATFORM_ULTRA  0x02
+#define PLATFORM_HEX    0x03
+
 typedef struct
 {
     void (*init_fn)(u_int64_t);
@@ -24,6 +29,8 @@ typedef struct
 
 typedef struct
 {
+	int platform_id;
+
     char * asic_model;
     AsicFunctions ASIC_functions;
     double asic_job_frequency_ms;

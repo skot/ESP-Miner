@@ -3,7 +3,9 @@
 #include "esp_log.h"
 
 #include "DS4432U.h"
+#include "TPS546.h"
 #include "EMC2101.h"
+#include "EMC2302.h"
 #include "INA260.h"
 #include "adc.h"
 #include "connect.h"
@@ -75,11 +77,28 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
 
     ADC_init();
 
-    // DS4432U tests
-    DS4432U_set_vcore(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0);
+    /* perform platform init based on the platform ID */
+    /* TODO add other platforms besides HEX */
+    switch (global_state->platform_id) {
+        case PLATFORM_BITAXE:
+        case PLATFORM_ULTRA:
+            // DS4432U tests
+            DS4432U_set_vcore(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0);
 
-    EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
-    EMC2101_set_fan_speed(1);
+            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            EMC2101_set_fan_speed(1);
+            break;
+        case PLATFORM_HEX:
+            // Initialize the core voltage regulator
+            TPS546_init();
+            // Fan Tests
+            EMC2302_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            EMC2302_set_fan_speed(0, (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
+            EMC2302_set_fan_speed(1, (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
+            break;
+        default:
+            ESP_LOGI(TAG, "ERROR- invalid platform ID");
+    }
 
     vTaskDelay(500 / portTICK_PERIOD_MS);
 
