@@ -7,7 +7,7 @@
 
 
 void TPS546_init(void);
-//void TPS546_set_voltage(float);
-//void TPS546_get_status(void);
+int TPS546_get_temperature(void);
+void TPS546_set_vout(int millivolts);
 
 #endif /* TPS546_H_ */
