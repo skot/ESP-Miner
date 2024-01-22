@@ -47,14 +47,16 @@ esp_err_t smb_read_byte(uint8_t command, uint8_t *data)
     ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, SMBUS_DEFAULT_TIMEOUT));
     i2c_cmd_link_delete(cmd);
 
+    // TODO get an actual error status
     return err;
 }
 
 /**
  * @brief SMBus read word
  */
-esp_err_t smb_read_word(uint8_t command, uint8_t *data)
+esp_err_t smb_read_word(uint8_t command, uint16_t *result)
 {
+    uint8_t data[2];
     esp_err_t err = ESP_FAIL;
 
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
@@ -69,6 +71,8 @@ esp_err_t smb_read_word(uint8_t command, uint8_t *data)
     ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, SMBUS_DEFAULT_TIMEOUT));
     i2c_cmd_link_delete(cmd);
 
+    *result = (data[1] << 8) + data[0];
+    // TODO get an actual error status
     return err;
 }
 
@@ -98,6 +102,7 @@ static esp_err_t smb_read_block(uint8_t command, uint8_t * data, uint8_t len)
     ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, SMBUS_DEFAULT_TIMEOUT));
     i2c_cmd_link_delete(cmd);
 
+    // TODO get an actual error status
     return 0;
 }
 
@@ -125,6 +130,59 @@ static esp_err_t register_write_byte(uint8_t reg_addr, uint8_t data)
     return ret;
 }
 
+/**
+ * @brief Convert an SLINEAR11 value into a float
+ */
+float slinear11_2_float(uint16_t value)
+{
+    int exponent, mantissa;
+    float result;
+
+    // First 5 bits is exponent in twos-complement
+    // check the first bit of the exponent to see if its negative
+    if (value & 0x8000) {
+        // exponent is negative
+        exponent = -1 * (((~value >> 11) & 0x001F) + 1);
+    } else {
+        exponent = (value >> 11);
+    }
+    // last 11 bits is the mantissa in twos-complement
+    // check the first bit of the mantissa to see if its negative
+    if (value & 0x400) {
+        // mantissa is negative
+        mantissa = -1 * ((~value & 0x07FF) + 1);
+    } else {
+        mantissa = (value & 0x07FF);
+    }
+
+    // calculate result (mantissa * 2^exponent)
+    result = mantissa * powf(2.0, exponent);
+    return result;
+}
+
+/**
+ * @brief Convert a ULINEAR16 value into an int
+ */
+int ulinear16_2_int(uint16_t value)
+{
+    float exponent;
+    int result;
+    uint8_t voutmode;
+
+    /* the exponent comes from VOUT_MODE bits[4..0] */
+    /* in twos-complement */
+    smb_read_byte(PMBUS_VOUT_MODE, &voutmode);
+    if (voutmode & 0x10) {
+        // exponent is negative
+        exponent = -1 * ((~voutmode & 0x1F) + 1);
+    } else {
+        exponent = (voutmode & 0x1F);
+    }
+
+    result = (value * powf(2.0, exponent)) * 1000;
+    return result;
+}
+
 // Set up the TPS546 regulator and turn it on
 void TPS546_init(void)
 {
@@ -133,6 +191,8 @@ void TPS546_init(void)
     uint16_t u16_value;
     float temp;
     int mantissa, exponent;
+    int millivolts;
+    float iout;
 
     ESP_LOGI(TAG, "Initializing the core voltage regulator");
 
@@ -145,39 +205,27 @@ void TPS546_init(void)
 
     /* Get temperature (SLINEAR11) */
     ESP_LOGI(TAG, "--------------------------------");
-    smb_read_word(PMBUS_READ_TEMPERATURE_1, data);
-    u16_value = (data[1] << 8) + data[0];
-    ESP_LOGI(TAG, "Temperature raw: %04x", u16_value);
-    if (u16_value & 0x400) {
-        // mantissa is negative
-        mantissa = -1 * ((~u16_value & 0x07FF) + 1);
-    } else {
-        mantissa = (u16_value & 0x07FF);
-    }
-    if (u16_value & 0x8000) {
-        // exponent is negative
-        exponent = -1 * (((~u16_value >> 11) & 0x001F) + 1);
-    } else {
-        exponent = (u16_value >> 11);
-    }
-    ESP_LOGI(TAG, "exp: %04x, mant: %04x", exponent, mantissa);
-    temp = mantissa * powf(2.0, exponent);
+    smb_read_word(PMBUS_READ_TEMPERATURE_1, &u16_value);
+    temp = slinear11_2_float(u16_value);
     ESP_LOGI(TAG, "Temp: %2.1f", temp);
 
     /* Get voltage setting (ULINEAR16) */
     ESP_LOGI(TAG, "--------------------------------");
-    smb_read_byte(PMBUS_VOUT_MODE, &u8_value);
-    //ESP_LOGI(TAG, "VOUT mode: %02x", u8_value);
-    float mode_exponent = -1 * ((~u8_value & 0x1F) + 1);
-    //ESP_LOGI(TAG, "mode_exponent: %f", mode_exponent);
+    smb_read_word(PMBUS_VOUT_COMMAND, &u16_value);
+    millivolts = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout set to: %d mV", millivolts);
 
-    smb_read_word(PMBUS_VOUT_COMMAND, data);
-    u16_value = (data[1] << 8) + data[0];
-    //ESP_LOGI(TAG, "VOUT: %d", u16_value);
-    float scaler = powf(2.0, mode_exponent);
-    //ESP_LOGI(TAG, "scaler: %f", scaler);
-    int voltage = (u16_value * scaler) * 1000;
-    ESP_LOGI(TAG, "Vout: %d mV", voltage);
+    /* Get voltage output (ULINEAR16) */
+//    ESP_LOGI(TAG, "--------------------------------");
+//    smb_read_word(PMBUS_READ_VOUT, &u16_value);
+//    millivolts = ulinear16_2_int(u16_value);
+//    ESP_LOGI(TAG, "Vout measured: %d mV", millivolts);
+
+    /* Get output current (SLINEAR11) */
+    ESP_LOGI(TAG, "--------------------------------");
+    smb_read_word(PMBUS_READ_IOUT, &u16_value);
+    iout = slinear11_2_float(u16_value);
+    ESP_LOGI(TAG, "Iout measured: %2.2f", iout);
 
 }
 
