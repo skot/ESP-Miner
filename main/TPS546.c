@@ -52,6 +52,26 @@ esp_err_t smb_read_byte(uint8_t command, uint8_t *data)
 }
 
 /**
+ * @brief SMBus write byte
+ */
+esp_err_t smb_write_byte(uint8_t command, uint8_t data)
+{
+    esp_err_t err = ESP_FAIL;
+
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, TPS546_I2CADDR << 1 | WRITE_BIT, ACK_CHECK);
+    i2c_master_write_byte(cmd, command, ACK_CHECK);
+    i2c_master_write_byte(cmd, data, ACK_CHECK);
+    i2c_master_stop(cmd);
+    ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, SMBUS_DEFAULT_TIMEOUT));
+    i2c_cmd_link_delete(cmd);
+
+    // TODO get an actual error status
+    return err;
+}
+
+/**
  * @brief SMBus read word
  */
 esp_err_t smb_read_word(uint8_t command, uint16_t *result)
@@ -72,6 +92,27 @@ esp_err_t smb_read_word(uint8_t command, uint16_t *result)
     i2c_cmd_link_delete(cmd);
 
     *result = (data[1] << 8) + data[0];
+    // TODO get an actual error status
+    return err;
+}
+
+/**
+ * @brief SMBus write word
+ */
+esp_err_t smb_write_word(uint8_t command, uint16_t data)
+{
+    esp_err_t err = ESP_FAIL;
+
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, TPS546_I2CADDR << 1 | WRITE_BIT, ACK_CHECK);
+    i2c_master_write_byte(cmd, command, ACK_CHECK);
+    i2c_master_write_byte(cmd, (uint8_t)(data & 0x00FF), ACK_CHECK);
+    i2c_master_write_byte(cmd, (uint8_t)((data & 0xFF00) >> 8), NACK_VALUE);
+    i2c_master_stop(cmd);
+    ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, SMBUS_DEFAULT_TIMEOUT));
+    i2c_cmd_link_delete(cmd);
+
     // TODO get an actual error status
     return err;
 }
@@ -183,15 +224,42 @@ int ulinear16_2_int(uint16_t value)
     return result;
 }
 
+/**
+ * @brief Convert an int value into a ULINEAR16
+ */
+uint16_t int_2_ulinear16(int value)
+{
+    uint8_t voutmode;
+    float exponent;
+    int result;
+
+    /* the exponent comes from VOUT_MODE bits[4..0] */
+    /* in twos-complement */
+    smb_read_byte(PMBUS_VOUT_MODE, &voutmode);
+    if (voutmode & 0x10) {
+        // exponent is negative
+        exponent = -1 * ((~voutmode & 0x1F) + 1);
+    } else {
+        exponent = (voutmode & 0x1F);
+    }
+
+    ESP_LOGI(TAG, "Exp: %f", exponent);
+    result = (value / powf(2.0, exponent)) / 1000;
+    //result = (value * powf(2.0, exponent)) * 1000;
+
+    return result;
+}
+
+/*--- Public TPS546 functions ---*/
+
 // Set up the TPS546 regulator and turn it on
 void TPS546_init(void)
 {
 	uint8_t data[6];
     uint8_t u8_value;
     uint16_t u16_value;
-    float temp;
-    int mantissa, exponent;
     int millivolts;
+    int vmax;
     float iout;
 
     ESP_LOGI(TAG, "Initializing the core voltage regulator");
@@ -205,17 +273,35 @@ void TPS546_init(void)
 
     /* Get temperature (SLINEAR11) */
     ESP_LOGI(TAG, "--------------------------------");
-    smb_read_word(PMBUS_READ_TEMPERATURE_1, &u16_value);
-    temp = slinear11_2_float(u16_value);
-    ESP_LOGI(TAG, "Temp: %2.1f", temp);
+    ESP_LOGI(TAG, "Temp: %d", TPS546_get_temperature());
 
     /* Get voltage setting (ULINEAR16) */
     ESP_LOGI(TAG, "--------------------------------");
     smb_read_word(PMBUS_VOUT_COMMAND, &u16_value);
+    ESP_LOGI(TAG, "VOUT_COMMAND: %04x", u16_value);
     millivolts = ulinear16_2_int(u16_value);
     ESP_LOGI(TAG, "Vout set to: %d mV", millivolts);
 
+    u16_value = int_2_ulinear16(millivolts);
+    ESP_LOGI(TAG, "Converted back: %04x", u16_value);
+
+    ESP_LOGI(TAG, "--------------------------------");
+    smb_read_word(PMBUS_VOUT_MAX, &u16_value);
+    ESP_LOGI(TAG, "VOUT_MAX: %04x", u16_value);
+    vmax = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout Max set to: %d mV", vmax);
+
+    u16_value = int_2_ulinear16(1300);
+    smb_write_word(PMBUS_VOUT_MAX, u16_value);
+    ESP_LOGI(TAG, "Vout Max changed to 1300");
+
+    smb_read_word(PMBUS_VOUT_MAX, &u16_value);
+    ESP_LOGI(TAG, "VOUT_MAX: %04x", u16_value);
+    vmax = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout Max set to: %d mV", vmax);
+
     /* Get voltage output (ULINEAR16) */
+    // This gets a timeout, don't know why.  clock stretching?
 //    ESP_LOGI(TAG, "--------------------------------");
 //    smb_read_word(PMBUS_READ_VOUT, &u16_value);
 //    millivolts = ulinear16_2_int(u16_value);
@@ -228,5 +314,25 @@ void TPS546_init(void)
     ESP_LOGI(TAG, "Iout measured: %2.2f", iout);
 
 }
+
+int TPS546_get_temperature(void)
+{
+    uint16_t value;
+    float temp;
+
+    smb_read_word(PMBUS_READ_TEMPERATURE_1, &value);
+    temp = slinear11_2_float(value);
+    return (int)temp;
+}
+
+void TPS546_set_vout(int millivolts)
+{
+    uint16_t value;
+
+    value = int_2_ulinear16(millivolts);
+    smb_write_word(PMBUS_VOUT_COMMAND, value);
+    ESP_LOGI(TAG, "Vout changed to %d mV", millivolts);
+}
+
 
 
