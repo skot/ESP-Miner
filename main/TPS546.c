@@ -199,8 +199,10 @@ void TPS546_init(void)
 	uint8_t data[6];
     uint8_t u8_value;
     uint16_t u16_value;
+    int i_value;
     int millivolts;
     int vmax;
+    float f_value;
     float iout;
 
     ESP_LOGI(TAG, "Initializing the core voltage regulator");
@@ -212,34 +214,34 @@ void TPS546_init(void)
     smb_read_byte(PMBUS_REVISION, &u8_value);
     ESP_LOGI(TAG, "PMBus revision: %02x", u8_value);
 
-    /* Get temperature (SLINEAR11) */
+
+    /* Show temperature (SLINEAR11) */
     ESP_LOGI(TAG, "--------------------------------");
     ESP_LOGI(TAG, "Temp: %d", TPS546_get_temperature());
 
-    /* Get voltage setting (ULINEAR16) */
-    ESP_LOGI(TAG, "--------------------------------");
-    smb_read_word(PMBUS_VOUT_COMMAND, &u16_value);
-    ESP_LOGI(TAG, "VOUT_COMMAND: %04x", u16_value);
-    millivolts = ulinear16_2_int(u16_value);
-    ESP_LOGI(TAG, "Vout set to: %d mV", millivolts);
 
-    u16_value = int_2_ulinear16(millivolts);
-    ESP_LOGI(TAG, "Converted back: %04x", u16_value);
+    /* Show voltage settings */
+    TPS546_show_voltage_settings();
 
-    ESP_LOGI(TAG, "--------------------------------");
-    smb_read_word(PMBUS_VOUT_MAX, &u16_value);
-    ESP_LOGI(TAG, "VOUT_MAX: %04x", u16_value);
-    vmax = ulinear16_2_int(u16_value);
-    ESP_LOGI(TAG, "Vout Max set to: %d mV", vmax);
+    /* Test changing value */
+//    u16_value = int_2_ulinear16(1300);
+//    smb_write_word(PMBUS_VOUT_MAX, u16_value);
+//    ESP_LOGI(TAG, "Vout Max changed to 1300");
 
-    u16_value = int_2_ulinear16(1300);
-    smb_write_word(PMBUS_VOUT_MAX, u16_value);
-    ESP_LOGI(TAG, "Vout Max changed to 1300");
+//    smb_read_word(PMBUS_VOUT_MAX, &u16_value);
+//    ESP_LOGI(TAG, "VOUT_MAX: %04x", u16_value);
+//    vmax = ulinear16_2_int(u16_value);
+//    ESP_LOGI(TAG, "Vout Max set to: %d mV", vmax);
 
-    smb_read_word(PMBUS_VOUT_MAX, &u16_value);
-    ESP_LOGI(TAG, "VOUT_MAX: %04x", u16_value);
-    vmax = ulinear16_2_int(u16_value);
-    ESP_LOGI(TAG, "Vout Max set to: %d mV", vmax);
+    ESP_LOGI(TAG, "-----------CURRENT---------------------");
+
+    /* Get output current (SLINEAR11) */
+    smb_read_word(PMBUS_READ_IOUT, &u16_value);
+    iout = slinear11_2_float(u16_value);
+    ESP_LOGI(TAG, "Iout measured: %2.2f", iout);
+
+
+
 
     /* Get voltage output (ULINEAR16) */
     // This gets a timeout, don't know why.  clock stretching?
@@ -247,12 +249,6 @@ void TPS546_init(void)
 //    smb_read_word(PMBUS_READ_VOUT, &u16_value);
 //    millivolts = ulinear16_2_int(u16_value);
 //    ESP_LOGI(TAG, "Vout measured: %d mV", millivolts);
-
-    /* Get output current (SLINEAR11) */
-    ESP_LOGI(TAG, "--------------------------------");
-    smb_read_word(PMBUS_READ_IOUT, &u16_value);
-    iout = slinear11_2_float(u16_value);
-    ESP_LOGI(TAG, "Iout measured: %2.2f", iout);
 
 }
 
@@ -275,5 +271,69 @@ void TPS546_set_vout(int millivolts)
     ESP_LOGI(TAG, "Vout changed to %d mV", millivolts);
 }
 
+void TPS546_show_voltage_settings(void)
+{
+    uint16_t u16_value;
+    int i_value;
+    float f_value;
+    int millivolts;
 
+    ESP_LOGI(TAG, "-----------VOLTAGE---------------------");
+    /* VIN_ON SLINEAR11 */
+    smb_read_word(PMBUS_VIN_ON, &u16_value);
+    f_value = slinear11_2_float(u16_value);
+    ESP_LOGI(TAG, "VIN ON set to: %f", f_value);
+
+    /* VIN_OFF SLINEAR11 */
+    smb_read_word(PMBUS_VIN_OFF, &u16_value);
+    f_value = slinear11_2_float(u16_value);
+    ESP_LOGI(TAG, "VIN OFF set to: %f", f_value);
+
+    /* VOUT_MAX */
+    smb_read_word(PMBUS_VOUT_MAX, &u16_value);
+    i_value = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout Max set to: %d mV", i_value);
+
+    /* VOUT_OV_FAULT_LIMIT */
+    smb_read_word(PMBUS_VOUT_OV_FAULT_LIMIT, &u16_value);
+    i_value = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout OV Fault Limit: %d mV", i_value);
+
+    /* VOUT_OV_WARN_LIMIT */
+    smb_read_word(PMBUS_VOUT_OV_WARN_LIMIT, &u16_value);
+    i_value = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout OV Warn Limit: %d mV", i_value);
+
+    /* VOUT_MARGIN_HIGH */
+    smb_read_word(PMBUS_VOUT_MARGIN_HIGH, &u16_value);
+    i_value = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout Margin HIGH: %d mV", i_value);
+
+    /* --- VOUT_COMMAND --- */
+    smb_read_word(PMBUS_VOUT_COMMAND, &u16_value);
+    millivolts = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout set to: %d mV", millivolts);
+    //u16_value = int_2_ulinear16(millivolts);
+    //ESP_LOGI(TAG, "Converted back: %04x", u16_value);
+
+    /* VOUT_MARGIN_LOW */
+    smb_read_word(PMBUS_VOUT_MARGIN_LOW, &u16_value);
+    i_value = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout Margin LOW: %d mV", i_value);
+
+    /* VOUT_UV_WARN_LIMIT */
+    smb_read_word(PMBUS_VOUT_UV_WARN_LIMIT, &u16_value);
+    i_value = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout UV Warn Limit: %d mV", i_value);
+
+    /* VOUT_UV_FAULT_LIMIT */
+    smb_read_word(PMBUS_VOUT_UV_FAULT_LIMIT, &u16_value);
+    i_value = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout UV Fault Limit: %d mV", i_value);
+
+    /* VOUT_MIN */
+    smb_read_word(PMBUS_VOUT_MIN, &u16_value);
+    i_value = ulinear16_2_int(u16_value);
+    ESP_LOGI(TAG, "Vout Min set to: %d mV", i_value);
+}
 
