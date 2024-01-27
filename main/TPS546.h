@@ -53,6 +53,8 @@ struct tps546_settings_t
 };
 
 void TPS546_init(void);
+int TPS546_get_frequency(void);
+void TPS546_set_frequency(int);
 int TPS546_get_temperature(void);
 void TPS546_set_vout(int millivolts);
 void TPS546_show_voltage_settings(void);

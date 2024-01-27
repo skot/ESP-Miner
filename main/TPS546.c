@@ -25,7 +25,7 @@ static const char *TAG = "TPS546.c";
 /**
  * @brief SMBus read byte
  */
-esp_err_t smb_read_byte(uint8_t command, uint8_t *data)
+static esp_err_t smb_read_byte(uint8_t command, uint8_t *data)
 {
     esp_err_t err = ESP_FAIL;
 
@@ -47,7 +47,7 @@ esp_err_t smb_read_byte(uint8_t command, uint8_t *data)
 /**
  * @brief SMBus write byte
  */
-esp_err_t smb_write_byte(uint8_t command, uint8_t data)
+static esp_err_t smb_write_byte(uint8_t command, uint8_t data)
 {
     esp_err_t err = ESP_FAIL;
 
@@ -67,7 +67,7 @@ esp_err_t smb_write_byte(uint8_t command, uint8_t data)
 /**
  * @brief SMBus read word
  */
-esp_err_t smb_read_word(uint8_t command, uint16_t *result)
+static esp_err_t smb_read_word(uint8_t command, uint16_t *result)
 {
     uint8_t data[2];
     esp_err_t err = ESP_FAIL;
@@ -92,7 +92,7 @@ esp_err_t smb_read_word(uint8_t command, uint16_t *result)
 /**
  * @brief SMBus write word
  */
-esp_err_t smb_write_word(uint8_t command, uint16_t data)
+static esp_err_t smb_write_word(uint8_t command, uint16_t data)
 {
     esp_err_t err = ESP_FAIL;
 
@@ -140,10 +140,11 @@ static esp_err_t smb_read_block(uint8_t command, uint8_t * data, uint8_t len)
     return 0;
 }
 
+
 /**
- * @brief Convert an SLINEAR11 value into a float
+ * @brief Convert an SLINEAR11 value into an int
  */
-float slinear11_2_float(uint16_t value)
+static int slinear11_2_int(uint16_t value)
 {
     int exponent, mantissa;
     float result;
@@ -167,13 +168,56 @@ float slinear11_2_float(uint16_t value)
 
     // calculate result (mantissa * 2^exponent)
     result = mantissa * powf(2.0, exponent);
+    ESP_LOGI(TAG, "result: %f", result);
+    return (int)result;
+}
+
+/**
+ * @brief Convert an int value into an SLINEAR11
+ */
+static uint16_t int_2_slinear11(int value)
+{
+    float mantissa;
+    int exponent;
+    uint16_t result = 0;
+
+    mantissa = frexp(value, &exponent);
+    ESP_LOGI(TAG, "mantissa: %f, exponent: %d", mantissa, exponent);
+
+    result = (mantissa * 1024);
+//  ESP_LOGI(TAG, "result: %04x", result);
+    // TPS546.c: Writing new frequency: 550
+    // TPS546.c: result: 0.537109, exponent: 10
+
+    // First 5 bits is exponent in twos-complement
+    // check the first bit of the exponent to see if its negative
+//    if (value & 0x8000) {
+        // exponent is negative
+//        exponent = -1 * (((~value >> 11) & 0x001F) + 1);
+//    } else {
+//        exponent = (value >> 11);
+//    }
+    // last 11 bits is the mantissa in twos-complement
+    // check the first bit of the mantissa to see if its negative
+//    if (value & 0x400) {
+        // mantissa is negative
+//        mantissa = -1 * ((~value & 0x07FF) + 1);
+//    } else {
+//        mantissa = (value & 0x07FF);
+//    }
+
+    // TPS546.c: Read Freq: 1234
+    // TPS546.c: result: 2256.000000
+
+    // calculate result (mantissa * 2^exponent)
+//    result = mantissa * powf(2.0, exponent);
     return result;
 }
 
 /**
  * @brief Convert a ULINEAR16 value into an int
  */
-int ulinear16_2_int(uint16_t value)
+static int ulinear16_2_int(uint16_t value)
 {
     float exponent;
     int result;
@@ -193,6 +237,34 @@ int ulinear16_2_int(uint16_t value)
     return result;
 }
 
+/**
+ * @brief Convert an int value into a ULINEAR16
+ */
+static uint16_t int_2_ulinear16(int value)
+{
+    uint8_t voutmode;
+    float exponent;
+    int result;
+
+    /* the exponent comes from VOUT_MODE bits[4..0] */
+    /* in twos-complement */
+    smb_read_byte(PMBUS_VOUT_MODE, &voutmode);
+    if (voutmode & 0x10) {
+        // exponent is negative
+        exponent = -1 * ((~voutmode & 0x1F) + 1);
+    } else {
+        exponent = (voutmode & 0x1F);
+    }
+
+    ESP_LOGI(TAG, "Exp: %f", exponent);
+    result = (value / powf(2.0, exponent)) / 1000;
+    //result = (value * powf(2.0, exponent)) * 1000;
+
+    return result;
+}
+
+/*--- Public TPS546 functions ---*/
+
 // Set up the TPS546 regulator and turn it on
 void TPS546_init(void)
 {
@@ -203,8 +275,7 @@ void TPS546_init(void)
     int millivolts;
     int vmax;
     float f_value;
-    float iout;
-
+    int iout;
     ESP_LOGI(TAG, "Initializing the core voltage regulator");
 
     smb_read_block(PMBUS_IC_DEVICE_ID, data, 6);
@@ -214,11 +285,13 @@ void TPS546_init(void)
     smb_read_byte(PMBUS_REVISION, &u8_value);
     ESP_LOGI(TAG, "PMBus revision: %02x", u8_value);
 
-
-    /* Show temperature (SLINEAR11) */
+    /* Show temperature */
     ESP_LOGI(TAG, "--------------------------------");
     ESP_LOGI(TAG, "Temp: %d", TPS546_get_temperature());
 
+    /* Show switching frequency */
+    TPS546_get_frequency();
+    TPS546_set_frequency(650);
 
     /* Show voltage settings */
     TPS546_show_voltage_settings();
@@ -234,14 +307,10 @@ void TPS546_init(void)
 //    ESP_LOGI(TAG, "Vout Max set to: %d mV", vmax);
 
     ESP_LOGI(TAG, "-----------CURRENT---------------------");
-
     /* Get output current (SLINEAR11) */
     smb_read_word(PMBUS_READ_IOUT, &u16_value);
-    iout = slinear11_2_float(u16_value);
-    ESP_LOGI(TAG, "Iout measured: %2.2f", iout);
-
-
-
+    iout = slinear11_2_int(u16_value);
+    ESP_LOGI(TAG, "Iout measured: %d", iout);
 
     /* Get voltage output (ULINEAR16) */
     // This gets a timeout, don't know why.  clock stretching?
@@ -252,14 +321,46 @@ void TPS546_init(void)
 
 }
 
+int TPS546_get_frequency(void)
+{
+    uint16_t value;
+    int freq;
+
+    smb_read_word(PMBUS_FREQUENCY_SWITCH, &value);
+    ESP_LOGI(TAG, "Read Freq: %04x", value);
+    freq = slinear11_2_int(value);
+
+    ESP_LOGI(TAG, "Frequency: %d", freq);
+    return (int)freq;
+}
+
+void TPS546_set_frequency(int newfreq)
+{
+    uint16_t value;
+    int freq;
+
+    ESP_LOGI(TAG, "Writing new frequency: %d", newfreq);
+    value = int_2_slinear11(newfreq);
+    //value = 0xC999;
+    ESP_LOGI(TAG, "New value: 0x%04x", value);
+    //smb_write_word(PMBUS_FREQUENCY_SWITCH, value);
+
+    ESP_LOGI(TAG, "Checking conversion...");
+    freq = slinear11_2_int(value);
+    ESP_LOGI(TAG, "Converted value: %d", freq);
+
+    //ESP_LOGI(TAG, "Frequency: %d", (int)freq);
+    //return (int)freq;
+}
+
 int TPS546_get_temperature(void)
 {
     uint16_t value;
-    float temp;
+    int temp;
 
     smb_read_word(PMBUS_READ_TEMPERATURE_1, &value);
-    temp = slinear11_2_float(value);
-    return (int)temp;
+    temp = slinear11_2_int(value);
+    return temp;
 }
 
 void TPS546_set_vout(int millivolts)
@@ -281,13 +382,13 @@ void TPS546_show_voltage_settings(void)
     ESP_LOGI(TAG, "-----------VOLTAGE---------------------");
     /* VIN_ON SLINEAR11 */
     smb_read_word(PMBUS_VIN_ON, &u16_value);
-    f_value = slinear11_2_float(u16_value);
-    ESP_LOGI(TAG, "VIN ON set to: %f", f_value);
+    i_value = slinear11_2_int(u16_value);
+    ESP_LOGI(TAG, "VIN ON set to: %d", i_value);
 
     /* VIN_OFF SLINEAR11 */
     smb_read_word(PMBUS_VIN_OFF, &u16_value);
-    f_value = slinear11_2_float(u16_value);
-    ESP_LOGI(TAG, "VIN OFF set to: %f", f_value);
+    i_value = slinear11_2_int(u16_value);
+    ESP_LOGI(TAG, "VIN OFF set to: %d", i_value);
 
     /* VOUT_MAX */
     smb_read_word(PMBUS_VOUT_MAX, &u16_value);
