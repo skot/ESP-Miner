@@ -5,54 +5,63 @@
 #define TPS546_MANUFACTURER_ID 0xFE  //< Manufacturer ID
 #define TPS546_REVISION        0xFF  //< Chip revision
 
-struct tps546_settings_t
-{
-  int switch_frequency;
+/*-------------------------*/
+/* These are the inital values for the voltage regulator configuration */
+/* when the config revision stored in the TPS546 doesn't match, these values are used */
 
-  /* vin voltage */
-  int vin_on;	/* voltage level to start power conversion */
-  int vin_off;  /* voltage level to stop power conversion */
-  int vin_uv_warn_limit;
-  int vin_ov_fault_limit;
-  int vin_ov_fault_response;
+
+#define TPS546_INIT_FREQUENCY 650  /* KHz */
+
+/* vin voltage */
+#define TPS546_INIT_VIN_ON  11900  /* mV */
+#define TPS546_INIT_VIN_OFF 11000  /* mV */
+#define TPS546_INIT_VIN_UV_WARN_LIMIT 11000 /* mV */
+#define TPS546_INIT_VIN_OV_FAULT_LIMIT 14000 /* mV */
+#define TPS546_INIT_VIN_OV_FAULT_RESPONSE 0xB7  /* retry 6 times */
 
   /* vout voltage */
-  int vout_transition_rate;
-  int vout_scale_loop;
-  int vout_trim;
-  int vout_max;
-  int vout_ov_fault_limit;
-  int vout_ov_warn_limit;
-  int vout_margin_high;
-  int vout_command;
-  int vout_margin_low;
-  int vout_uv_warn_limit;
-  int vout_uv_fault_limit;
-  int vout_min;
+#define TPS546_INIT_SCALE_LOOP 0xC808  /* 0.125 */
+#define TPS546_INIT_VOUT_MAX 4500 /* mV */
+#define TPS546_INIT_VOUT_OV_FAULT_LIMIT 4500 /* mV */
+#define TPS546_INIT_VOUT_OV_WARN_LIMIT  4400 /* mV */
+#define TPS546_INIT_VOUT_COMMAND 3600 /* mV */
+#define TPS546_INIT_VOUT_UV_WARN_LIMIT 3100 /* mV */
+#define TPS546_INIT_VOUT_UV_FAULT_LIMIT 3000 /* mV */
+#define TPS546_INIT_VOUT_MIN 3000 /* mv */
 
   /* iout current */
-  int iout_oc_warn_limit;
-  int iout_oc_fault_limit;
-  int iout_oc_fault_response;
-  int iout_cal_gain;
-  int iout_cal_offset;
+#define TPS546_INIT_IOUT_OC_WARN_LIMIT 25000 /* mA */
+#define TPS546_INIT_IOUT_OC_FAULT_LIMIT 30000 /* mA */
+#define TPS546_INIT_IOUT_OC_FAULT_RESPONSE 0xC0  /* shut down, no retries */
 
   /* temperature */
-  int ot_warn_limit;
-  int ot_fault_limit;
-  int ot_fault_response;
+#define TPS546_INIT_OT_WARN_LIMIT  70 /* degrees C */
+#define TPS546_INIT_OT_FAULT_LIMIT 80 /* degrees C */
+#define TPS546_INIT_OT_FAULT_RESPONSE 0xFF /* wait for cooling, and retry */
 
   /* timing */
-  int ton_delay;
-  int ton_rise;
-  int ton_max_fault_limit;
-  int ton_max_fault_response;
-  int toff_delay;
-  int toff_fall;
+#define TPS546_INIT_TON_DELAY 0
+#define TPS546_INIT_TON_RISE 3
+#define TPS546_INIT_TON_MAX_FAULT_LIMIT 0
+#define TPS546_INIT_TON_MAX_FAULT_RESPONSE 0x3B
+#define TPS546_INIT_TOFF_DELAY 0
+#define TPS546_INIT_TOFF_FALL 0
 
-};
+/*-------------------------*/
 
-void TPS546_init(void);
+/* PMBUS_ON_OFF_CONFIG initialization values */
+#define ON_OFF_CONFIG_PU 0x10   // turn on PU bit
+#define ON_OFF_CONFIG_CMD 0x08  // turn on CMD bit
+#define ON_OFF_CONFIG_CP 0x00   // turn off CP bit
+#define ON_OFF_CONFIG_POLARITY 0x00 // turn off POLARITY bit
+#define ON_OFF_CONFIG_DELAY 0x00 // turn off DELAY bit
+
+
+/* public functions */
+int TPS546_init(void);
+void TPS546_read_mfr_info(uint8_t *);
+void TPS546_set_mfr_info(void);
+void TPS546_write_entire_config(void);
 int TPS546_get_frequency(void);
 void TPS546_set_frequency(int);
 int TPS546_get_temperature(void);
