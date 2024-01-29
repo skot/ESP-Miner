@@ -27,6 +27,8 @@ static uint8_t MFR_ID[] = {'B', 'A', 'X'};
 static uint8_t MFR_MODEL[] = {'H', 'E', 'X'};
 static uint8_t MFR_REVISION[] = {0x00, 0x00, 0x01};
 
+static uint8_t COMPENSATION_CONFIG[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
 /**
  * @brief SMBus read byte
  */
@@ -295,6 +297,7 @@ int TPS546_init(void)
     int iout;
     uint8_t mfr_revision[3];
     int temp;
+    uint8_t comp_config[5];
 
     ESP_LOGI(TAG, "Initializing the core voltage regulator");
 
@@ -321,6 +324,8 @@ int TPS546_init(void)
         ESP_LOGI(TAG, "Config version mismatch, writing new config values");
         //TPS546_write_entire_config();
         // TODO write new config version here
+
+        
     }
 
     /* Show temperature */
@@ -367,6 +372,11 @@ int TPS546_init(void)
     ESP_LOGI(TAG, "TOFF_FALL: %d", temp);
     ESP_LOGI(TAG, "--------------------------------------");
 
+    // Read the compensation config registers
+    smb_read_block(PMBUS_COMPENSATION_CONFIG, comp_config, 5);
+    ESP_LOGI(TAG, "COMPENSATION CONFIG");
+    ESP_LOGI(TAG, "%02x %02x %02x %02x %02x", comp_config[0], comp_config[1],
+        comp_config[2], comp_config[3], comp_config[4]);
 
     return 0;
 }
@@ -439,6 +449,19 @@ void TPS546_write_entire_config(void)
     smb_write_byte(PMBUS_TON_MAX_FAULT_RESPONSE, TPS546_INIT_TON_MAX_FAULT_RESPONSE);
     smb_write_word(PMBUS_TOFF_DELAY, int_2_slinear11(TPS546_INIT_TOFF_DELAY));
     smb_write_word(PMBUS_TOFF_FALL, int_2_slinear11(TPS546_INIT_TOFF_FALL));
+
+    /* Stack/sync config */
+    smb_write_word(PMBUS_STACK_CONFIG, INIT_STACK_CONFIG);
+    smb_write_word(PMBUS_SYNC_CONFIG, INIT_SYNC_CONFIG);
+
+    /* Compensation config */
+    smb_write_block(PMBUS_COMPENSATION_CONFIG, COMPENSATION_CONFIG, 5);
+
+    /* Slave address */
+    smb_write_byte(PMBUS_SLAVE_ADDRESS, TPS546_I2CADDR);
+
+    /* configure the bootup behavior regarding pin detect values vs NVM values */
+    smb_write_word(PMBUS_PIN_DETECT_OVERRIDE, INIT_PIN_DETECT_OVERRIDE);
 
     /* store configuration in NVM */
     smb_write_byte(PMBUS_STORE_USER_ALL, 0xFF);
