@@ -47,6 +47,10 @@
 #define TPS546_INIT_TOFF_DELAY 0
 #define TPS546_INIT_TOFF_FALL 0
 
+#define INIT_STACK_CONFIG 0x0000
+#define INIT_SYNC_CONFIG 0x0010
+#define INIT_PIN_DETECT_OVERRIDE 0x0000
+
 /*-------------------------*/
 
 /* PMBUS_ON_OFF_CONFIG initialization values */
