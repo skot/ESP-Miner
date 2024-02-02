@@ -1,5 +1,6 @@
 
 /* Standard Core PMBus commands */
+#define PMBUS_OPERATION 0x01
 #define PMBUS_ON_OFF_CONFIG 0x02
 #define PMBUS_CLEAR_FAULTS 0x03
 #define PMBUS_PHASE 0x04
