@@ -214,6 +214,17 @@ static uint16_t int_2_slinear11(int value)
 
     result = (mantissa * 1024);
 
+
+//    int i;
+    // First see if the exponent is positive or negative
+//    if (value > 0) {
+        // exponent is positive
+//    } else {
+        // exponent is negative
+//    }
+
+
+
     // First 5 bits is exponent in twos-complement
     // check the first bit of the exponent to see if its negative
 //    if (value & 0x8000) {
@@ -239,6 +250,9 @@ static uint16_t int_2_slinear11(int value)
 
 /**
  * @brief Convert a ULINEAR16 value into an int
+ * the exponent comes from the VOUT_MODE bits[4..0]
+ * stored in twos-complement
+ * The mantissa occupies the full 16-bits of the value
  */
 static int ulinear16_2_int(uint16_t value)
 {
@@ -246,8 +260,6 @@ static int ulinear16_2_int(uint16_t value)
     int result;
     uint8_t voutmode;
 
-    /* the exponent comes from VOUT_MODE bits[4..0] */
-    /* in twos-complement */
     smb_read_byte(PMBUS_VOUT_MODE, &voutmode);
     if (voutmode & 0x10) {
         // exponent is negative
@@ -262,15 +274,16 @@ static int ulinear16_2_int(uint16_t value)
 
 /**
  * @brief Convert an int value into a ULINEAR16
- */
+ * the exponent comes from the VOUT_MODE bits[4..0]
+ * stored in twos-complement
+ * The mantissa occupies the full 16-bits of the result
+**/
 static uint16_t int_2_ulinear16(int value)
 {
     uint8_t voutmode;
     float exponent;
     int result;
 
-    /* the exponent comes from VOUT_MODE bits[4..0] */
-    /* in twos-complement */
     smb_read_byte(PMBUS_VOUT_MODE, &voutmode);
     if (voutmode & 0x10) {
         // exponent is negative
@@ -412,6 +425,9 @@ void TPS546_set_mfr_info(void)
 /* Set all the relevant config registers for normal operation */
 void TPS546_write_entire_config(void)
 {
+    /* set up the ON_OFF_CONFIG */
+    smb_write_byte(PMBUS_ON_OFF_CONFIG, TPS546_INIT_ON_OFF_CONFIG);
+
     /* Switch frequency */
     smb_write_word(PMBUS_FREQUENCY_SWITCH, int_2_slinear11(TPS546_INIT_FREQUENCY));
 
@@ -463,6 +479,8 @@ void TPS546_write_entire_config(void)
     /* configure the bootup behavior regarding pin detect values vs NVM values */
     smb_write_word(PMBUS_PIN_DETECT_OVERRIDE, INIT_PIN_DETECT_OVERRIDE);
 
+    /* TODO write new MFR_REVISION number to reflect these parameters */
+
     /* store configuration in NVM */
     smb_write_byte(PMBUS_STORE_USER_ALL, 0xFF);
 
@@ -510,13 +528,35 @@ int TPS546_get_temperature(void)
     return temp;
 }
 
+
+/**
+ * @brief Sets the core voltage
+ * this function controls the regulator ontput state
+ * send it the desired output in millivolts
+ * A value between TPS546_INIT_VOUT_MIN and TPS546_INIT_VOUT_MAX
+ * send a 0 to turn off the output
+**/
 void TPS546_set_vout(int millivolts)
 {
     uint16_t value;
 
-    value = int_2_ulinear16(millivolts);
-    smb_write_word(PMBUS_VOUT_COMMAND, value);
-    ESP_LOGI(TAG, "Vout changed to %d mV", millivolts);
+    if (millivolts == 0) {
+        /* turn off output */
+        smb_write_byte(PMBUS_OPERATION, OPERATION_OFF);
+    } else {
+        /* make sure we're in range */
+        if ((millivolts < TPS546_INIT_VOUT_MIN) || (millivolts > TPS546_INIT_VOUT_MAX)) {
+            ESP_LOGI(TAG, "ERR- Voltage requested is out of range");
+        } else {
+            /* set the output voltage */
+            value = int_2_ulinear16(millivolts);
+            smb_write_word(PMBUS_VOUT_COMMAND, value);
+            ESP_LOGI(TAG, "Vout changed to %d mV", millivolts);
+
+            /* turn on output */
+           smb_write_byte(PMBUS_OPERATION, OPERATION_ON);
+        }
+    }
 }
 
 void TPS546_show_voltage_settings(void)

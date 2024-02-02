@@ -10,6 +10,10 @@
 /* when the config revision stored in the TPS546 doesn't match, these values are used */
 
 
+#define TPS546_INIT_ON_OFF_CONFIG 0x18 /* use ON_OFF command to control power */
+#define OPERATION_OFF 0x00
+#define OPERATION_ON  0x80
+
 #define TPS546_INIT_FREQUENCY 650  /* KHz */
 
 /* vin voltage */
