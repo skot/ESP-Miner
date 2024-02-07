@@ -105,3 +105,4 @@ typedef struct
 } GlobalState;
 
 #endif /* GLOBAL_STATE_H_ */
+
