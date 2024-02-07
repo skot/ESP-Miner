@@ -6,6 +6,7 @@
 #include "TPS546.h"
 #include "EMC2101.h"
 #include "EMC2302.h"
+#include "TMP1075.h"
 #include "INA260.h"
 #include "adc.h"
 #include "connect.h"
@@ -77,7 +78,7 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
 
     ADC_init();
 
-    /* perform platform init based on the device name */
+    /* perform device init based on the device name */
     /* TODO add other platforms besides HEX */
     switch (global_state->board_version) {
         case 201:  /* ULTRA */
@@ -93,10 +94,17 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
         case 302:  /* HEX */
             // Initialize the core voltage regulator
             TPS546_init();
-            // Fan Tests
-            EMC2302_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
-            EMC2302_set_fan_speed(0, (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
-            EMC2302_set_fan_speed(1, (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
+            // Fan config - Hex has two fans
+            //EMC2302_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            //EMC2302_set_fan_speed(0, (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
+            //EMC2302_set_fan_speed(1, (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
+            // temperature sensors - Hex has two sensors
+            if (TMP1075_installed(0)) {
+                ESP_LOGI(TAG, "Temperature sensor 0: %d", TMP1075_read_temperature(0));
+            }
+            if (TMP1075_installed(1)) {
+                ESP_LOGI(TAG, "Temperature sensor 1: %d", TMP1075_read_temperature(1));
+            }
             break;
         default:
             ESP_LOGI(TAG, "ERROR- invalid board version");
