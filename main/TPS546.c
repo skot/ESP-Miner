@@ -371,7 +371,7 @@ int TPS546_init(void)
     float vin;
     float iout;
     float vout;
-    uint8_t read_mfr_revision[3];
+    uint8_t read_mfr_revision[4];
     int temp;
     uint8_t comp_config[5];
 
@@ -381,6 +381,7 @@ int TPS546_init(void)
     smb_read_block(PMBUS_IC_DEVICE_ID, data, 6);
     ESP_LOGI(TAG, "Device ID: %02x %02x %02x %02x %02x %02x", data[0], data[1],
                  data[2], data[3], data[4], data[5]);
+    /* There's two different known device IDs observed so far */
     if ( (memcmp(data, DEVICE_ID1, 6) != 0) && (memcmp(data, DEVICE_ID2, 6) != 0) )
     {
         ESP_LOGI(TAG, "ERROR- cannot find TPS546 regulator");

@@ -5,6 +5,7 @@ SRCS
     "EMC2101.c"
     "EMC2302.c"
     "TPS546.c"
+    "TMP1075.c"
     "fonts.c"
     "i2c_master.c"
     "INA260.c"
