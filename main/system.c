@@ -77,18 +77,20 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
 
     ADC_init();
 
-    /* perform platform init based on the platform ID */
+    /* perform platform init based on the device name */
     /* TODO add other platforms besides HEX */
-    switch (global_state->platform_id) {
-        case PLATFORM_BITAXE:
-        case PLATFORM_ULTRA:
+    switch (global_state->board_version) {
+        case 201:  /* ULTRA */
+        case 202:
+        case 203:
+        case 204:
             // DS4432U tests
             DS4432U_set_vcore(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0);
 
             EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
             EMC2101_set_fan_speed(1);
             break;
-        case PLATFORM_HEX:
+        case 302:  /* HEX */
             // Initialize the core voltage regulator
             TPS546_init();
             // Fan Tests
@@ -97,7 +99,7 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
             EMC2302_set_fan_speed(1, (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
             break;
         default:
-            ESP_LOGI(TAG, "ERROR- invalid platform ID");
+            ESP_LOGI(TAG, "ERROR- invalid board version");
     }
 
     vTaskDelay(500 / portTICK_PERIOD_MS);

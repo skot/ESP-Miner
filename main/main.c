@@ -25,11 +25,12 @@ void app_main(void)
 {
     ESP_ERROR_CHECK(nvs_flash_init());
 
-    /* we need to populate the platform_id here, but it doesn't exist in NVS yet */
-    /* TODO read the platform ID from the NVS */
-    /* TODO bitaxetool will need to be modified to include it */
-    /* use hard-coded value for now */
-    GLOBAL_STATE.platform_id = PLATFORM_HEX;
+    /* Use device_name/board_version to decide how to handle the hardware drivers */
+    /* TODO What should the default values be? */
+    GLOBAL_STATE.device_name = nvs_config_get_string(NVS_CONFIG_DEVICE_MODEL, "hex");
+    GLOBAL_STATE.board_version = atoi(nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "000"));
+    ESP_LOGI(TAG, "Found Device Model: %s", GLOBAL_STATE.device_name);
+    ESP_LOGI(TAG, "Found Board Version: %d", GLOBAL_STATE.board_version);
 
     ESP_LOGI(TAG, "NVS_CONFIG_ASIC_FREQ %f", (float) nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY));
     GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
