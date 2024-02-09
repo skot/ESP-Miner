@@ -45,6 +45,7 @@ static esp_err_t smb_read_byte(uint8_t command, uint8_t *data)
     i2c_master_write_byte(cmd, TPS546_I2CADDR << 1 | READ_BIT, ACK_CHECK);
     i2c_master_read_byte(cmd, data, NACK_VALUE);
     i2c_master_stop(cmd);
+    i2c_set_timeout(I2C_MASTER_NUM, 20);
     ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, SMBUS_DEFAULT_TIMEOUT));
     i2c_cmd_link_delete(cmd);
 
@@ -89,6 +90,7 @@ static esp_err_t smb_read_word(uint8_t command, uint16_t *result)
     i2c_master_read(cmd, &data[0], 1, ACK_VALUE);
     i2c_master_read_byte(cmd, &data[1], NACK_VALUE);
     i2c_master_stop(cmd);
+    i2c_set_timeout(I2C_MASTER_NUM, 20);
     ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, SMBUS_DEFAULT_TIMEOUT));
     i2c_cmd_link_delete(cmd);
 
@@ -141,6 +143,7 @@ static esp_err_t smb_read_block(uint8_t command, uint8_t *data, uint8_t len)
     }
     i2c_master_read_byte(cmd, &data[slave_len - 1], NACK_VALUE);
     i2c_master_stop(cmd);
+    i2c_set_timeout(I2C_MASTER_NUM, 20);
     ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, SMBUS_DEFAULT_TIMEOUT));
     i2c_cmd_link_delete(cmd);
 
@@ -163,6 +166,7 @@ static esp_err_t smb_write_block(uint8_t command, uint8_t *data, uint8_t len)
         i2c_master_write_byte(cmd, data[i], ACK_CHECK);
     }
     i2c_master_stop(cmd);
+    i2c_set_timeout(I2C_MASTER_NUM, 20);
     ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, SMBUS_DEFAULT_TIMEOUT));
     i2c_cmd_link_delete(cmd);
 
@@ -430,9 +434,10 @@ int TPS546_init(void)
 
     /* Get voltage output (ULINEAR16) */
     // This gets a timeout, don't know why.  clock stretching?
-//    smb_read_word(PMBUS_READ_VOUT, &u16_value);
-//    vout = ulinear16_2_float(u16_value);
-//    ESP_LOGI(TAG, "Vout measured: %2.3f V", vout);
+    // Should take about 91 uS
+    smb_read_word(PMBUS_READ_VOUT, &u16_value);
+    vout = ulinear16_2_float(u16_value);
+    ESP_LOGI(TAG, "Vout measured: %2.3f V", vout);
 
     ESP_LOGI(TAG, "-----------TIMING---------------------");
     smb_read_word(PMBUS_TON_DELAY, &u16_value);
