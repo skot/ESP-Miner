@@ -16,5 +16,5 @@ typedef struct
 } PowerManagementModule;
 
 void POWER_MANAGEMENT_task(void * pvParameters);
-
+void POWER_MANAGEMENT_HEX_task(void * pvParameters);
 #endif

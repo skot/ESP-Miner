@@ -143,7 +143,6 @@ static esp_err_t smb_read_block(uint8_t command, uint8_t *data, uint8_t len)
     }
     i2c_master_read_byte(cmd, &data[slave_len - 1], NACK_VALUE);
     i2c_master_stop(cmd);
-    i2c_set_timeout(I2C_MASTER_NUM, 20);
     ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, SMBUS_DEFAULT_TIMEOUT));
     i2c_cmd_link_delete(cmd);
 
@@ -201,7 +200,6 @@ static int slinear11_2_int(uint16_t value)
 
     // calculate result (mantissa * 2^exponent)
     result = mantissa * powf(2.0, exponent);
-    ESP_LOGI(TAG, "result: %f", result);
     return (int)result;
 }
 
@@ -267,9 +265,6 @@ static uint16_t int_2_slinear11(int value)
 
     result = ((exponent << 11) & 0xF800) + mantissa;
 
-    //ESP_LOGI(TAG, "mantissa: %d, exponent: %d", mantissa, exponent);
-    //ESP_LOGI(TAG, "result: %04x", result);
-
     return result;
 }
 
@@ -306,9 +301,6 @@ static uint16_t float_2_slinear11(float value)
 
     result = (( (~exponent + 1) << 11) & 0xF800) + mantissa;
 
-    //ESP_LOGI(TAG, "mantissa: %d, exponent: -%d", mantissa, exponent);
-    //ESP_LOGI(TAG, "result: %04x", result);
-
     return result;
 }
 
@@ -332,8 +324,6 @@ static int ulinear16_2_float(uint16_t value)
         exponent = (voutmode & 0x1F);
     }
 
-    //ESP_LOGI(TAG, "value: %04x", value);
-    //ESP_LOGI(TAG, "mantissa: %d, exponent: %d", value, exponent);
     result = (value * powf(2.0, exponent));
     return result;
 }
@@ -359,7 +349,6 @@ static uint16_t float_2_ulinear16(float value)
     }
 
     result = (value / powf(2.0, exponent));
-    ESP_LOGI(TAG, "result: %04x, exponent: %f", result, exponent);
 
     return result;
 }
@@ -423,21 +412,22 @@ int TPS546_init(void)
 
     ESP_LOGI(TAG, "-----------VOLTAGE/CURRENT---------------------");
     /* Get voltage input (SLINEAR11) */
-    smb_read_word(PMBUS_READ_VIN, &u16_value);
-    vin = slinear11_2_float(u16_value);
-    ESP_LOGI(TAG, "Vin measured: %2.3f V", vin);
+    //smb_read_word(PMBUS_READ_VIN, &u16_value);
+    //vin = slinear11_2_float(u16_value);
+    //ESP_LOGI(TAG, "Vin measured: %2.3f V", vin);
+    TPS546_get_vin();
 
     /* Get output current (SLINEAR11) */
-    smb_read_word(PMBUS_READ_IOUT, &u16_value);
-    iout = slinear11_2_float(u16_value);
-    ESP_LOGI(TAG, "Iout measured: %2.3f A", iout);
+    //smb_read_word(PMBUS_READ_IOUT, &u16_value);
+    //iout = slinear11_2_float(u16_value);
+    //ESP_LOGI(TAG, "Iout measured: %2.3f A", iout);
+    TPS546_get_iout();
 
     /* Get voltage output (ULINEAR16) */
-    // This gets a timeout, don't know why.  clock stretching?
-    // Should take about 91 uS
-    smb_read_word(PMBUS_READ_VOUT, &u16_value);
-    vout = ulinear16_2_float(u16_value);
-    ESP_LOGI(TAG, "Vout measured: %2.3f V", vout);
+    //smb_read_word(PMBUS_READ_VOUT, &u16_value);
+    //vout = ulinear16_2_float(u16_value);
+    //ESP_LOGI(TAG, "Vout measured: %2.3f V", vout);
+    TPS546_get_vout();
 
     ESP_LOGI(TAG, "-----------TIMING---------------------");
     smb_read_word(PMBUS_TON_DELAY, &u16_value);
@@ -523,12 +513,16 @@ void TPS546_write_entire_config(void)
     smb_write_word(PMBUS_VOUT_COMMAND, float_2_ulinear16(TPS546_INIT_VOUT_COMMAND));
     ESP_LOGI(TAG, "VOUT_MAX");
     smb_write_word(PMBUS_VOUT_MAX, float_2_ulinear16(TPS546_INIT_VOUT_MAX));
-    ESP_LOGI(TAG, "VOUT_MAX_OV_FAULT_LIMIT");
+    ESP_LOGI(TAG, "VOUT_OV_FAULT_LIMIT");
     smb_write_word(PMBUS_VOUT_OV_FAULT_LIMIT, float_2_ulinear16(TPS546_INIT_VOUT_OV_FAULT_LIMIT));
     ESP_LOGI(TAG, "VOUT_OV_WARN_LIMIT");
-    //smb_write_word(PMBUS_VOUT_OV_WARN_LIMIT, float_2_ulinear16(TPS546_INIT_VOUT_OV_WARN_LIMIT));
+    smb_write_word(PMBUS_VOUT_OV_WARN_LIMIT, float_2_ulinear16(TPS546_INIT_VOUT_OV_WARN_LIMIT));
+    ESP_LOGI(TAG, "VOUT_MARGIN_HIGH");
+    smb_write_word(PMBUS_VOUT_MARGIN_HIGH, float_2_ulinear16(TPS546_INIT_VOUT_MARGIN_HIGH));
+    ESP_LOGI(TAG, "VOUT_MARGIN_LOW");
+    smb_write_word(PMBUS_VOUT_MARGIN_LOW, float_2_ulinear16(TPS546_INIT_VOUT_MARGIN_LOW));
     ESP_LOGI(TAG, "VOUT_UV_WARN_LIMIT");
-    //smb_write_word(PMBUS_VOUT_UV_WARN_LIMIT, float_2_ulinear16(TPS546_INIT_VOUT_UV_WARN_LIMIT));
+    smb_write_word(PMBUS_VOUT_UV_WARN_LIMIT, float_2_ulinear16(TPS546_INIT_VOUT_UV_WARN_LIMIT));
     ESP_LOGI(TAG, "VOUT_UV_FAULT_LIMIT");
     smb_write_word(PMBUS_VOUT_UV_FAULT_LIMIT, float_2_ulinear16(TPS546_INIT_VOUT_UV_FAULT_LIMIT));
     ESP_LOGI(TAG, "VOUT_MIN");
@@ -565,9 +559,6 @@ void TPS546_write_entire_config(void)
     //ESP_LOGI(TAG, "COMPENSATION");
     //smb_write_block(PMBUS_COMPENSATION_CONFIG, COMPENSATION_CONFIG, 5);
 
-    /* Slave address */
-    //smb_write_byte(PMBUS_SLAVE_ADDRESS, TPS546_I2CADDR);
-
     /* configure the bootup behavior regarding pin detect values vs NVM values */
     ESP_LOGI(TAG, "Setting PIN_DETECT_OVERRIDE");
     smb_write_word(PMBUS_PIN_DETECT_OVERRIDE, INIT_PIN_DETECT_OVERRIDE);
@@ -582,7 +573,7 @@ void TPS546_write_entire_config(void)
 
     /* store configuration in NVM */
     ESP_LOGI(TAG, "---Saving new config---");
-    //smb_write_byte(PMBUS_STORE_USER_ALL, 0xFF);
+    smb_write_byte(PMBUS_STORE_USER_ALL, 0x98);
 
 }
 
@@ -628,6 +619,41 @@ int TPS546_get_temperature(void)
     return temp;
 }
 
+float TPS546_get_vin(void)
+{
+    uint16_t u16_value;
+    float vin;
+
+    /* Get voltage input (ULINEAR16) */
+    smb_read_word(PMBUS_READ_VIN, &u16_value);
+    vin = slinear11_2_float(u16_value);
+    ESP_LOGI(TAG, "Got Vin: %2.3f V", vin);
+    return vin;
+}
+
+float TPS546_get_iout(void)
+{
+    uint16_t u16_value;
+    float iout;
+
+    /* Get current output (SLINEAR11) */
+    smb_read_word(PMBUS_READ_IOUT, &u16_value);
+    iout = slinear11_2_float(u16_value);
+    ESP_LOGI(TAG, "Got Iout: %2.3f V", iout);
+    return iout;
+}
+
+float TPS546_get_vout(void)
+{
+    uint16_t u16_value;
+    float vout;
+
+    /* Get voltage output (ULINEAR16) */
+    smb_read_word(PMBUS_READ_VOUT, &u16_value);
+    vout = ulinear16_2_float(u16_value);
+    ESP_LOGI(TAG, "Got Vout: %2.3f V", vout);
+    return vout;
+}
 
 /**
  * @brief Sets the core voltage

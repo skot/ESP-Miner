@@ -160,7 +160,17 @@ void app_main(void)
 
     xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
 
+    if (strcmp(GLOBAL_STATE.board_version, "302") == 0) {
+        // this is a HEX board
+        ESP_LOGI(TAG, "Starting HEX power management");
+        xTaskCreate(POWER_MANAGEMENT_HEX_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
+    } else {
+        // this is NOT a HEX board
+        ESP_LOGI(TAG, "Starting BITAXE power management");
+        xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
+    }
 
+    ESP_LOGI(TAG, "Starting init functions");
     if (GLOBAL_STATE.ASIC_functions.init_fn != NULL) {
         wifi_softap_off();
 
