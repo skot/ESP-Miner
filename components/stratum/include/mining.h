@@ -25,19 +25,27 @@ typedef struct
     char *extranonce2;
 } bm_job;
 
-void free_bm_job(bm_job *job);
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-char *construct_coinbase_tx(const char *coinbase_1, const char *coinbase_2,
-                            const char *extranonce, const char *extranonce_2);
+void free_bm_job(bm_job * job);
 
-char *calculate_merkle_root_hash(const char *coinbase_tx, const uint8_t merkle_branches[][32], const int num_merkle_branches);
+char * construct_coinbase_tx(const char * coinbase_1, const char * coinbase_2, const char * extranonce,
+                                 const char * extranonce_2);
 
-bm_job construct_bm_job(mining_notify *params, const char *merkle_root, const uint32_t version_mask);
+char * calculate_merkle_root_hash(const char * coinbase_tx, const uint8_t merkle_branches[][32], const int num_merkle_branches);
 
-double test_nonce_value(const bm_job *job, const uint32_t nonce, const uint32_t rolled_version);
+bm_job construct_bm_job(mining_notify * params, const char * merkle_root, const uint32_t version_mask);
 
-char *extranonce_2_generate(uint32_t extranonce_2, uint32_t length);
+double test_nonce_value(const bm_job * job, const uint32_t nonce, const uint32_t rolled_version);
+
+char * extranonce_2_generate(uint32_t extranonce_2, uint32_t length);
 
 uint32_t increment_bitmask(const uint32_t value, const uint32_t mask);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // MINING_H

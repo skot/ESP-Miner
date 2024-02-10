@@ -14,7 +14,15 @@ typedef struct
     bool HAS_PLUG_SENSE;
 } PowerManagementModule;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 static void automatic_fan_speed(float chip_temp);
 void POWER_MANAGEMENT_task(void * pvParameters);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

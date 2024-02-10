@@ -23,6 +23,10 @@ typedef enum
   FONT_SMALL       // 6x8
 } FONTSIZE;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 // Initialize the OLED96 library for a specific I2C address
 // Optionally enable inverted or flipped mode
 // returns 0 for success, 1 for failure
@@ -48,5 +52,9 @@ int OLED_setPixel(int x, int y, uint8_t ucPixel);
 bool OLED_setContrast(uint8_t ucContrast);
 int OLED_clearLine(uint8_t);
 bool OLED_status(void);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // OLED96_H

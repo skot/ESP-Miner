@@ -53,6 +53,10 @@ typedef struct
     bool response_success;
 } StratumApiV1Message;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void STRATUM_V1_initialize_buffer();
 
 char *STRATUM_V1_receive_jsonrpc_line(int sockfd);
@@ -72,5 +76,9 @@ int STRATUM_V1_suggest_difficulty(int socket, uint32_t difficulty);
 void STRATUM_V1_submit_share(int socket, const char *username, const char *jobid,
                              const char *extranonce_2, const uint32_t ntime, const uint32_t nonce,
                              const uint32_t version);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // STRATUM_API_H

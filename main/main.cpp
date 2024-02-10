@@ -21,7 +21,7 @@ static GlobalState GLOBAL_STATE = {.extranonce_str = NULL, .extranonce_2_len = 0
 
 static const char * TAG = "miner";
 
-void app_main(void)
+extern "C" void app_main(void)
 {
     ESP_ERROR_CHECK(nvs_flash_init());
 

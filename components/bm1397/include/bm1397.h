@@ -45,6 +45,10 @@ typedef struct __attribute__((__packed__))
     uint8_t midstate3[32];
 } job_packet;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void BM1397_init(u_int64_t frequency);
 
 void BM1397_send_work(void * GLOBAL_STATE, bm_job * next_bm_job);
@@ -53,5 +57,9 @@ int BM1397_set_max_baud(void);
 int BM1397_set_default_baud(void);
 void BM1397_send_hash_frequency(float frequency);
 task_result * BM1397_proccess_work(void * GLOBAL_STATE);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* BM1397_H_ */

@@ -28,8 +28,17 @@ typedef enum
     WIFI_RETRYING,
 } wifi_status_t;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void toggle_wifi_softap(void);
 void wifi_softap_off(void);
 void wifi_init(const char * wifi_ssid, const char * wifi_pass);
 EventBits_t wifi_connect(void);
 void generate_ssid(char * ssid);
+
+#ifdef __cplusplus
+}
+
+#endif
