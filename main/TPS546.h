@@ -25,16 +25,18 @@
 
   /* vout voltage */
 #define TPS546_INIT_SCALE_LOOP 0xC808  /* 0.125 */
-#define TPS546_INIT_VOUT_MAX 5.00 /* V */
-#define TPS546_INIT_VOUT_OV_FAULT_LIMIT 1.20 /* V relative to VOUT_COMMAND */
-#define TPS546_INIT_VOUT_OV_WARN_LIMIT  0.90 /* V relative to VOUT_COMMAND */
-#define TPS546_INIT_VOUT_COMMAND 3.60 /* V absolute value */
-#define TPS546_INIT_VOUT_UV_WARN_LIMIT 0.50 /* V relative to VOUT_COMMAND */
-#define TPS546_INIT_VOUT_UV_FAULT_LIMIT 0.60 /* V relative to VOUT_COMMAND */
-#define TPS546_INIT_VOUT_MIN 3.00 /* v */
+#define TPS546_INIT_VOUT_MAX 4.50 /* V */
+#define TPS546_INIT_VOUT_OV_FAULT_LIMIT 1.25 /* %/100 above VOUT_COMMAND */
+#define TPS546_INIT_VOUT_OV_WARN_LIMIT  1.1 /* %/100 above VOUT_COMMAND */
+#define TPS546_INIT_VOUT_MARGIN_HIGH 1.1 /* %/100 above VOUT */
+#define TPS546_INIT_VOUT_COMMAND 3.60  /* V absolute value */
+#define TPS546_INIT_VOUT_MARGIN_LOW 0.90 /* %/100 below VOUT */
+#define TPS546_INIT_VOUT_UV_WARN_LIMIT 0.90  /* %/100 below VOUT_COMMAND */
+#define TPS546_INIT_VOUT_UV_FAULT_LIMIT 0.75 /* %/100 below VOUT_COMMAND */
+#define TPS546_INIT_VOUT_MIN 2.5 /* v */
 
   /* iout current */
-#define TPS546_INIT_IOUT_OC_WARN_LIMIT 25.00 /* A */
+#define TPS546_INIT_IOUT_OC_WARN_LIMIT  25.00 /* A */
 #define TPS546_INIT_IOUT_OC_FAULT_LIMIT 30.00 /* A */
 #define TPS546_INIT_IOUT_OC_FAULT_RESPONSE 0xC0  /* shut down, no retries */
 
@@ -73,6 +75,9 @@ void TPS546_write_entire_config(void);
 int TPS546_get_frequency(void);
 void TPS546_set_frequency(int);
 int TPS546_get_temperature(void);
+float TPS546_get_vin(void);
+float TPS546_get_iout(void);
+float TPS546_get_vout(void);
 void TPS546_set_vout(int millivolts);
 void TPS546_show_voltage_settings(void);
 

@@ -16,5 +16,5 @@ typedef struct
 
 static void automatic_fan_speed(float chip_temp);
 void POWER_MANAGEMENT_task(void * pvParameters);
-
+void POWER_MANAGEMENT_HEX_task(void * pvParameters);
 #endif
