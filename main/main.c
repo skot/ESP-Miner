@@ -160,9 +160,10 @@ void app_main(void)
 
     xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
 
-    if (strcmp(GLOBAL_STATE.board_version, "302") == 0) {
+    if (GLOBAL_STATE.board_version == 302) {
         // this is a HEX board
         ESP_LOGI(TAG, "Starting HEX power management");
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
         xTaskCreate(POWER_MANAGEMENT_HEX_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
     } else {
         // this is NOT a HEX board

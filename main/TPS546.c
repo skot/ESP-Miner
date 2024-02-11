@@ -310,20 +310,20 @@ static uint16_t float_2_slinear11(float value)
  * stored in twos-complement
  * The mantissa occupies the full 16-bits of the value
  */
-static int ulinear16_2_float(uint16_t value)
+static float ulinear16_2_float(uint16_t value)
 {
     uint8_t voutmode;
     int exponent;
     float result;
 
     smb_read_byte(PMBUS_VOUT_MODE, &voutmode);
+
     if (voutmode & 0x10) {
         // exponent is negative
         exponent = -1 * ((~voutmode & 0x1F) + 1);
     } else {
         exponent = (voutmode & 0x1F);
     }
-
     result = (value * powf(2.0, exponent));
     return result;
 }
@@ -382,9 +382,9 @@ int TPS546_init(void)
     }
 
     /* Make sure power is turned off until commanded */
-    ESP_LOGI(TAG, "Verifying power config");
     u8_value = ON_OFF_CONFIG_CMD | ON_OFF_CONFIG_PU | ON_OFF_CONFIG_CP |
             ON_OFF_CONFIG_POLARITY | ON_OFF_CONFIG_DELAY;
+    ESP_LOGI(TAG, "Power config-ON_OFF_CONFIG: %02x", u8_value);
     smb_write_byte(PMBUS_ON_OFF_CONFIG, u8_value);
  
     /* Read version number and see if it matches */
@@ -412,21 +412,10 @@ int TPS546_init(void)
 
     ESP_LOGI(TAG, "-----------VOLTAGE/CURRENT---------------------");
     /* Get voltage input (SLINEAR11) */
-    //smb_read_word(PMBUS_READ_VIN, &u16_value);
-    //vin = slinear11_2_float(u16_value);
-    //ESP_LOGI(TAG, "Vin measured: %2.3f V", vin);
     TPS546_get_vin();
-
     /* Get output current (SLINEAR11) */
-    //smb_read_word(PMBUS_READ_IOUT, &u16_value);
-    //iout = slinear11_2_float(u16_value);
-    //ESP_LOGI(TAG, "Iout measured: %2.3f A", iout);
     TPS546_get_iout();
-
     /* Get voltage output (ULINEAR16) */
-    //smb_read_word(PMBUS_READ_VOUT, &u16_value);
-    //vout = ulinear16_2_float(u16_value);
-    //ESP_LOGI(TAG, "Vout measured: %2.3f V", vout);
     TPS546_get_vout();
 
     ESP_LOGI(TAG, "-----------TIMING---------------------");
@@ -583,10 +572,8 @@ int TPS546_get_frequency(void)
     int freq;
 
     smb_read_word(PMBUS_FREQUENCY_SWITCH, &value);
-    ESP_LOGI(TAG, "Read Freq: %04x", value);
     freq = slinear11_2_int(value);
 
-    ESP_LOGI(TAG, "Frequency: %d", freq);
     return (int)freq;
 }
 
@@ -597,16 +584,12 @@ void TPS546_set_frequency(int newfreq)
 
     ESP_LOGI(TAG, "Writing new frequency: %d", newfreq);
     value = int_2_slinear11(newfreq);
-    //value = 0xC999;
-    ESP_LOGI(TAG, "New value: 0x%04x", value);
-    //smb_write_word(PMBUS_FREQUENCY_SWITCH, value);
+    //ESP_LOGI(TAG, "New value: 0x%04x", value);
+    smb_write_word(PMBUS_FREQUENCY_SWITCH, value);
 
-    ESP_LOGI(TAG, "Checking conversion...");
-    freq = slinear11_2_int(value);
-    ESP_LOGI(TAG, "Converted value: %d", freq);
-
-    //ESP_LOGI(TAG, "Frequency: %d", (int)freq);
-    //return (int)freq;
+    //ESP_LOGI(TAG, "Checking conversion...");
+    //freq = slinear11_2_int(value);
+    //ESP_LOGI(TAG, "Converted value: %d", freq);
 }
 
 int TPS546_get_temperature(void)
@@ -627,7 +610,7 @@ float TPS546_get_vin(void)
     /* Get voltage input (ULINEAR16) */
     smb_read_word(PMBUS_READ_VIN, &u16_value);
     vin = slinear11_2_float(u16_value);
-    ESP_LOGI(TAG, "Got Vin: %2.3f V", vin);
+    //ESP_LOGI(TAG, "Got Vin: %2.3f V", vin);
     return vin;
 }
 
@@ -639,7 +622,7 @@ float TPS546_get_iout(void)
     /* Get current output (SLINEAR11) */
     smb_read_word(PMBUS_READ_IOUT, &u16_value);
     iout = slinear11_2_float(u16_value);
-    ESP_LOGI(TAG, "Got Iout: %2.3f V", iout);
+    //ESP_LOGI(TAG, "Got Iout: %2.3f V", iout);
     return iout;
 }
 
@@ -651,7 +634,7 @@ float TPS546_get_vout(void)
     /* Get voltage output (ULINEAR16) */
     smb_read_word(PMBUS_READ_VOUT, &u16_value);
     vout = ulinear16_2_float(u16_value);
-    ESP_LOGI(TAG, "Got Vout: %2.3f V", vout);
+    //ESP_LOGI(TAG, "Got Vout: %2.3f V", vout);
     return vout;
 }
 
@@ -665,19 +648,20 @@ float TPS546_get_vout(void)
 void TPS546_set_vout(int millivolts)
 {
     uint16_t value;
+    float volts = millivolts / 1000;
 
-    if (millivolts == 0) {
+    if (volts == 0) {
         /* turn off output */
         smb_write_byte(PMBUS_OPERATION, OPERATION_OFF);
     } else {
         /* make sure we're in range */
-        if ((millivolts < TPS546_INIT_VOUT_MIN) || (millivolts > TPS546_INIT_VOUT_MAX)) {
-            ESP_LOGI(TAG, "ERR- Voltage requested is out of range");
+        if ((volts < TPS546_INIT_VOUT_MIN) || (volts > TPS546_INIT_VOUT_MAX)) {
+            ESP_LOGI(TAG, "ERR- Voltage requested (%f) is out of range", volts);
         } else {
             /* set the output voltage */
-            value = float_2_ulinear16((float)(millivolts / 1000));
+            value = float_2_ulinear16(volts);
             smb_write_word(PMBUS_VOUT_COMMAND, value);
-            ESP_LOGI(TAG, "Vout changed to %d mV", millivolts);
+            ESP_LOGI(TAG, "Vout changed to %f mV", volts);
 
             /* turn on output */
            smb_write_byte(PMBUS_OPERATION, OPERATION_ON);

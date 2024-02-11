@@ -496,12 +496,14 @@ void SYSTEM_task(void * pvParameters)
         vTaskDelay(5000 / portTICK_PERIOD_MS);
     }
 
+    ESP_LOGI(TAG, "Show the connection screen...");
     // show the connection screen
     while (!module->startup_done) {
         _update_connection(GLOBAL_STATE);
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 
+    ESP_LOGI(TAG, "Entering System Loop...");
     while (1) {
         // Automatically cycle through screens
         for (int screen = 0; screen < 3; screen++) {
