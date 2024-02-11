@@ -393,6 +393,7 @@ void SYSTEM_task(void * pvParameters)
         vTaskDelay(5000 / portTICK_PERIOD_MS);
     }
 
+    ESP_LOGI(TAG, "Show the connection screen...");
     // show the connection screen
     while (!module->startup_done) {
         result = esp_wifi_get_mode(&wifi_mode);
@@ -406,6 +407,7 @@ void SYSTEM_task(void * pvParameters)
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 
+    ESP_LOGI(TAG, "Entering System Loop...");
     while (1) {
         _clear_display();
         module->screen_page = 0;
