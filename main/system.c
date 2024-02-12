@@ -199,7 +199,10 @@ static void _update_esp32_info(SystemModule * module)
 {
     uint32_t free_heap_size = esp_get_free_heap_size();
 
-    uint16_t vcore = ADC_get_vcore();
+    //uint16_t vcore = ADC_get_vcore();
+
+    // Hex board has vcore across three domains
+    uint16_t vcore = (TPS546_get_vout() * 1000) / 3;
 
     if (OLED_status()) {
 

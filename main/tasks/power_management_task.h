@@ -15,6 +15,8 @@ typedef struct
 } PowerManagementModule;
 
 static void automatic_fan_speed(float chip_temp);
+
+uint16_t Get_vcore(void);
 void POWER_MANAGEMENT_task(void * pvParameters);
 void POWER_MANAGEMENT_HEX_task(void * pvParameters);
 #endif

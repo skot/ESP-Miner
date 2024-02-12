@@ -58,6 +58,18 @@ static void automatic_fan_speed(float chip_temp)
     EMC2101_set_fan_speed((float) result / 100);
 }
 
+// Returns the vcore voltage using the appropriate source
+uint16_t Get_vcore(void)
+{
+    // TODO determine which plaform we are on for vcore retrieval
+
+    // Regular bitaxe uses ADC for vcore
+    //return ADC_get_vcore();
+
+    // Hex regulator reports measured vcore across all 3 domains
+    return (TPS546_get_vout() * 1000) / 3;
+}
+
 void POWER_MANAGEMENT_task(void * pvParameters)
 {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
@@ -223,8 +235,10 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
     uint16_t auto_fan_speed = nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1);
 
     // turn on ASIC core voltage (three domains in series)
+    int want_vcore = nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE);
+    want_vcore *= 3;  // across 3 domains
     ESP_LOGI(TAG, "---TURNING ON VCORE---");
-    TPS546_set_vout(3600);
+    TPS546_set_vout(want_vcore);
 
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
@@ -242,7 +256,7 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
         // For reference:
         // TPS546_get_vin()- board input voltage
         //    we don't have a way to measure board input current
-        // TPS546_get_out()- core voltage *3 (across all domains)
+        // TPS546_get_vout()- core voltage *3 (across all domains)
         // TPS546_get_iout()- Current output of regulator
         //    we don't have a way to measure power, we have to calculate it
         //    but we don't have total board current, so calculate regulator power
