@@ -24,7 +24,7 @@
 #define TPS546_INIT_VIN_OV_FAULT_RESPONSE 0xB7  /* retry 6 times */
 
   /* vout voltage */
-#define TPS546_INIT_SCALE_LOOP 0xC808  /* 0.125 */
+#define TPS546_INIT_SCALE_LOOP 0.125  /* Voltage Scale factor */
 #define TPS546_INIT_VOUT_MAX 4.50 /* V */
 #define TPS546_INIT_VOUT_OV_FAULT_LIMIT 1.25 /* %/100 above VOUT_COMMAND */
 #define TPS546_INIT_VOUT_OV_WARN_LIMIT  1.1 /* %/100 above VOUT_COMMAND */
