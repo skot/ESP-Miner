@@ -272,12 +272,32 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
 
     while (1) {
 
-        // use TPS546_get_vin() for input voltage
+        // power_management members
+        //uint16_t fan_speed;
+        //float chip_temp;
+        //float voltage;
+        //float frequency_multiplier;
+        //float frequency_value;
+        //float power;
+        //float current;
 
-        power_management->voltage = TPS546_get_vout();
+        // For reference:
+        // TPS546_get_vin()- board input voltage
+        //    we don't have a way to measure board input current
+        // TPS546_get_out()- core voltage *3 (across all domains)
+        // TPS546_get_iout()- Current output of regulator
+        //    we don't have a way to measure power, we have to calculate it
+        //    but we don't have total board current, so calculate regulator power
+        // TPS546_get_temperature()- gets internal regulator temperature
+        // TMP1075_read_temperature(index)- gets the values from the two board sensors
+        // TPS546_get_frequency()- gets the regulator switching frequency (probably no need to display)
+
+
+        power_management->voltage = TPS546_get_vin() * 1000;
         power_management->current = TPS546_get_iout();
-        // calculate ASIC power consumed (in milliwatts)
-        power_management->power = (power_management->voltage * power_management->current) / 1000;
+
+        // calculate regulator power (in milliwatts)
+        power_management->power = (TPS546_get_vout() * power_management->current) / 1000;
 
         // TODO fix fan driver
         //power_management->fan_speed = EMC2101_get_fan_speed();

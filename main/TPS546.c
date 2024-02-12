@@ -496,8 +496,8 @@ void TPS546_write_entire_config(void)
     smb_write_byte(PMBUS_VIN_OV_FAULT_RESPONSE, TPS546_INIT_VIN_OV_FAULT_RESPONSE);
 
     /* vout voltage */
-    ESP_LOGI(TAG, "Setting VOUT");
-    smb_write_word(PMBUS_VOUT_SCALE_LOOP, TPS546_INIT_SCALE_LOOP);  /* no conversion necessary */
+    ESP_LOGI(TAG, "Setting VOUT SCALE");
+    smb_write_word(PMBUS_VOUT_SCALE_LOOP, float_2_slinear11(TPS546_INIT_SCALE_LOOP));
     ESP_LOGI(TAG, "VOUT_COMMAND");
     smb_write_word(PMBUS_VOUT_COMMAND, float_2_ulinear16(TPS546_INIT_VOUT_COMMAND));
     ESP_LOGI(TAG, "VOUT_MAX");
@@ -648,7 +648,7 @@ float TPS546_get_vout(void)
 void TPS546_set_vout(int millivolts)
 {
     uint16_t value;
-    float volts = millivolts / 1000;
+    float volts = (float)millivolts / 1000;
 
     if (volts == 0) {
         /* turn off output */
@@ -656,12 +656,12 @@ void TPS546_set_vout(int millivolts)
     } else {
         /* make sure we're in range */
         if ((volts < TPS546_INIT_VOUT_MIN) || (volts > TPS546_INIT_VOUT_MAX)) {
-            ESP_LOGI(TAG, "ERR- Voltage requested (%f) is out of range", volts);
+            ESP_LOGI(TAG, "ERR- Voltage requested (%f V) is out of range", volts);
         } else {
             /* set the output voltage */
             value = float_2_ulinear16(volts);
             smb_write_word(PMBUS_VOUT_COMMAND, value);
-            ESP_LOGI(TAG, "Vout changed to %f mV", volts);
+            ESP_LOGI(TAG, "Vout changed to %1.2f V", volts);
 
             /* turn on output */
            smb_write_byte(PMBUS_OPERATION, OPERATION_ON);
