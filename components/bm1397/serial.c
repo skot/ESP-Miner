@@ -60,10 +60,11 @@ int SERIAL_send(uint8_t *data, int len, bool debug)
     return uart_write_bytes(UART_NUM_1, (const char *)data, len);
 }
 
-/// @brief waits for a serial response from the device
-/// @param buf buffer to read data into
-/// @param buf number of ms to wait before timing out
-/// @return number of bytes read, or -1 on error
+/// @brief reads serial bytes into a buffer
+/// @param buf 
+/// @param size 
+/// @param timeout_ms 
+/// @return 
 int16_t SERIAL_rx(uint8_t *buf, uint16_t size, uint16_t timeout_ms)
 {
     int16_t bytes_read = uart_read_bytes(UART_NUM_1, buf, size, timeout_ms / portTICK_PERIOD_MS);
