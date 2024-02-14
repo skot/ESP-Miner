@@ -462,6 +462,11 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     unsigned char init4[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0xA8, 0x00, 0x07, 0x00, 0x00, 0x03};
     _send_simple(init4, 11);
 
+    for (int i = 0; i < 256; i += 2) {
+        unsigned char address[2] = {i, 0x00};
+        _send_BM1366((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), address, 2, true);
+    }
+
     unsigned char init5[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x18, 0xFF, 0x0F, 0xC1, 0x00, 0x00};
     _send_simple(init5, 11);
 
