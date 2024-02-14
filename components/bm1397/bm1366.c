@@ -455,8 +455,6 @@ static void _send_init(uint64_t frequency)
     }
     ESP_LOGI(TAG, "%i chip(s) detected on the chain", chip_counter);
 
-    return;
-
     unsigned char init4[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0xA8, 0x00, 0x07, 0x00, 0x00, 0x03};
     _send_simple(init4, 11);
 
