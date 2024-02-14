@@ -645,7 +645,7 @@ void BM1366_send_work(void * pvParameters, bm_job * next_bm_job)
 asic_result * BM1366_receive_work(void)
 {
     // wait for a response, wait time is pretty arbitrary
-    int received = SERIAL_rx(asic_response_buffer, 11, 60000);
+    int received = SERIAL_rx(asic_response_buffer, 11, 20);
 
     if (received < 0) {
         ESP_LOGI(TAG, "Error in serial RX");
