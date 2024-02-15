@@ -26,6 +26,8 @@ export class SystemService {
           current: 2237.5,
           fanSpeed: 82,
           temp: 60,
+          boardtemp1: 60,
+          boardtemp2: 60,
           hashRate: 0,
           bestDiff: "0",
           freeHeap: 200504,
