@@ -9,6 +9,8 @@ export interface ISystemInfo {
     current: number,
     fanSpeed: number,
     temp: number,
+    boardtemp1: number,
+    boardtemp2: number,
     hashRate: number,
     bestDiff: string,
     bestSessionDiff: string,

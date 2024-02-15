@@ -201,7 +201,76 @@
             </div>
         </div>
 
+        <div>
+            <div class="card">
+                <h2>Power</h2>
 
+                <table *ngIf="info$ | async as info; else loading">
+                    <tr>
+                        <td>Power Consumption:</td>
+                        <td>{{info.power | number: '1.2-2'}} <small>W</small> </td>
+                    </tr>
+                    <tr>
+                        <td>Input Voltage:</td>
+                        <td>{{info.voltage | number: '0.0-0'}} <small>mV</small> <span class="danger"
+                                *ngIf="info.voltage < 4800">&nbsp; Danger: Low voltage</span></td>
+                    </tr>
+                    <tr>
+                        <td>Regulator Current:</td>
+                        <td>{{info.current | number: '0.0-0'}} <small>mA</small></td>
+                    </tr>
+                    <tr>
+                        <td>Frequency:</td>
+                        <td>{{info.frequency}} <small>Mhz</small></td>
+                    </tr>
+                    <tr>
+                        <td>Core Voltage:</td>
+                        <td>{{info.coreVoltage}} <small>mV</small></td>
+                    </tr>
+                    <tr>
+                        <td>Measured Core Voltage:</td>
+                        <td>{{info.coreVoltageActual}} <small>mV</small></td>
+                    </tr>
+                    <tr>
+                        <td>Fan Speed:</td>
+                        <td>{{info.fanSpeed}} <small>RPM</small></td>
+                    </tr>
+                    <tr>
+                        <td>Chip Temperature:</td>
+                        <td>{{info.temp}} <small>C</small> <span class="danger" *ngIf="info.temp >= 70">&nbsp; Danger:
+                                High Temperature</span></td>
+                    </tr>
+                    <tr>
+                        <td>Board Temperature 1:</td>
+                        <td>{{info.boardtemp1}} <small>C</small> <span class="danger" *ngIf="info.boardtemp1 >= 70">&nbsp; Danger:
+                                High Temperature</span></td>
+                    </tr>
+                    <tr>
+                        <td>Board Temperature 2:</td>
+                        <td>{{info.boardtemp2}} <small>C</small> <span class="danger" *ngIf="info.boardtemp1 >= 70">&nbsp; Danger:
+                                High Temperature</span></td>
+                    </tr>
+                </table>
+
+            </div>
+            <div class="card">
+                <h2>Results</h2>
+                <table *ngIf="info$ | async as info; else loading">
+                    <tr>
+                        <td> Hash Rate:</td>
+                        <td>{{info.hashRate | number: '1.2-2'}} <small>Gh/s</small></td>
+                    </tr>
+                    <tr>
+                        <td>Efficiency:</td>
+                        <td>{{info.power / (info.hashRate/1000) | number: '1.2-2'}} <small>W/Th</small></td>
+                    </tr>
+                    <tr>
+                        <td>Best Difficulty:</td>
+                        <td>{{info.bestDiff}}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
     </div>
 
 
