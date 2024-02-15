@@ -644,24 +644,25 @@ void BM1366_send_work(void * pvParameters, bm_job * next_bm_job)
 
 asic_result * BM1366_receive_work(void)
 {
-    // wait for a response, wait time is pretty arbitrary
-    int received = SERIAL_rx(asic_response_buffer, 11, 20);
+    // // wait for a response, wait time is pretty arbitrary
+    // int received = SERIAL_rx(asic_response_buffer, 11, 20);
 
-    if (received < 0) {
-        ESP_LOGI(TAG, "Error in serial RX");
-        return NULL;
-    } else if (received == 0) {
-        // Didn't find a solution, restart and try again
-        return NULL;
-    }
+    // if (received < 0) {
+    //     ESP_LOGI(TAG, "Error in serial RX");
+    //     return NULL;
+    // } else if (received == 0) {
+    //     // Didn't find a solution, restart and try again
+    //     return NULL;
+    // }
 
-    if (received != 11 || asic_response_buffer[0] != 0xAA || asic_response_buffer[1] != 0x55) {
-        ESP_LOGI(TAG, "Serial RX invalid %i", received);
-        ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, received);
-        return NULL;
-    }
+    // if (received != 11 || asic_response_buffer[0] != 0xAA || asic_response_buffer[1] != 0x55) {
+    //     ESP_LOGI(TAG, "Serial RX invalid %i", received);
+    //     ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, received);
+    //     return NULL;
+    // }
 
-    return (asic_result *) asic_response_buffer;
+    // return (asic_result *) asic_response_buffer;
+    return SERIAL_rx_aa55(asic_response_buffer, 11);
 }
 
 uint16_t reverse_uint16(uint16_t num)

@@ -95,3 +95,41 @@ void SERIAL_clear_buffer(void)
 {
     uart_flush(UART_NUM_1);
 }
+
+/**
+  * @brief recieve packet with 0xaa 0x55 header
+  * @param data - buffer for received serial data
+  * @param length - length of expected packet
+  */
+ void *SERIAL_rx_aa55(uint8_t *data,const int length) {
+     for(int len=0; len < length;) {
+         // wait for a response, wait time is pretty arbitrary
+         int received = SERIAL_rx(data+len, length-len, 60000);
+         if (received < 0) {
+             ESP_LOGI(TAG, "Error in serial RX");
+             return NULL;
+         } else if (received == 0) {
+             // Didn't find a solution, restart and try again
+             return NULL;
+         }
+
+         if (len+received > 2) {
+             // valid start
+             if (data[0] == 0xAA && data[1] == 0x55) {
+                 len += received;
+             } else {
+                 for(int count = 1; count < len + received; ++count) {
+                     if(*(data+count) == 0xAA) {
+                         // move to head and adjust read length
+                         memmove(data, data+count, len+received-count);
+                         len+=received-count;
+                         break;
+                     }
+                 }
+             }
+         } else {
+             len+=received;
+         }
+     }
+     return data;
+ }
