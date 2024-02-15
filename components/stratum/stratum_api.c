@@ -236,7 +236,7 @@ int STRATUM_V1_subscribe(int socket, char ** extranonce, int * extranonce2_len, 
 {
     // Subscribe
     char subscribe_msg[BUFFER_SIZE];
-    sprintf(subscribe_msg, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"bitaxe/%s\"]}\n", send_uid++, model);
+    sprintf(subscribe_msg, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"bitaxeHex/%s\"]}\n", send_uid++, model);
     debug_stratum_tx(subscribe_msg);
     write(socket, subscribe_msg, strlen(subscribe_msg));
     char * line;
