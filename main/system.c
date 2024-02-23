@@ -98,9 +98,13 @@ static void _init_system(GlobalState * GLOBAL_STATE)
             break;
         case DEVICE_HEX:
             // Fan config - Hex has two fans
-            //EMC2302_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            EMC2302_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            EMC2302_get_fan_speed(0);
+            EMC2302_get_fan_speed(1);
+
             //EMC2302_set_fan_speed(0, (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
             //EMC2302_set_fan_speed(1, (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
+
             // temperature sensors - Hex has two sensors
             if (TMP1075_installed(0)) {
                 ESP_LOGI(TAG, "Temperature sensor 0: %d", TMP1075_read_temperature(0));
