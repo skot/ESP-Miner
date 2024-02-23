@@ -1,5 +1,6 @@
 #include "DS4432U.h"
 #include "EMC2101.h"
+#include "EMC2302.h"
 #include "INA260.h"
 #include "TPS546.h"
 #include "TMP1075.h"
@@ -271,8 +272,9 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
         // calculate regulator power (in milliwatts)
         power_management->power = (TPS546_get_vout() * power_management->current) / 1000;
 
-        // TODO fix fan driver
-        //power_management->fan_speed = EMC2101_get_fan_speed();
+        // get the fan RPM
+        power_management->fan_speed = EMC2302_get_fan_speed(0);
+        power_management->fan_speed = EMC2302_get_fan_speed(1);
 
         // Two board temperature sensors
         ESP_LOGI(TAG, "Board Temp: %d, %d", TMP1075_read_temperature(0), TMP1075_read_temperature(1));
@@ -280,6 +282,16 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
         // get regulator internal temperature
         power_management->chip_temp = (float)TPS546_get_temperature();
         ESP_LOGI(TAG, "TPS546 Temp: %2f", power_management->chip_temp);
+
+        EMC2302_set_fan_speed(1, 100);
+
+        // This causes the fan to cycle on/off quickly, need some hysteresis
+        // for active fan control 
+        //if (power_management->chip_temp > 65) {
+        //    EMC2302_set_fan_speed(1, 100);
+        //} else {
+        //    EMC2302_set_fan_speed(1, 60);
+        //}
 
         // TODO figure out best way to detect overheating on the Hex
         if (power_management->chip_temp > TPS546_THROTTLE_TEMP &&
