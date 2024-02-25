@@ -179,7 +179,7 @@ void BM1366_send_hash_frequency(float target_freq)
         }
     }
 
-    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), freqbuf, 6, true);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), freqbuf, 6, false);
 
     ESP_LOGI(TAG, "Setting Frequency to %.2fMHz (%.2f)", target_freq, newf);
 }
@@ -665,7 +665,7 @@ asic_result * BM1366_receive_work(void)
     return SERIAL_rx_aa55(asic_response_buffer, 11);
 }
 
-uint16_t reverse_uint16(uint16_t num)
+static uint16_t reverse_uint16(uint16_t num)
 {
     return (num >> 8) | (num << 8);
 }
