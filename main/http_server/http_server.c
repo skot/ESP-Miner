@@ -270,6 +270,12 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "stratumPort")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_STRATUM_PORT, item->valueint);
     }
+    if ((item = cJSON_GetObjectItem(root, "stratumTLS")) != NULL) {
+        nvs_config_set_u16(NVS_CONFIG_STRATUM_TLS, item->valueint);
+    }
+    if ((item = cJSON_GetObjectItem(root, "stratumCert")) != NULL) {
+        nvs_config_set_string(NVS_CONFIG_STRATUM_CERT, item->valuestring);
+    }
     if ((item = cJSON_GetObjectItem(root, "ssid")) != NULL) {
         nvs_config_set_string(NVS_CONFIG_WIFI_SSID, item->valuestring);
     }
@@ -338,6 +344,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     char * ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, CONFIG_ESP_WIFI_SSID);
     char * stratumURL = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, CONFIG_STRATUM_URL);
     char * stratumUser = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, CONFIG_STRATUM_USER);
+    char * stratumCert = nvs_config_get_string(NVS_CONFIG_STRATUM_CERT, CONFIG_STRATUM_CERT);
     char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, 'unknown');
 
         cJSON * root = cJSON_CreateObject();
@@ -362,6 +369,8 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddStringToObject(root, "stratumURL", stratumURL);
     cJSON_AddNumberToObject(root, "stratumPort", nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, CONFIG_STRATUM_PORT));
     cJSON_AddStringToObject(root, "stratumUser", stratumUser);
+    cJSON_AddNumberToObject(root, "stratumTLS", nvs_config_get_u16(NVS_CONFIG_STRATUM_TLS, 0));
+    cJSON_AddStringToObject(root, "stratumCert", stratumCert);
 
     cJSON_AddStringToObject(root, "version", esp_app_get_description()->version);
     cJSON_AddStringToObject(root, "boardVersion", board_version);
@@ -377,6 +386,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     free(ssid);
     free(stratumURL);
     free(stratumUser);
+    free(stratumCert);
     free(board_version);
 
         const char * sys_info = cJSON_Print(root);

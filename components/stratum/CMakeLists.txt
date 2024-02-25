@@ -9,4 +9,5 @@ INCLUDE_DIRS
 REQUIRES 
     json
     mbedtls
+    tcp_transport
 )

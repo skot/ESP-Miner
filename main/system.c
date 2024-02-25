@@ -52,8 +52,14 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
     // set the pool url
     module->pool_url = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, CONFIG_STRATUM_URL);
 
-    //set the pool port
+    // set the pool port
     module->pool_port = nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, CONFIG_STRATUM_PORT);
+
+    // set the pool tls
+    module->is_tls = nvs_config_get_u16(NVS_CONFIG_STRATUM_TLS, false);
+
+    // set the pool cert
+    module->pool_cert = nvs_config_get_string(NVS_CONFIG_STRATUM_CERT, CONFIG_STRATUM_CERT);
 
     // set the best diff string
     _suffix_string(module->best_nonce_diff, module->best_diff_string, DIFF_STRING_SIZE, 0);

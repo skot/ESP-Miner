@@ -1,4 +1,5 @@
 input[type="text"],
+textarea,
 input[type="number"],
 input[type="password"],
 input[type="range"] {
@@ -19,6 +20,7 @@ select {
 @media only screen and (min-width:900px) {
 
     input[type="text"],
+    textarea,
     input[type="password"],
     input[type="number"],
     input[type="range"] {
