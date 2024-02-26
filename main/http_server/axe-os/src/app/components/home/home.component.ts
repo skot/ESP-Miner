@@ -24,6 +24,8 @@ export class HomeComponent {
   public dataData: number[] = [];
   public chartData?: any;
 
+  public inputVoltage$: Observable<{ min: number, max: number }>;
+
   constructor(
     private systemService: SystemService
   ) {
@@ -134,17 +136,26 @@ export class HomeComponent {
     this.expectedHashRate$ = this.info$.pipe(map(info => {
       if (info.ASICModel === eASICModel.BM1366) {
         const version = parseInt(info.boardVersion);
-        if (version >= 400 && version < 500) {
-          return (info.frequency * ((894 * 6) / 1000))
+        if (version >= 300 && version < 400) {
+          return Math.floor((info.frequency * ((894 * 6) / 1000)))
         } else {
-          return (info.frequency * (894 / 1000))
+          return Math.floor((info.frequency * (894 / 1000)))
         }
       } else if (info.ASICModel === eASICModel.BM1397) {
-        return (info.frequency * (672 / 1000))
+        return Math.floor((info.frequency * (672 / 1000)))
       }
 
       return undefined;
 
+    }));
+
+    this.inputVoltage$ = this.info$.pipe(map(info => {
+      const version = parseInt(info.boardVersion);
+      if (version >= 300 && version < 400) {
+        return { min: 11, max: 13 };
+      } else {
+        return { min: 4.5, max: 5.5 };
+      }
     }))
 
     this.quickLink$ = this.info$.pipe(
