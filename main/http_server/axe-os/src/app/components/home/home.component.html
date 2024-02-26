@@ -100,11 +100,11 @@
                         Power
                     </div>
 
-                    <div class="col-4">
-                        <p-knob [min]="4.5" [max]="5.5" [readonly]="true" [(ngModel)]="info.voltage"
-                            valueTemplate="{value}V"></p-knob>
+                    <div class="col-4" *ngIf="inputVoltage$ | async as inputVoltage">
+                        <p-knob [min]="inputVoltage.min" [max]="inputVoltage.max" [readonly]="true"
+                            [(ngModel)]="info.voltage" valueTemplate="{value}V"></p-knob>
                         Input Voltage
-                        <span class="danger" *ngIf="info.voltage < 4.8">&nbsp; Danger: Low voltage</span>
+
                     </div>
 
                     <div class="col-4">
