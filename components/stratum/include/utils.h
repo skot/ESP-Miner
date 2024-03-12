@@ -4,6 +4,10 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 int hex2char(uint8_t x, char *c);
 
 size_t bin2hex(const uint8_t *buf, size_t buflen, char *hex, size_t hexlen);
@@ -33,5 +37,9 @@ double le256todouble(const void *target);
 void prettyHex(unsigned char *buf, int len);
 
 uint32_t flip32(uint32_t val);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // STRATUM_UTILS_H

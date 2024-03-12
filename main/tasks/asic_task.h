@@ -2,6 +2,7 @@
 #define ASIC_TASK_H_
 
 #include "mining.h"
+
 typedef struct
 {
     // ASIC may not return the nonce in the same order as the jobs were sent
@@ -10,6 +11,14 @@ typedef struct
     bm_job **active_jobs;
 } AsicTaskModule;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void ASIC_task(void *pvParameters);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif

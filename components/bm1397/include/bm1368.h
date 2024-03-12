@@ -31,6 +31,10 @@ typedef struct __attribute__((__packed__))
     uint8_t version[4];
 } BM1368_job;
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 void BM1368_init(u_int64_t frequency);
 
 void BM1368_send_init(void);
@@ -41,4 +45,7 @@ int BM1368_set_default_baud(void);
 void BM1368_send_hash_frequency(float frequency);
 task_result * BM1368_proccess_work(void * GLOBAL_STATE);
 
+#ifdef __cplusplus
+}
+#endif
 #endif /* BM1368_H_ */

@@ -6,7 +6,7 @@ SRCS
     "fonts.c"
     "INA260.c"
     "led_controller.c"
-    "main.c"
+    "main.cpp"
     "nvs_config.c"
     "oled.c"
     "system.c"

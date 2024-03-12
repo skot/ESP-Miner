@@ -81,10 +81,20 @@ typedef enum
     EMC2101_RATE_32_HZ,   ///< 32_HZ
 } emc2101_rate_t;
 
+#ifdef __cplusplus
+extern "C"
+{
+#endif
+
 void EMC2101_set_fan_speed(float);
 // void EMC2101_read(void);
 uint16_t EMC2101_get_fan_speed(void);
 void EMC2101_init(bool);
 float EMC2101_get_external_temp(void);
 uint8_t EMC2101_get_internal_temp(void);
+
+#ifdef __cplusplus
+}
+#endif
+
 #endif /* EMC2101_H_ */
