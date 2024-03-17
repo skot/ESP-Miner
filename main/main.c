@@ -74,9 +74,9 @@ void app_main(void)
     }
 
     uint16_t should_self_test = nvs_config_get_u16(NVS_CONFIG_SELF_TEST, 1);
-    //if (should_self_test == 1) {
+    if (should_self_test == 1) {
         self_test((void *) &GLOBAL_STATE);
-    //}
+    }
 
     xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void *) &GLOBAL_STATE, 3, NULL);
 
