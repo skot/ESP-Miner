@@ -127,8 +127,8 @@
                             High Temperature</span>
                     </div>
                     <div class="col-6">
-                        <p-knob [min]="0" [max]="100" [readonly]="true" [(ngModel)]="info.fanspeed"
-                            valueTemplate="{value}%"></p-knob>
+                        <p-knob [min]="0" [max]="6000" [readonly]="true" [(ngModel)]="info.fanSpeed"
+                            valueTemplate="{value}rpm"></p-knob>
                         Fan
                     </div>
                     <div class="col-6" *ngIf="info.boardtemp1">
