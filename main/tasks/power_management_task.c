@@ -44,8 +44,8 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 
     char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "unknown");
     power_management->HAS_POWER_EN =
-        (strcmp(board_version, "202") == 1 || strcmp(board_version, "203") == 1 || strcmp(board_version, "204") == 1);
-    power_management->HAS_PLUG_SENSE = strcmp(board_version, "204") == 1;
+        (strcmp(board_version, "202") == 1 || strcmp(board_version, "203") == 1 || strcmp(board_version, "204") == 1 || strcmp(board_version, "205") == 1);
+    power_management->HAS_PLUG_SENSE = strcmp(board_version, "204") == 1 || strcmp(board_version, "205") == 1;
     free(board_version);
 
     int last_frequency_increase = 0;
@@ -71,6 +71,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     } else {
         // turn ASIC off
         gpio_set_level(GPIO_NUM_10, 1);
+        ESP_LOGE(TAG, "No 5V power (barrel jack) available - ASIC disabled");
     }
 
     vTaskDelay(3000 / portTICK_PERIOD_MS);
@@ -148,9 +149,9 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
                 ESP_LOGE(TAG, "OVERHEAT");
 
-
                 if (power_management->HAS_POWER_EN) {
                     gpio_set_level(GPIO_NUM_10, 1);
+                    ESP_LOGE(TAG, "OVERHEAT detected - ASIC disabled");
                 } else {
                     nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, 990);
                     nvs_config_set_u16(NVS_CONFIG_ASIC_FREQ, 50);
@@ -176,6 +177,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             if (gpio12_state == 0) {
                 // turn ASIC off
                 gpio_set_level(GPIO_NUM_10, 1);
+                ESP_LOGE(TAG, "No 5V power (barrel jack) available - ASIC disabled");
             }
         }
 
