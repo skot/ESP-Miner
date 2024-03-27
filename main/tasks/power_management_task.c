@@ -58,6 +58,26 @@ static void automatic_fan_speed(float chip_temp)
     EMC2101_set_fan_speed((float) result / 100);
 }
 
+static void automatic_fan_speed_hex(float chip_temp)
+{
+    double result = 0.0;
+    double min_temp = 50.0;
+    double min_fan_speed = 20.0;
+
+    if (chip_temp < min_temp) {
+        result = min_fan_speed;
+    } else if (chip_temp >= THROTTLE_TEMP) {
+        result = 100;
+    } else {
+        double temp_range = THROTTLE_TEMP - min_temp;
+        double fan_range = 100 - min_fan_speed;
+        result = ((chip_temp - min_temp) / temp_range) * fan_range + min_fan_speed;
+    }
+
+    EMC2302_set_fan_speed(0,(float) result / 100);
+    EMC2302_set_fan_speed(1,(float) result / 100);
+}
+
 // Returns the vcore voltage using the appropriate source
 uint16_t Get_vcore(void)
 {
