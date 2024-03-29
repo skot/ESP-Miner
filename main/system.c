@@ -56,7 +56,7 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
     module->pool_port = nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, CONFIG_STRATUM_PORT);
 
     // set the best diff string
-    _suffix_string((uint64_t) module->best_nonce_diff, module->best_diff_string, DIFF_STRING_SIZE, 0);
+    _suffix_string(module->best_nonce_diff, module->best_diff_string, DIFF_STRING_SIZE, 0);
 
     // set the ssid string to blank
     memset(module->ssid, 0, 20);
@@ -269,12 +269,12 @@ static double _calculate_network_difficulty(uint32_t nBits)
 
 static void _check_for_best_diff(SystemModule * module, double diff, uint32_t nbits)
 {
-    if (diff <= module->best_nonce_diff) {
+    if ((uint64_t) diff <= module->best_nonce_diff) {
         return;
     }
-    module->best_nonce_diff = diff;
+    module->best_nonce_diff = (uint64_t) diff;
 
-    nvs_config_set_u64(NVS_CONFIG_BEST_DIFF, (uint64_t) module->best_nonce_diff);
+    nvs_config_set_u64(NVS_CONFIG_BEST_DIFF, module->best_nonce_diff);
 
     // make the best_nonce_diff into a string
     _suffix_string((uint64_t) diff, module->best_diff_string, DIFF_STRING_SIZE, 0);
