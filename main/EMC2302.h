@@ -2,7 +2,8 @@
 #define EMC2302_H_
 
 
-#define EMC2302_I2CADDR_DEFAULT 0x2F ///< EMC2302 default i2c address
+#define EMC2302_I2CADDR_DEFAULT 0x2F ///< EMC2302-2 default i2c address
+#define EMC2302_1_I2CADDR_DEFAULT 0x2E ///< EMC2302-2 default i2c address
 #define EMC2302_WHOAMI 0xFD          ///< Chip ID register
 #define EMC2302_MANUFACTURER_ID 0xFE ///< Manufacturer ID
 #define EMC2302_REVISION 0xFF        ///< Chip revision
@@ -50,7 +51,7 @@
 #define EMC2302_TACH2_LSB 0x4E          ///< Tach 2 reading low byte
 #define EMC2302_TACH2_MSB 0x4F          ///< Tach 2 reading high byte
 
-#define EMC2302_FAN_RPM_NUMERATOR 5400000 ///< Conversion unit to convert LSBs to fan RPM
+#define EMC2302_FAN_RPM_NUMERATOR 3932160 ///< Conversion unit to convert LSBs to fan RPM
 #define _TEMP_LSB 0.125                   ///< single bit value for internal temperature readings
 
 /**

@@ -41,7 +41,6 @@ static esp_err_t register_write_byte(uint8_t reg_addr, uint8_t data)
 // run this first. sets up the PWM polarity register
 void EMC2302_init(bool invertPolarity)
 {
-
     if (invertPolarity) {
         ESP_ERROR_CHECK(register_write_byte(EMC2302_PWM_POLARITY, 0b00011111));
     }
@@ -53,7 +52,7 @@ void EMC2302_set_fan_speed(uint8_t devicenum, float percent)
     uint8_t speed;
 	uint8_t FAN_SETTING_REG = EMC2302_FAN1_SETTING + (devicenum * 0x10);
 
-    speed = (uint8_t) (63.0 * percent);
+    speed = (uint8_t) (255.0 * percent);
     ESP_ERROR_CHECK(register_write_byte(FAN_SETTING_REG, speed));
 }
 
@@ -70,6 +69,7 @@ uint16_t EMC2302_get_fan_speed(uint8_t devicenum)
 
     ESP_LOGI(TAG, "Raw Fan Speed[%d] = %02X %02X", devicenum, tach_msb, tach_lsb);
     RPM = (tach_msb << 5) + ((tach_lsb >> 3) & 0x1F);
+    RPM = EMC2302_FAN_RPM_NUMERATOR / RPM;
     ESP_LOGI(TAG, "Fan Speed[%d] = %d RPM", devicenum, RPM);
 
     return RPM;

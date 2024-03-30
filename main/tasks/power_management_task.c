@@ -1,5 +1,6 @@
 #include "DS4432U.h"
 #include "EMC2101.h"
+#include "EMC2302.h"
 #include "INA260.h"
 #include "TPS546.h"
 #include "TMP1075.h"
@@ -20,6 +21,7 @@
 #define THROTTLE_TEMP_RANGE (MAX_TEMP - THROTTLE_TEMP)
 
 #define TPS546_THROTTLE_TEMP 105.0
+#define TPS546_MAX_TEMP 145.0
 
 #define VOLTAGE_START_THROTTLE 4900
 #define VOLTAGE_MIN_THROTTLE 3500
@@ -66,13 +68,15 @@ static void automatic_fan_speed_hex(float chip_temp)
 
     if (chip_temp < min_temp) {
         result = min_fan_speed;
-    } else if (chip_temp >= THROTTLE_TEMP) {
+    } else if (chip_temp >= TPS546_THROTTLE_TEMP) {
         result = 100;
     } else {
-        double temp_range = THROTTLE_TEMP - min_temp;
+        double temp_range = TPS546_THROTTLE_TEMP - min_temp;
         double fan_range = 100 - min_fan_speed;
         result = ((chip_temp - min_temp) / temp_range) * fan_range + min_fan_speed;
     }
+
+    ESP_LOGI(TAG, "============>AutoFan speed set to: %f percent", result);
 
     EMC2302_set_fan_speed(0,(float) result / 100);
     EMC2302_set_fan_speed(1,(float) result / 100);
@@ -317,15 +321,16 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
         }
 
         // TODO fix fan driver
-        //if (auto_fan_speed == 1) {
-        //    automatic_fan_speed(power_management->chip_temp);
-        //} else {
-        //    EMC2101_set_fan_speed((float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
-        //}
+        if (auto_fan_speed == 1) {
+            automatic_fan_speed_hex(power_management->chip_temp);
+        } else {
+            EMC2302_set_fan_speed(0,(float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
+            EMC2302_set_fan_speed(1,(float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
+        }
 
-        ESP_LOGI(TAG, "VIN: %f, VOUT: %f, IOUT: %f", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
-        ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
-        ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
+        //ESP_LOGI(TAG, "VIN: %f, VOUT: %f, IOUT: %f", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
+        //ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
+        //ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
 
         vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
     }
