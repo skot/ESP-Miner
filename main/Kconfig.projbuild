@@ -12,6 +12,12 @@ menu "Bitaxe Configuration"
         default 250
         help
             The BM1397 hash frequency
+
+    config ASIC_MODEL
+        string "ASIC Model"
+        default "BM1366"
+        help
+            Model of the ASIC chip
 endmenu
 
 menu "Stratum Configuration"
