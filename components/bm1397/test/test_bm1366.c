@@ -125,6 +125,12 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
     // actual merkle_root of block #839900, see see blockchain.info/... or https://bitcoinexplorer.org/block-height/839900#JSON
     char * merkle_root = "088083f58ddef995494fec492880da49e3463cc73dee1306dbdf6cf3af77454c";
 
+    // The merkle_root copied from blockchain.info needs to be in reversed order. Maybe there is a better way to do this?
+    uint8_t merkle_root_rev[32];
+    hex2bin(merkle_root, merkle_root_rev, 32);
+    reverse_bytes(merkle_root_rev, 32);
+    bin2hex(merkle_root_rev, 32, merkle_root, 64);
+
     // construct job
     bm_job job = construct_bm_job(&notify_message, merkle_root, 0);
 
@@ -148,7 +154,7 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
     // in order to cover the whole nonce space, we need to have 128 chips (chip address 0-127).
     // So we need to change the chip address to selecct the correct nonce space.
     // The solution for block #839900 (the block we are using in this test) should be in nonce space of chip address 0xc2.
-    // In order to show and proof the different nonce scapes per chip address, we start at 96 (96 * 2 = 192 = 0xc0).
+    // In order to show and proof the different nonce spaces per chip address, we start at 96 (96 * 2 = 192 = 0xc0).
     // It is expected to not find a solution in nonce space of chip address 0xc0.
     // This unit test is designed to test one single BM1366 chip.
     for (uint8_t i = 96; i < 128; i++) {
