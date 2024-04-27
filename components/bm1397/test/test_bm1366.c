@@ -147,10 +147,10 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
     // set difficulty mask
     (*GLOBAL_STATE.ASIC_functions.set_difficulty_mask_fn)(notify_message.difficulty);
 
-    // uncomment the lines below to simulate 4 chips / 4 nonce ranges
+    // uncomment the line below to simulate 4 chips / 4 nonce ranges
     // chips_detected = 4;
-    // uint32_t magic_number_full_nonce_scope = 0x151c * 128;
-    // BM1366_set_nonce_scope(magic_number_full_nonce_scope / chips_detected);
+    uint32_t magic_number_full_nonce_scope = 0xAFFFF;
+    BM1366_set_nonce_scope(magic_number_full_nonce_scope / chips_detected);
 
     // Why do we need to change the chip address? see https://youtu.be/6o92HhvOc1I?t=5710 for a more detailed explanation.
     // Each chip (each chip address) has a different nonce space (see BM1366_set_nonce_scope).
@@ -173,7 +173,7 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
         uint32_t nonce = 0;
 
         int counter = 1;
-        while (asic_result != NULL && counter <= 100) {
+        while (asic_result != NULL && counter <= 150) {
 
             if (asic_result->rolled_version < version || (asic_result->rolled_version == version && asic_result->nonce == nonce)) {
                 ESP_LOGI(TAG, "Rollover detected - Nonce %lu, Version 0x%08lx", asic_result->nonce, asic_result->rolled_version);
