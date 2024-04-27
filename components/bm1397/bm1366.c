@@ -584,7 +584,8 @@ void BM1366_set_single_chip_address(uint8_t new_address)
     _set_chip_address(new_address);
 }
 
-void BM1366_set_nonce_scope(uint32_t chipmask)
+// to be called like BM1366_set_nonce_scope( 0xAFFFF (magic number) / chips_detected )
+void BM1366_set_nonce_scope(uint32_t nonce_scope)
 {
     // 55 AA 51 09 00 10 00 00 11 5A 04 //s19kPro (77 chips) 0x115a
     //unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010001, 0b01011010};
@@ -598,11 +599,11 @@ void BM1366_set_nonce_scope(uint32_t chipmask)
 
     // convert into char array
     for (int i = 0; i < 4; i++) {
-        char value = (chipmask >> (8 * i)) & 0xFF;
+        char value = (nonce_scope >> (8 * i)) & 0xFF;
         command[5 - i] = value;
     }
 
-    ESP_LOGI(TAG, "Setting Nonce scope to %lu (0x%08lx)", chipmask, chipmask);
+    ESP_LOGI(TAG, "Setting Nonce scope to %lu (0x%08lx)", nonce_scope, nonce_scope);
     _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), command, 6, true);
 }
 
