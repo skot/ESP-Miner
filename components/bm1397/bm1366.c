@@ -575,13 +575,35 @@ uint8_t BM1366_init(uint64_t frequency)
     return _send_init(frequency);
 }
 
-void BM1366_set_chip_address(uint8_t chipAddr)
+void BM1366_set_single_chip_address(uint8_t new_address)
 {
     // set all chips to chain_inactive mode
     _send_chain_inactive();
 
-    // set new chip address. First chip in chain_inactive mode will now be addressed by the new address
-    _set_chip_address(chipAddr);
+    // set new chip address to first chip in chain_inactive mode.
+    _set_chip_address(new_address);
+}
+
+void BM1366_set_nonce_scope(uint32_t chipmask)
+{
+    // 55 AA 51 09 00 10 00 00 11 5A 04 //s19kPro (77 chips) 0x115a
+    //unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010001, 0b01011010};
+    // 55 AA 51 09 00 10 00 00 14 46 04 //s19xp_luxos (110 chips) 0x1446
+    //unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010100, 0b01000110};
+    // 55 AA 51 09 00 10 00 00 15 1C 02 //s19xp-stock / BitaxeUltra 0x151c
+    //unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010101, 0b00011100};
+
+    // Default mask for 128 chips (address interval 0x02) on chain
+    unsigned char command[9] = {0x00, 0x10, 0x00, 0x00, 0x15, 0x1C};
+
+    // convert into char array
+    for (int i = 0; i < 4; i++) {
+        char value = (chipmask >> (8 * i)) & 0xFF;
+        command[5 - i] = value;
+    }
+
+    ESP_LOGI(TAG, "Setting Nonce scope to %lu (0x%08lx)", chipmask, chipmask);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), command, 6, true);
 }
 
 // Baud formula = 25M/((denominator+1)*8)
