@@ -59,6 +59,7 @@ static const char * TAG = "bm1366Module";
 
 static uint8_t asic_response_buffer[CHUNK_SIZE];
 static task_result result;
+static int chip_counter = 0; // updated in _send_init
 
 /// @brief
 /// @param ftdi
@@ -446,7 +447,7 @@ static uint8_t _send_init(uint64_t frequency)
     unsigned char init3[7] = {0x55, 0xAA, 0x52, 0x05, 0x00, 0x00, 0x0A};
     _send_simple(init3, 7);
 
-    int chip_counter = 0;
+    chip_counter = 0;
     while (true) {
         if(SERIAL_rx(asic_response_buffer, 11, 1000) > 0) {
             chip_counter++;
