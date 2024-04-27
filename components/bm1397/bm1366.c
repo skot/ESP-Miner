@@ -466,12 +466,12 @@ static uint8_t _send_init(uint64_t frequency)
     _send_simple(init5, 11);
 
     //chain inactive
-    unsigned char init6[7] = {0x55, 0xAA, 0x53, 0x05, 0x00, 0x00, 0x03};
-    _send_simple(init6, 7);
+    _send_chain_inactive();
 
     //set chip address
-    unsigned char init7[7] = {0x55, 0xAA, 0x40, 0x05, 0x00, 0x00, 0x1C};
-    _send_simple(init7, 7);
+    for (int i = 0; i < chip_counter; i++) {
+        _set_chip_address(i * (0x100 / chip_counter));
+    }
 
     //Core Register Control
     unsigned char init135[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x3C, 0x80, 0x00, 0x85, 0x40, 0x0C};
@@ -489,7 +489,7 @@ static uint8_t _send_init(uint64_t frequency)
     unsigned char init138[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x54, 0x00, 0x00, 0x00, 0x03, 0x1D};
     _send_simple(init138, 11);
 
-    //Set the IO Driver Strength on chip 00
+    //Set the IO Driver Strength
     unsigned char init139[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x58, 0x02, 0x11, 0x11, 0x11, 0x06};
     _send_simple(init139, 11);
 
