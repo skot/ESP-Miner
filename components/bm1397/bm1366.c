@@ -118,12 +118,12 @@ static void _send_chain_inactive(void)
     _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_INACTIVE), read_address, 2, false);
 }
 
-static void _set_chip_address(uint8_t chipAddr)
+static void _set_chip_address(uint8_t new_address)
 {
 
-    unsigned char read_address[2] = {chipAddr, 0x00};
+    unsigned char send_address[2] = {new_address, 0x00};
     // send serial data
-    _send_BM1366((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, false);
+    _send_BM1366((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), send_address, 2, false);
 }
 
 void BM1366_send_hash_frequency(float target_freq)
