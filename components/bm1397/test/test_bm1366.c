@@ -147,25 +147,25 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
     // set difficulty mask
     (*GLOBAL_STATE.ASIC_functions.set_difficulty_mask_fn)(notify_message.difficulty);
 
-    task_result * asic_result = NULL;
+    // uncomment the lines below to simulate 4 chips / 4 nonce ranges
+    // chips_detected = 4;
+    // uint32_t magic_number_full_nonce_scope = 0x151c * 128;
+    // BM1366_set_nonce_scope(magic_number_full_nonce_scope / chips_detected);
 
     // Why do we need to change the chip address? see https://youtu.be/6o92HhvOc1I?t=5710 for a more detailed explanation.
-    // It seems that the chip (each chip address) has a different nonce space and 
-    // in order to cover the whole nonce space, we need to have 128 chips (chip address 0-127).
-    // So we need to change the chip address to selecct the correct nonce space.
-    // The solution for block #839900 (the block we are using in this test) should be in nonce space of chip address 0xc2.
-    // In order to show and proof the different nonce spaces per chip address, we start at 96 (96 * 2 = 192 = 0xc0).
-    // It is expected to not find a solution in nonce space of chip address 0xc0.
-    // This unit test is designed to test one single BM1366 chip.
-    for (uint8_t i = 96; i < 128; i++) {
+    // Each chip (each chip address) has a different nonce space (see BM1366_set_nonce_scope).
+    // So we need to change the chip address to simulate multible chips (and to select a nonce space by doing so).
+    // This unit test is designed to test one single BM1366 chip and has an option to simulate multible chips by changing the chip address.
+    task_result * asic_result = NULL;
+    for (uint16_t i = 0; i < 256; i = i + (256/chips_detected)) {
 
-        uint8_t chip_address = i * 2;
+        uint8_t chip_address = i;
         
         ESP_LOGI(TAG, "Changing chip address and sending job; new chip address: 0x%02x", chip_address);
-        BM1366_set_chip_address(chip_address);
+        BM1366_set_single_chip_address(chip_address);
         (*GLOBAL_STATE.ASIC_functions.send_work_fn)(&GLOBAL_STATE, &job);
 
-        ESP_LOGI(TAG, "Waiting for result ... (might take a while due to 60s timeout)");
+        ESP_LOGI(TAG, "Waiting for result ... (might take a while)");
         asic_result = (*GLOBAL_STATE.ASIC_functions.receive_result_fn)(&GLOBAL_STATE);
         if (asic_result == NULL) { continue; }
 
@@ -183,7 +183,7 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
             nonce = asic_result->nonce;
 
             double nonce_diff = test_nonce_value(&job, asic_result->nonce, asic_result->rolled_version);
-            ESP_LOGI(TAG, "Result[%d]: Nonce %lu (0x%08lx) Nonce difficulty %.32f. rolled-version 0x%08lx", counter, asic_result->nonce, asic_result->nonce, nonce_diff, asic_result->rolled_version);
+            ESP_LOGI(TAG, "Result[%d]: Nonce %lu (0x%08lx), Nonce difficulty %.32f, rolled-version 0x%08lx", counter, asic_result->nonce, asic_result->nonce, nonce_diff, asic_result->rolled_version);
 
             if (asic_result->nonce == expected_nonce && asic_result->rolled_version == expected_version) {
                 ESP_LOGI(TAG, "Expected nonce and version match. Solution found!");
