@@ -28,7 +28,26 @@ static uint8_t MFR_ID[] = {'B', 'A', 'X'};
 static uint8_t MFR_MODEL[] = {'H', 'E', 'X'};
 static uint8_t MFR_REVISION[] = {0x00, 0x00, 0x01};
 
-static uint8_t COMPENSATION_CONFIG[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+//static uint8_t COMPENSATION_CONFIG[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+
+/**
+ * @brief SMBus command
+ */
+static esp_err_t smb_command(uint8_t command)
+{
+    esp_err_t err = ESP_FAIL;
+
+    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
+    i2c_master_start(cmd);
+    i2c_master_write_byte(cmd, TPS546_I2CADDR << 1 | WRITE_BIT, ACK_CHECK);
+    i2c_master_write_byte(cmd, command, ACK_CHECK);
+    i2c_master_stop(cmd);
+    ESP_ERROR_CHECK(i2c_master_cmd_begin(I2C_MASTER_NUM, cmd, SMBUS_DEFAULT_TIMEOUT));
+    i2c_cmd_link_delete(cmd);
+
+    // TODO return an actual error status
+    return err;
+}
 
 /**
  * @brief SMBus read byte
@@ -361,9 +380,9 @@ int TPS546_init(void)
 	uint8_t data[6];
     uint8_t u8_value;
     uint16_t u16_value;
-    float vin;
-    float iout;
-    float vout;
+    //float vin;
+    //float iout;
+    //float vout;
     uint8_t read_mfr_revision[4];
     int temp;
     uint8_t comp_config[5];
@@ -580,7 +599,7 @@ int TPS546_get_frequency(void)
 void TPS546_set_frequency(int newfreq)
 {
     uint16_t value;
-    int freq;
+    //int freq;
 
     ESP_LOGI(TAG, "Writing new frequency: %d", newfreq);
     value = int_2_slinear11(newfreq);
@@ -730,4 +749,73 @@ void TPS546_show_voltage_settings(void)
     f_value = ulinear16_2_float(u16_value);
     ESP_LOGI(TAG, "Vout Min set to: %f V", f_value);
 }
+
+/* Bit masks for status faults */
+#define PMBUS_FAULT_SECONDARY 0x0001 /* need to check STATUS_WORD */
+#define PMBUS_FAULT_CML       0x0002 /* need to check STATUS_CML */
+#define PMBUS_FAULT_TEMP      0x0004 /* need to check STATUS_TEMP */
+#define PMBUS_FAULT_VIN_UV    0x0008
+#define PMBUS_FAULT_IOUT_OC   0x0010
+#define PMBUS_FAULT_VOUT_OV   0x0020
+#define PMBUS_FAULT_OFF       0x0040
+#define PMBUS_FAULT_BUSY      0x0080
+/* NOT SUPPORTED              0x0100 */
+#define PMBUS_FAULT_OTHER     0x0200 /* need to check STATUS_OTHER */
+/* NOT SUPPORTED              0x0400 */
+#define PMBUS_FAULT_PGOOD     0x0800
+#define PMBUS_FAULT_MFR       0x1000 /* need to check STATUS_MFR */
+#define PMBUS_FAULT_INPUT     0x2000 /* need to check STATUS_INPUT */
+#define PMBUS_FAULT_IOUT      0x4000 /* need to check STATUS_IOUT  */
+#define PMBUS_FAULT_VOUT      0x8000 /* need to check STATUS_VOUT  */
+
+/* Check the status register for faults */
+void TPS546_check_status(void)
+{
+    uint8_t status_byte;
+    uint16_t status_word;
+
+    ESP_LOGI(TAG, "Checking Fault Status");
+    smb_read_word(PMBUS_STATUS_WORD, &status_word);
+    if (status_word != 0x0000) {
+        ESP_LOGI(TAG, "Status Word: %04x", status_word);
+
+        if (status_word & PMBUS_FAULT_CML) {
+            smb_read_byte(PMBUS_STATUS_CML, &status_byte);
+            ESP_LOGI(TAG, "STATUS_CML: %02x", status_byte);
+        }
+        if (status_word & PMBUS_FAULT_TEMP) {
+            smb_read_byte(PMBUS_STATUS_TEMPERATURE, &status_byte);
+            ESP_LOGI(TAG, "STATUS_TEMPERATUR: %02x", status_byte);
+        }
+        if (status_word & PMBUS_FAULT_VIN_UV) {
+            ESP_LOGI(TAG, "Vin Undervoltage");
+        }
+        if (status_word & PMBUS_FAULT_IOUT_OC) {
+            ESP_LOGI(TAG, "Iout Overcurrent");
+        }
+        if (status_word & PMBUS_FAULT_VOUT_OV) {
+            ESP_LOGI(TAG, "Vout Overvoltage");
+        }
+        if (status_word & PMBUS_FAULT_MFR) {
+            smb_read_byte(PMBUS_STATUS_MFR_SPECIFIC, &status_byte);
+            ESP_LOGI(TAG, "STATUS_MFR_SPECIFIC: %02x", status_byte);
+        }
+        if (status_word & PMBUS_FAULT_INPUT) {
+            smb_read_byte(PMBUS_STATUS_INPUT, &status_byte);
+            ESP_LOGI(TAG, "STATUS_INPUT: %02x", status_byte);
+        }
+        if (status_word & PMBUS_FAULT_IOUT) {
+            smb_read_byte(PMBUS_STATUS_IOUT, &status_byte);
+            ESP_LOGI(TAG, "STATUS_IOUT: %02x", status_byte);
+        }
+        if (status_word & PMBUS_FAULT_VOUT) {
+            smb_read_byte(PMBUS_STATUS_VOUT, &status_byte);
+            ESP_LOGI(TAG, "STATUS_VOUT: %02x", status_byte);
+        }
+
+        /* clear the faults, they will return if they still exist */
+        smb_command(PMBUS_CLEAR_FAULTS);
+    }
+}
+
 

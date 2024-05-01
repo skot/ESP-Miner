@@ -81,3 +81,22 @@
 #define PMBUS_SIMULATE_FAULTS 0xF1
 #define PMBUS_FUSION_ID0 0xFC
 #define PMBUS_FUSION_ID1 0xFD
+
+/* Bit masks for status faults */
+#define PMBUS_FAULT_SECONDARY 0x0001 /* need to check STATUS_WORD */
+#define PMBUS_FAULT_CML       0x0002 /* need to check STATUS_CML */
+#define PMBUS_FAULT_TEMP      0x0004 /* need to check STATUS_TEMP */
+#define PMBUS_FAULT_VIN_UV    0x0008
+#define PMBUS_FAULT_IOUT_OC   0x0010
+#define PMBUS_FAULT_VOUT_OV   0x0020
+#define PMBUS_FAULT_OFF       0x0040
+#define PMBUS_FAULT_BUSY      0x0080
+/* NOT SUPPORTED              0x0100 */
+#define PMBUS_FAULT_OTHER     0x0200 /* need to check STATUS_OTHER */
+/* NOT SUPPORTED              0x0400 */
+#define PMBUS_FAULT_PGOOD     0x0800
+#define PMBUS_FAULT_MFR       0x1000 /* need to check STATUS_MFR */
+#define PMBUS_FAULT_INPUT     0x2000 /* need to check STATUS_INPUT */
+#define PMBUS_FAULT_IOUT      0x4000 /* need to check STATUS_IOUT  */
+#define PMBUS_FAULT_VOUT      0x8000 /* need to check STATUS_VOUT  */
+

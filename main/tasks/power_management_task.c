@@ -293,6 +293,8 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
         // TMP1075_read_temperature(index)- gets the values from the two board sensors
         // TPS546_get_frequency()- gets the regulator switching frequency (probably no need to display)
 
+        /* check for faults */
+        TPS546_check_status();
 
         power_management->voltage = TPS546_get_vin() * 1000;
         power_management->current = TPS546_get_iout() * 1000;
