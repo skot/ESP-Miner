@@ -228,18 +228,13 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
             version = asic_result->rolled_version;
             nonce = asic_result->nonce;
 
-            // Every nonce returned by chip (except those sent by opencore) encodes address of the
-            // chip and core that computed it, because of the way they divide the search space.
-            uint8_t chipAddr = (asic_result->nonce >> 9) & 0x7f;
-            uint8_t coreAddr = (asic_result->nonce >> 29) & 0x7;
-
             double nonce_diff = test_nonce_value(&job, asic_result->nonce, asic_result->rolled_version);
             char * result_isDuplicated = "";
             if ( isDuplicated(&nonceList, (nonce_result) {.nonce = asic_result->nonce, .version = asic_result->rolled_version, .chip_address = chip_address}) ) {
                 result_isDuplicated = "(duplicate)";
             }
-            ESP_LOGI(TAG, "Result[%d](%02x/%02x): Nonce %lu (0x%08lx), Nonce difficulty %.32f. rolled-version 0x%08lx %s", counter, chipAddr, coreAddr, asic_result->nonce, asic_result->nonce, nonce_diff, asic_result->rolled_version, result_isDuplicated);
-            /*
+            ESP_LOGI(TAG, "Result[%d]: Nonce %lu (0x%08lx), Nonce difficulty %.32f. rolled-version 0x%08lx %s", counter, asic_result->nonce, asic_result->nonce, nonce_diff, asic_result->rolled_version, result_isDuplicated);
+
             if (asic_result->nonce == expected_nonce && asic_result->rolled_version == expected_version) {
                 ESP_LOGI(TAG, "Expected nonce and version match. Solution found!");
                 break;
@@ -252,12 +247,12 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
         ESP_LOGI(TAG, "Elapsed: %f seconds", (double)(end.tv_sec - begin.tv_sec)+(end.tv_usec - begin.tv_usec)*1e-6 );
         ESP_LOGI(TAG, "----------------------------------");
 
-        /*
         if (asic_result != NULL && asic_result->nonce == expected_nonce) {
             break;
         }
     }
     ESP_LOGI(TAG, "%lu unique nonces, %lu duplicates.", nonceList.numUnique, nonceList.numDuplicated);
+    ESP_LOGI(TAG, "----------------------------------");
 
     free(GLOBAL_STATE.ASIC_TASK_MODULE.active_jobs);
     free(GLOBAL_STATE.valid_jobs);
