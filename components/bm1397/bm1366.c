@@ -628,7 +628,7 @@ void BM1366_set_single_chip_address(uint8_t new_address)
 
 void BM1366_set_nonce_mask(int chip_count)
 {
-    if (chip_count < 0) { chip_count = 0; }
+    if (chip_count < 1) { chip_count = 1; }
     if (chip_count > 128) { chip_count = 128; }
 
     chip_count = _calculate_chip_number(chip_count); // Because of the way the nonce ranges calculated, we need to use a fixed chip address interval (for now)
