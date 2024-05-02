@@ -188,23 +188,30 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
     // uncomment the line below to simulate 4 chips / 4 nonce ranges
     // chips_detected = 4;
     BM1366_set_nonce_mask(chips_detected);
+
+    struct timeval begin, end;
     struct nonce_list nonceList;
     initList(&nonceList);
+    task_result * asic_result = NULL;
 
     // Why do we need to change the chip address? see https://youtu.be/6o92HhvOc1I?t=5710 for a more detailed explanation.
     // Each chip (each chip address) has a different nonce space (see BM1366_set_nonce_scope).
     // So we need to change the chip address to simulate multible chips (and to select a nonce space by doing so).
     // This unit test is designed to test one single BM1366 chip and has an option to simulate multible chips by changing the chip address.
-    task_result * asic_result = NULL;
     for (uint16_t i = 0; i < 256; i = i + (256/chips_detected)) {
 
         uint8_t chip_address = i;
         
         ESP_LOGI(TAG, "Changing chip address and sending job; new chip address: 0x%02x", chip_address);
         BM1366_set_single_chip_address(chip_address);
+
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        SERIAL_clear_buffer();
+
         (*GLOBAL_STATE.ASIC_functions.send_work_fn)(&GLOBAL_STATE, &job);
 
         ESP_LOGI(TAG, "Waiting for result ... (might take a while)");
+        gettimeofday(&begin, 0);
         asic_result = (*GLOBAL_STATE.ASIC_functions.receive_result_fn)(&GLOBAL_STATE);
         if (asic_result == NULL) { continue; }
 
@@ -241,6 +248,11 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
             asic_result = (*GLOBAL_STATE.ASIC_functions.receive_result_fn)(&GLOBAL_STATE); // wait for next result
             counter++;
         }
+        gettimeofday(&end, 0);
+        ESP_LOGI(TAG, "Elapsed: %f seconds", (double)(end.tv_sec - begin.tv_sec)+(end.tv_usec - begin.tv_usec)*1e-6 );
+        ESP_LOGI(TAG, "----------------------------------");
+
+        /*
         if (asic_result != NULL && asic_result->nonce == expected_nonce) {
             break;
         }
