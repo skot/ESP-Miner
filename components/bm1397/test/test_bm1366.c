@@ -16,6 +16,44 @@
 
 #include <string.h>
 
+typedef struct
+{
+    uint8_t chip_address;
+    uint32_t nonce;
+    uint16_t version;
+} nonce_result;
+
+struct nonce_list {
+    nonce_result *data;
+    uint32_t numUnique;
+    uint32_t numDuplicated;
+    uint32_t size;
+};
+
+void initList(struct nonce_list *_list);
+void initList(struct nonce_list *_list) {
+    _list->numUnique = 0;
+    _list->size = 10;
+    _list->data = malloc(_list->size * sizeof(nonce_result));
+}
+
+bool isDuplicated(struct nonce_list *_list, nonce_result _item);
+bool isDuplicated(struct nonce_list *_list, nonce_result _item) {
+    if (_list->numUnique == _list->size) {
+        _list->size += 10;
+        _list->data = realloc( _list->data, _list->size * sizeof(nonce_result) );
+    }
+    for (uint32_t j = 0; j < _list->numUnique; j++) {
+        if (_list->data[j].nonce == _item.nonce && _list->data[j].version == _item.version) {
+            _list->numDuplicated++;
+            return true;
+        }
+    }
+    _list->data[_list->numUnique] = _item;
+    _list->numUnique++;
+    return false;
+}
+
 static GlobalState GLOBAL_STATE = {.extranonce_str = NULL, .extranonce_2_len = 0, .abandon_work = 0, .version_mask = 0};
 
 static const char * TAG = "test_bm1366";
@@ -150,6 +188,8 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
     // uncomment the line below to simulate 4 chips / 4 nonce ranges
     // chips_detected = 4;
     BM1366_set_nonce_mask(chips_detected);
+    struct nonce_list nonceList;
+    initList(&nonceList);
 
     // Why do we need to change the chip address? see https://youtu.be/6o92HhvOc1I?t=5710 for a more detailed explanation.
     // Each chip (each chip address) has a different nonce space (see BM1366_set_nonce_scope).
@@ -181,9 +221,18 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
             version = asic_result->rolled_version;
             nonce = asic_result->nonce;
 
-            double nonce_diff = test_nonce_value(&job, asic_result->nonce, asic_result->rolled_version);
-            ESP_LOGI(TAG, "Result[%d]: Nonce %lu (0x%08lx), Nonce difficulty %.32f, rolled-version 0x%08lx", counter, asic_result->nonce, asic_result->nonce, nonce_diff, asic_result->rolled_version);
+            // Every nonce returned by chip (except those sent by opencore) encodes address of the
+            // chip and core that computed it, because of the way they divide the search space.
+            uint8_t chipAddr = (asic_result->nonce >> 9) & 0x7f;
+            uint8_t coreAddr = (asic_result->nonce >> 29) & 0x7;
 
+            double nonce_diff = test_nonce_value(&job, asic_result->nonce, asic_result->rolled_version);
+            char * result_isDuplicated = "";
+            if ( isDuplicated(&nonceList, (nonce_result) {.nonce = asic_result->nonce, .version = asic_result->rolled_version, .chip_address = chip_address}) ) {
+                result_isDuplicated = "(duplicate)";
+            }
+            ESP_LOGI(TAG, "Result[%d](%02x/%02x): Nonce %lu (0x%08lx), Nonce difficulty %.32f. rolled-version 0x%08lx %s", counter, chipAddr, coreAddr, asic_result->nonce, asic_result->nonce, nonce_diff, asic_result->rolled_version, result_isDuplicated);
+            /*
             if (asic_result->nonce == expected_nonce && asic_result->rolled_version == expected_version) {
                 ESP_LOGI(TAG, "Expected nonce and version match. Solution found!");
                 break;
@@ -196,9 +245,11 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
             break;
         }
     }
+    ESP_LOGI(TAG, "%lu unique nonces, %lu duplicates.", nonceList.numUnique, nonceList.numDuplicated);
 
     free(GLOBAL_STATE.ASIC_TASK_MODULE.active_jobs);
     free(GLOBAL_STATE.valid_jobs);
+    free(nonceList.data);
 
     // turn ASIC off
     gpio_set_direction(GPIO_NUM_10, GPIO_MODE_OUTPUT);
