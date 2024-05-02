@@ -185,7 +185,7 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
     // set difficulty mask
     (*GLOBAL_STATE.ASIC_functions.set_difficulty_mask_fn)(notify_message.difficulty);
 
-    // uncomment the line below to simulate 4 chips / 4 nonce ranges
+    // uncomment the lines below to simulate 4 chips / 4 nonce ranges
     // chips_detected = 4;
     BM1366_set_nonce_mask(chips_detected);
 
@@ -195,7 +195,7 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
     task_result * asic_result = NULL;
 
     // Why do we need to change the chip address? see https://youtu.be/6o92HhvOc1I?t=5710 for a more detailed explanation.
-    // Each chip (each chip address) has a different nonce space (see BM1366_set_nonce_scope).
+    // Each chip (each chip address) has a different nonce space (see BM1366_set_nonce_mask).
     // So we need to change the chip address to simulate multible chips (and to select a nonce space by doing so).
     // This unit test is designed to test one single BM1366 chip and has an option to simulate multible chips by changing the chip address.
     for (uint16_t i = 0; i < 256; i = i + (256/chips_detected)) {
@@ -216,12 +216,12 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
         if (asic_result == NULL) { continue; }
 
         uint32_t version = asic_result->rolled_version;
-        uint32_t nonce = 0;
+        uint32_t nonce = asic_result->nonce;
 
         int counter = 1;
-        while (asic_result != NULL && counter <= 150) {
+        while (asic_result != NULL && counter <= 1000) {
 
-            if (asic_result->rolled_version < version || (asic_result->rolled_version == version && asic_result->nonce == nonce)) {
+            if (asic_result->rolled_version < version || (counter > 1 && asic_result->rolled_version == version && asic_result->nonce == nonce)) {
                 ESP_LOGI(TAG, "Rollover detected - Nonce %lu, Version 0x%08lx", asic_result->nonce, asic_result->rolled_version);
                 break;
             }
@@ -269,5 +269,6 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
 
     TEST_ASSERT_NOT_NULL(asic_result);
     TEST_ASSERT_EQUAL_UINT32(expected_nonce, asic_result->nonce);
+    TEST_ASSERT_EQUAL_UINT32(expected_version, asic_result->rolled_version);
 }
 
