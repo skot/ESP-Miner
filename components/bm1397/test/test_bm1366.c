@@ -149,8 +149,7 @@ TEST_CASE("Testing one single BM1366 chip against a known valid block", "[bm1366
 
     // uncomment the line below to simulate 4 chips / 4 nonce ranges
     // chips_detected = 4;
-    uint32_t magic_number_full_nonce_scope = 0xAFFFF;
-    BM1366_set_nonce_scope(magic_number_full_nonce_scope / chips_detected);
+    BM1366_set_nonce_mask(chips_detected);
 
     // Why do we need to change the chip address? see https://youtu.be/6o92HhvOc1I?t=5710 for a more detailed explanation.
     // Each chip (each chip address) has a different nonce space (see BM1366_set_nonce_scope).

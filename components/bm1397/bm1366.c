@@ -59,7 +59,6 @@ static const char * TAG = "bm1366Module";
 
 static uint8_t asic_response_buffer[CHUNK_SIZE];
 static task_result result;
-static int chip_counter = 0; // updated in _send_init
 
 /// @brief
 /// @param ftdi
@@ -447,7 +446,7 @@ static uint8_t _send_init(uint64_t frequency)
     unsigned char init3[7] = {0x55, 0xAA, 0x52, 0x05, 0x00, 0x00, 0x0A};
     _send_simple(init3, 7);
 
-    chip_counter = 0;
+    int chip_counter = 0;
     while (true) {
         if(SERIAL_rx(asic_response_buffer, 11, 1000) > 0) {
             chip_counter++;
@@ -557,6 +556,49 @@ static void _send_read_address(void)
     _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_READ), read_address, 2, false);
 }
 
+static int _calculate_chip_number(unsigned int actual_chip_count)
+{
+    int i = 0;
+    if(actual_chip_count == 1)
+    {
+        i = 1;
+    }
+    else if(actual_chip_count == 2)
+    {
+        i = 2;
+    }
+    else if((actual_chip_count > 2) && (actual_chip_count <= 4))
+    {
+        i = 4;
+    }
+    else if((actual_chip_count > 4) && (actual_chip_count <= 8))
+    {
+        i = 8;
+    }
+    else if((actual_chip_count > 8) && (actual_chip_count <= 16))
+    {
+        i = 16;
+    }
+    else if((actual_chip_count > 16) && (actual_chip_count <= 32))
+    {
+        i = 32;
+    }
+    else if((actual_chip_count > 32) && (actual_chip_count <= 64))
+    {
+        i = 64;
+    }
+    else if((actual_chip_count > 64) && (actual_chip_count <= 128))
+    {
+        i = 128;
+    }
+    else
+    {
+        ESP_LOGE(TAG,"actual_chip_count = %d, but it is error\n", actual_chip_count);
+        return -1;
+    }
+    return i;
+}
+
 uint8_t BM1366_init(uint64_t frequency)
 {
     ESP_LOGI(TAG, "Initializing BM1366");
@@ -584,27 +626,52 @@ void BM1366_set_single_chip_address(uint8_t new_address)
     _set_chip_address(new_address);
 }
 
-// to be called like BM1366_set_nonce_scope( 0xAFFFF (magic number) / chips_detected )
-void BM1366_set_nonce_scope(uint32_t nonce_scope)
+void BM1366_set_nonce_mask(int chip_count)
 {
-    // 55 AA 51 09 00 10 00 00 11 5A 04 //s19kPro (77 chips) 0x115a
-    //unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010001, 0b01011010};
-    // 55 AA 51 09 00 10 00 00 14 46 04 //s19xp_luxos (110 chips) 0x1446
-    //unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010100, 0b01000110};
-    // 55 AA 51 09 00 10 00 00 15 1C 02 //s19xp-stock / BitaxeUltra 0x151c
-    //unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010101, 0b00011100};
+    if (chip_count < 0) { chip_count = 0; }
+    if (chip_count > 128) { chip_count = 128; }
 
-    // Default mask for 128 chips (address interval 0x02) on chain
-    unsigned char command[9] = {0x00, 0x10, 0x00, 0x00, 0x15, 0x1C};
+    chip_count = _calculate_chip_number(chip_count); // Because of the way the nonce ranges calculated, we need to use a fixed chip address interval (for now)
 
-    // convert into char array
+    // Every nonce returned by chip (except those sent by opencore) encodes address of the
+    // chip and core that computed it, because of the way they divide the search space.
+
+    // uint8_t chip_address = (asic_result->nonce >> 9) & 0x7f; // Range 0x00-0xFF. Chip address seems to be 8 bits in size. However the first bit should always be 0 because the chip address is increment by 2. The last bit is always low for addresses < 0x80 and always high for addresses >= 0x80
+    // uint8_t core_small_core_address = (asic_result->nonce >> 29) & 0x7; // Range 0x0-0x7. Helps to identify if the nonce was calculated by what small_core but not really important for now.
+
+    // It seems the nonces calculation use the following structure:
+    // 31.................16 15..................0
+    // 0byyy00000 0b0000000x 0bxxxxxxx0 0b00000000 // nonce calculated, one can compute the chip address and small core address from the nonce as outlines above
+    // 0b00000000 0b0000mmmm 0bmmmmmmm0 0b00000000 // nonce mask
+    // x = chip address (0x00 - 0xFF)
+    // y = small_core address (0x0 - 0x7)
+    // m = nonce mask used for nonce calculation.
+
+    // The following are known configurations:
+    // 55 AA 51 09 00 10 00 00 11 5A 04 //s19kPro (77 chips) -> 0x115a
+    // unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010001, 0b01011010};
+    // 55 AA 51 09 00 10 00 00 14 46 04 //s19xp_luxos (110 chips) -> 0x1446
+    // unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010100, 0b01000110};
+    // 55 AA 51 09 00 10 00 00 15 1C 02 //s19xp-stock / BitaxeUltra -> 0x151c
+    // unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010101, 0b00011100};
+    // 55 AA 51 09 00 10 00 00 15 A4 0A //s21 (bm1368 - 108 chips)
+    // unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010101, 0b10100100};
+
+    // command template
+    unsigned char command[9] = {0x00, 0x10, 0x00, 0x00, 0x00, 0x00};
+
+    // This nonce_mask is used in combination with the chip address to calculate the nonce ranges for the chip.
+    uint32_t offset = (0x15FF / 2); // found by try-and-error. 15FF seems to be max value. Any higher number result in duplicated nonces because the way (using addr interval) I'm moving bits to the left.
+    uint32_t nonce_mask = offset * (0x100 / chip_count);
+
+    // convert into char array and mix with command template
     for (int i = 0; i < 4; i++) {
-        char value = (nonce_scope >> (8 * i)) & 0xFF;
-        command[5 - i] = value;
+        char value = (nonce_mask >> (8 * i)) & 0xFF;
+        command[5 - i] = command[5 - i] | value;
     }
 
-    ESP_LOGI(TAG, "Setting Nonce scope to %lu (0x%08lx)", nonce_scope, nonce_scope);
-    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), command, 6, true);
+    ESP_LOGI(TAG, "Setting Nonce mask to %08lX", nonce_mask);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), command, 6, false);
 }
 
 // Baud formula = 25M/((denominator+1)*8)
