@@ -32,6 +32,8 @@ typedef struct
     work_queue stratum_queue;
     work_queue ASIC_jobs_queue;
 
+    char * device_name;
+    int board_version;
     bm1397Module BM1397_MODULE;
     SystemModule SYSTEM_MODULE;
     AsicTaskModule ASIC_TASK_MODULE;

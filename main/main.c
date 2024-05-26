@@ -25,6 +25,11 @@ void app_main(void)
 {
     ESP_ERROR_CHECK(nvs_flash_init());
 
+    GLOBAL_STATE.device_name = nvs_config_get_string(NVS_CONFIG_DEVICE_MODEL, "hex");
+    GLOBAL_STATE.board_version = atoi(nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "000"));
+    ESP_LOGI(TAG, "Found Device Model: %s", GLOBAL_STATE.device_name);
+    ESP_LOGI(TAG, "Found Board Version: %d", GLOBAL_STATE.board_version);
+
     ESP_LOGI(TAG, "NVS_CONFIG_ASIC_FREQ %f", (float) nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY));
     GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
 
@@ -75,7 +80,7 @@ void app_main(void)
 
     bool is_max = strcmp(GLOBAL_STATE.asic_model, "BM1397") == 0;
     uint64_t best_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF, 0);
-    uint16_t should_self_test = nvs_config_get_u16(NVS_CONFIG_SELF_TEST, 1);
+    uint16_t should_self_test = nvs_config_get_u16(NVS_CONFIG_SELF_TEST, 0);
     if (should_self_test == 1 && !is_max && best_diff < 1) {
         self_test((void *) &GLOBAL_STATE);
         vTaskDelay(60 * 60 * 1000 / portTICK_PERIOD_MS);
@@ -85,15 +90,16 @@ void app_main(void)
 
     ESP_LOGI(TAG, "Welcome to the bitaxe!");
 
-    // pull the wifi credentials out of NVS
+    // pull the wifi credentials and hostname out of NVS
     char * wifi_ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, WIFI_SSID);
     char * wifi_pass = nvs_config_get_string(NVS_CONFIG_WIFI_PASS, WIFI_PASS);
+    char * hostname  = nvs_config_get_string(NVS_CONFIG_HOSTNAME, HOSTNAME);
 
     // copy the wifi ssid to the global state
     strncpy(GLOBAL_STATE.SYSTEM_MODULE.ssid, wifi_ssid, 20);
 
     // init and connect to wifi
-    wifi_init(wifi_ssid, wifi_pass);
+    wifi_init(wifi_ssid, wifi_pass, hostname);
     start_rest_server((void *) &GLOBAL_STATE);
     EventBits_t result_bits = wifi_connect();
 
@@ -121,12 +127,23 @@ void app_main(void)
 
     free(wifi_ssid);
     free(wifi_pass);
+    free(hostname);
 
     // set the startup_done flag
     GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
 
     xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
-    xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
+
+    if (GLOBAL_STATE.board_version == 402) {
+        // this is a HEX board
+        ESP_LOGI(TAG, "Starting Supra-402 power management");
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        xTaskCreate(POWER_MANAGEMENT_Supra402_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
+    } else {
+        // this is NOT a HEX board
+        ESP_LOGI(TAG, "Starting BITAXE power management");
+        xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
+    }
 
     if (GLOBAL_STATE.ASIC_functions.init_fn != NULL) {
         wifi_softap_off();
@@ -136,6 +153,8 @@ void app_main(void)
 
         SERIAL_init();
         (*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value);
+        SERIAL_set_baud((*GLOBAL_STATE.ASIC_functions.set_max_baud_fn)());
+        SERIAL_clear_buffer();
 
         xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
         xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);
@@ -147,7 +166,7 @@ void app_main(void)
 void MINER_set_wifi_status(wifi_status_t status, uint16_t retry_count)
 {
     if (status == WIFI_RETRYING) {
-        snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Retrying: %d/%d", retry_count, WIFI_MAXIMUM_RETRY);
+        snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Retrying: %d", retry_count);
         return;
     } else if (status == WIFI_CONNECT_FAILED) {
         snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Connect Failed!");

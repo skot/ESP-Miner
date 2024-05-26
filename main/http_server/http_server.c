@@ -276,6 +276,9 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "wifiPass")) != NULL) {
         nvs_config_set_string(NVS_CONFIG_WIFI_PASS, item->valuestring);
     }
+    if ((item = cJSON_GetObjectItem(root, "hostname")) != NULL) {
+        nvs_config_set_string(NVS_CONFIG_HOSTNAME, item->valuestring);
+    }
     if ((item = cJSON_GetObjectItem(root, "coreVoltage")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, item->valueint);
     }
@@ -305,6 +308,8 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
 
 static esp_err_t POST_restart(httpd_req_t * req)
 {
+    ESP_LOGI(TAG, "Restarting System because of API Request");
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     esp_restart();
     return ESP_OK;
 }
@@ -336,6 +341,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     }
 
     char * ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, CONFIG_ESP_WIFI_SSID);
+    char * hostname = nvs_config_get_string(NVS_CONFIG_HOSTNAME, CONFIG_LWIP_LOCAL_HOSTNAME);
     char * stratumURL = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, CONFIG_STRATUM_URL);
     char * stratumUser = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, CONFIG_STRATUM_USER);
     char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, 'unknown');
@@ -344,16 +350,19 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "power", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power);
     cJSON_AddNumberToObject(root, "voltage", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.voltage);
     cJSON_AddNumberToObject(root, "current", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.current);
-    cJSON_AddNumberToObject(root, "fanSpeed", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_speed);
+    cJSON_AddNumberToObject(root, "fanSpeedRpm", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_speed);
     cJSON_AddNumberToObject(root, "temp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp);
+    cJSON_AddNumberToObject(root, "tpsTemp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.tps546_temp);
     cJSON_AddNumberToObject(root, "hashRate", GLOBAL_STATE->SYSTEM_MODULE.current_hashrate);
     cJSON_AddStringToObject(root, "bestDiff", GLOBAL_STATE->SYSTEM_MODULE.best_diff_string);
+    cJSON_AddStringToObject(root, "bestSessionDiff", GLOBAL_STATE->SYSTEM_MODULE.best_session_diff_string);
 
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "coreVoltage", nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE));
     cJSON_AddNumberToObject(root, "coreVoltageActual", ADC_get_vcore());
     cJSON_AddNumberToObject(root, "frequency", nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY));
     cJSON_AddStringToObject(root, "ssid", ssid);
+    cJSON_AddStringToObject(root, "hostname", hostname);
     cJSON_AddStringToObject(root, "wifiStatus", GLOBAL_STATE->SYSTEM_MODULE.wifi_status);
     cJSON_AddNumberToObject(root, "sharesAccepted", GLOBAL_STATE->SYSTEM_MODULE.shares_accepted);
     cJSON_AddNumberToObject(root, "sharesRejected", GLOBAL_STATE->SYSTEM_MODULE.shares_rejected);
@@ -375,6 +384,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "fanspeed", nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100));
 
     free(ssid);
+    free(hostname);
     free(stratumURL);
     free(stratumUser);
     free(board_version);
@@ -465,8 +475,8 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
     }
 
     httpd_resp_sendstr(req, "Firmware update complete, rebooting now!\n");
-
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    ESP_LOGI(TAG, "Restarting System because of Firmware update complete");
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     esp_restart();
 
     return ESP_OK;

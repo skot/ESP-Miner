@@ -5,6 +5,7 @@ typedef struct
 {
     uint16_t fan_speed;
     float chip_temp;
+    float tps546_temp;
     float voltage;
     float frequency_multiplier;
     float frequency_value;
@@ -15,6 +16,8 @@ typedef struct
 } PowerManagementModule;
 
 static void automatic_fan_speed(float chip_temp);
-void POWER_MANAGEMENT_task(void * pvParameters);
 
+
+void POWER_MANAGEMENT_task(void * pvParameters);
+void POWER_MANAGEMENT_Supra402_task(void * pvParameters);
 #endif

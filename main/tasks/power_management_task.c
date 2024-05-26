@@ -10,6 +10,8 @@
 #include "mining.h"
 #include "nvs_config.h"
 #include "serial.h"
+#include "TPS546.h"
+#include "TMP1075.h"
 #include <string.h>
 
 #define POLL_RATE 2000
@@ -20,6 +22,9 @@
 #define VOLTAGE_START_THROTTLE 4900
 #define VOLTAGE_MIN_THROTTLE 3500
 #define VOLTAGE_RANGE (VOLTAGE_START_THROTTLE - VOLTAGE_MIN_THROTTLE)
+
+#define TPS546_THROTTLE_TEMP 105.0
+#define TPS546_MAX_TEMP 145.0
 
 static const char * TAG = "power_management";
 
@@ -120,6 +125,9 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             // chip is coming back from a low/no voltage event
             if (power_management->frequency_value < 50 && target_frequency > 50) {
                 // TODO recover gracefully?
+                ESP_LOGE(TAG, "Freq %f", power_management->frequency_value);
+                ESP_LOGI(TAG, "Restarting System because of ERROR: low/no voltage event");
+                vTaskDelay(1000 / portTICK_PERIOD_MS);
                 esp_restart();
             }
 
@@ -148,7 +156,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
                 ESP_LOGE(TAG, "OVERHEAT");
 
-
+                EMC2101_set_fan_speed(1);
                 if (power_management->HAS_POWER_EN) {
                     gpio_set_level(GPIO_NUM_10, 1);
                 } else {
@@ -183,13 +191,84 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     }
 }
 
+void POWER_MANAGEMENT_Supra402_task(void * pvParameters)
+{
+    GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
+
+    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+
+    power_management->frequency_multiplier = 1;
+
+    int last_frequency_increase = 0;
+
+    uint16_t frequency_target = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
+
+    uint16_t auto_fan_speed = nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1);
+
+    // turn on ASIC core voltage (three domains in series)
+    int want_vcore = nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE);
+    //want_vcore *= 3;  // across 3 domains
+    ESP_LOGI(TAG, "---TURNING ON VCORE---");
+    TPS546_set_vout(want_vcore);
+
+    vTaskDelay(3000 / portTICK_PERIOD_MS);
+
+    while (1) {
+        power_management->voltage = TPS546_get_vin() * 1000;
+        power_management->current = TPS546_get_iout() * 1000;
+
+        // calculate regulator power (in milliwatts)
+        power_management->power = (TPS546_get_vout() * power_management->current) / 1000;
+
+        power_management->chip_temp = EMC2101_get_internal_temp() + 5;
+        power_management->fan_speed = EMC2101_get_fan_speed();
+        power_management->tps546_temp = (float)TPS546_get_temperature();
+        // TODO fix fan driver
+        //power_management->fan_speed = EMC2101_get_fan_speed();
+
+        // Two board temperature sensors
+        //ESP_LOGI(TAG, "Board Temp: %d, %d", TMP1075_read_temperature(0), TMP1075_read_temperature(1));
+
+        // get regulator internal temperature
+        //power_management->chip_temp = (float)TPS546_get_temperature();
+        //ESP_LOGI(TAG, "TPS546 Temp: %2f", power_management->chip_temp);
+
+        // TODO figure out best way to detect overheating on the Hex
+        if ((power_management->tps546_temp > TPS546_THROTTLE_TEMP || power_management->chip_temp > THROTTLE_TEMP) &&
+            (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
+            ESP_LOGE(TAG, "OVERHEAT");
+
+            // Turn off core voltage
+            TPS546_set_vout(0);
+
+            nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, 990);
+            nvs_config_set_u16(NVS_CONFIG_ASIC_FREQ, 50);
+            nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, 100);
+            nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, 0);
+            exit(EXIT_FAILURE);
+        }
+
+        // TODO fix fan driver
+        if (auto_fan_speed == 1) {
+            automatic_fan_speed(power_management->chip_temp);
+        } else {
+            EMC2101_set_fan_speed((float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
+        }
+        //ESP_LOGI(TAG, "VIN: %f, VOUT: %f, IOUT: %f", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
+        //ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
+        //ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
+
+        vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
+    }
+}
+
 // Set the fan speed between 20% min and 100% max based on chip temperature as input.
 // The fan speed increases from 20% to 100% proportionally to the temperature increase from 50 and THROTTLE_TEMP
 static void automatic_fan_speed(float chip_temp)
 {
     double result = 0.0;
-    double min_temp = 50.0;
-    double min_fan_speed = 20.0;
+    double min_temp = 45.0;
+    double min_fan_speed = 35.0;
 
     if (chip_temp < min_temp) {
         result = min_fan_speed;

@@ -12,7 +12,6 @@ const char *TAG = "asic_result";
 void ASIC_result_task(void *pvParameters)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)pvParameters;
-    SERIAL_clear_buffer();
 
     char *user = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, STRATUM_USER);
 
@@ -31,6 +30,7 @@ void ASIC_result_task(void *pvParameters)
         if (GLOBAL_STATE->valid_jobs[job_id] == 0)
         {
             ESP_LOGI(TAG, "Invalid job nonce found, id=%d", job_id);
+            continue;
         }
 
         // check the nonce difficulty
