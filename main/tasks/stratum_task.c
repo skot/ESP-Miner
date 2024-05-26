@@ -7,6 +7,7 @@
 #include "nvs_config.h"
 #include "stratum_task.h"
 #include "work_queue.h"
+#include "esp_wifi.h"
 #include <esp_sntp.h>
 #include <time.h>
 
@@ -16,6 +17,8 @@
 #define STRATUM_PW CONFIG_STRATUM_PW
 #define STRATUM_DIFFICULTY CONFIG_STRATUM_DIFFICULTY
 
+#define BASE_DELAY_MS 5000
+#define MAX_RETRY_ATTEMPTS 5
 static const char * TAG = "stratum_task";
 static ip_addr_t ip_Addr;
 static bool bDNSFound = false;
@@ -27,13 +30,27 @@ static SystemTaskModule SYSTEM_TASK_MODULE = {.stratum_difficulty = 8192};
 
 void dns_found_cb(const char * name, const ip_addr_t * ipaddr, void * callback_arg)
 {
-    bDNSFound = true;
-    if (ipaddr != NULL) {
-        ip_Addr = *ipaddr;
+    if ((ipaddr != NULL)){
+        ip4_addr_t ip4addr = ipaddr->u_addr.ip4;  // Obtener la estructura ip4_addr_t
+        if (ip4_addr1(&ip4addr) != 0 && ip4_addr2(&ip4addr) != 0 && 
+            ip4_addr3(&ip4addr) != 0 && ip4_addr4(&ip4addr) != 0) {
+            ESP_LOGI(TAG, "IP found : %d.%d.%d.%d",ip4_addr1(&ip4addr),ip4_addr2(&ip4addr),ip4_addr3(&ip4addr),ip4_addr4(&ip4addr));
+            ip_Addr = *ipaddr;
+         }
     } else {
         bDNSInvalid = true;
     }
+    bDNSFound = true;
  }
+
+bool is_wifi_connected() {
+    wifi_ap_record_t ap_info;
+    if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK) {
+        return true;
+    } else {
+        return false;
+    }
+}
 
 void stratum_task(void * pvParameters)
 {
@@ -43,6 +60,8 @@ void stratum_task(void * pvParameters)
     char host_ip[20];
     int addr_family = 0;
     int ip_protocol = 0;
+	int retry_attempts = 0;
+    int delay_ms = BASE_DELAY_MS;
 
 
     char *stratum_url = GLOBAL_STATE->SYSTEM_MODULE.pool_url;
@@ -72,6 +91,14 @@ void stratum_task(void * pvParameters)
     ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d (%s)\n", stratum_url, port, host_ip);
 
     while (1) {
+		if (!is_wifi_connected()) {
+            ESP_LOGI(TAG, "WiFi disconnected, attempting to reconnect...");
+            esp_wifi_connect();
+            vTaskDelay(10000 / portTICK_PERIOD_MS);
+            //delay_ms *= 2; // Increase delay exponentially
+            continue;
+        }
+
         struct sockaddr_in dest_addr;
         dest_addr.sin_addr.s_addr = inet_addr(host_ip);
         dest_addr.sin_family = AF_INET;
@@ -82,13 +109,15 @@ void stratum_task(void * pvParameters)
         GLOBAL_STATE->sock = socket(addr_family, SOCK_STREAM, ip_protocol);
         if (GLOBAL_STATE->sock < 0) {
             ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-            ESP_LOGI(TAG, "Restarting System because of ERROR: Unable to create socket");
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-            esp_restart();
-            break;
+            if (++retry_attempts > MAX_RETRY_ATTEMPTS) {
+                ESP_LOGE(TAG, "Max retry attempts reached, restarting...");
+                esp_restart();
+            }
+            vTaskDelay(5000 / portTICK_PERIOD_MS);
+            continue;
         }
         ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, port);
-
+		retry_attempts = 0;
         int err = connect(GLOBAL_STATE->sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
         if (err != 0)
         {
@@ -127,6 +156,13 @@ void stratum_task(void * pvParameters)
 
         while (1) {
             char * line = STRATUM_V1_receive_jsonrpc_line(GLOBAL_STATE->sock);
+			if (!line) {
+                ESP_LOGE(TAG, "Failed to receive JSON-RPC line, reconnecting...");
+                shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
+                close(GLOBAL_STATE->sock);
+                vTaskDelay(1000 / portTICK_PERIOD_MS); // Delay before attempting to reconnect
+                break;
+            }
             ESP_LOGI(TAG, "rx: %s", line); // debug incoming stratum messages
             STRATUM_V1_parse(&stratum_api_v1_message, line);
             free(line);
