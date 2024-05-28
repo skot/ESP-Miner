@@ -13,6 +13,7 @@
 #include "work_queue.h"
 
 #define STRATUM_USER CONFIG_STRATUM_USER
+#define _DEBUG_LOG_
 
 typedef struct
 {

@@ -212,6 +212,7 @@ void POWER_MANAGEMENT_Supra402_task(void * pvParameters)
     TPS546_set_vout(want_vcore);
 
     vTaskDelay(3000 / portTICK_PERIOD_MS);
+    bool isOverheated = false;
 
     while (1) {
         power_management->voltage = TPS546_get_vin() * 1000;
@@ -238,6 +239,7 @@ void POWER_MANAGEMENT_Supra402_task(void * pvParameters)
             (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
             ESP_LOGE(TAG, "OVERHEAT");
 
+            isOverheated=true;
             // Turn off core voltage
             TPS546_set_vout(0);
 
@@ -254,10 +256,13 @@ void POWER_MANAGEMENT_Supra402_task(void * pvParameters)
         } else {
             EMC2101_set_fan_speed((float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
         }
-        //ESP_LOGI(TAG, "VIN: %f, VOUT: %f, IOUT: %f", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
-        //ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
-        //ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
-
+        
+#ifdef _DEBUG_LOG_
+        ESP_LOGI(TAG, "VIN: %fV, VOUT: %fV, IOUT: %fA", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
+        ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
+        ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
+        ESP_LOGI(TAG, "IS TPS546 Overheat: %s", isOverheated?"true":"false");
+#endif
         vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
     }
 }
