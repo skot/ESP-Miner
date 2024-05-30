@@ -496,7 +496,7 @@ void TPS546_write_entire_config(void)
 
     /* vin voltage */
     ESP_LOGI(TAG, "Setting VIN");
-    smb_write_word(PMBUS_VIN_ON, float_2_slinear11(11.5));
+    smb_write_word(PMBUS_VIN_ON, float_2_slinear11(TPS546_INIT_VIN_ON));
     smb_write_word(PMBUS_VIN_OFF, float_2_slinear11(TPS546_INIT_VIN_OFF));
     smb_write_word(PMBUS_VIN_UV_WARN_LIMIT, float_2_slinear11(TPS546_INIT_VIN_UV_WARN_LIMIT));
     smb_write_word(PMBUS_VIN_OV_FAULT_LIMIT, float_2_slinear11(TPS546_INIT_VIN_OV_FAULT_LIMIT));
@@ -617,7 +617,9 @@ float TPS546_get_vin(void)
     /* Get voltage input (ULINEAR16) */
     smb_read_word(PMBUS_READ_VIN, &u16_value);
     vin = slinear11_2_float(u16_value);
-    //ESP_LOGI(TAG, "Got Vin: %2.3f V", vin);
+#ifdef _DEBUG_LOG_
+    ESP_LOGI(TAG, "Got Vin: %2.3f V", vin);
+#endif
     return vin;
 }
 
@@ -629,7 +631,11 @@ float TPS546_get_iout(void)
     /* Get current output (SLINEAR11) */
     smb_read_word(PMBUS_READ_IOUT, &u16_value);
     iout = slinear11_2_float(u16_value);
-    //ESP_LOGI(TAG, "Got Iout: %2.3f V", iout);
+
+#ifdef _DEBUG_LOG_
+    ESP_LOGI(TAG, "Got Iout: %2.3f A", iout);
+#endif
+
     return iout;
 }
 
@@ -641,7 +647,9 @@ float TPS546_get_vout(void)
     /* Get voltage output (ULINEAR16) */
     smb_read_word(PMBUS_READ_VOUT, &u16_value);
     vout = ulinear16_2_float(u16_value);
-    //ESP_LOGI(TAG, "Got Vout: %2.3f V", vout);
+#ifdef _DEBUG_LOG_
+    ESP_LOGI(TAG, "Got Vout: %2.3f V", vout);
+#endif
     return vout;
 }
 

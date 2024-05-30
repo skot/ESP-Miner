@@ -30,13 +30,25 @@ Starting with v2.0.0, the ESP-Miner firmware requires some basic manufacturing d
 
 The following are recommendations but it is necessary that you do have all values in your `config.cvs`file to flash properly.
 
+- recommended values for the Bitaxe 1368 (supra)
+
+  ```
+  key,type,encoding,value
+  main,namespace,,
+  asicfrequency,data,u16,490
+  asicvoltage,data,u16,1200
+  asicmodel,data,string,BM1368
+  devicemodel,data,string,supra
+  boardversion,data,string,400
+  ```
+
 - recommended values for the Bitaxe 1366 (ultra)
 
   ```
   key,type,encoding,value
   main,namespace,,
   asicfrequency,data,u16,485
-  asicvoltage,data,u16,1320
+  asicvoltage,data,u16,1200
   asicmodel,data,string,BM1366
   devicemodel,data,string,ultra
   boardversion,data,string,0.11
@@ -65,3 +77,35 @@ The bitaxetool requires a config.cvs preloaded file and the appropiate firmware.
 ```
 bitaxetool --config ./config.cvs --firmware ./esp-miner-factory-v2.0.3.bin
 ```
+
+## API
+Bitaxe provides an API to expose actions and information.
+
+For more details take a look at `main/http_server/http_server.c`.
+
+Things that can be done are:
+  
+  - Get System Info
+  - Get Swarm Info
+  - Update Swarm
+  - Swarm Options
+  - System Restart Action
+  - Update System Settings Action
+  - System Options
+  - Update OTA Firmware
+  - Update OTA WWW
+  - WebSocket
+
+Some API examples in curl:
+  ```bash
+  # Get system information
+  curl http://YOUR-BITAXE-IP/api/system/info
+  ```
+  ```bash
+  # Get swarm information
+  curl http://YOUR-BITAXE-IP/api/swarm/info
+  ```
+  ```bash
+  # System restart action
+  curl -X POST http://YOUR-BITAXE-IP/api/system/restart
+  ```

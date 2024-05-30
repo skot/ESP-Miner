@@ -56,6 +56,8 @@ static void realloc_json_buffer(size_t len)
 
     if (new_sockbuf == NULL) {
         fprintf(stderr, "Error: realloc failed in recalloc_sock()\n");
+        ESP_LOGI(TAG, "Restarting System because of ERROR: realloc failed in recalloc_sock");
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
         esp_restart();
     }
 
@@ -79,7 +81,10 @@ char * STRATUM_V1_receive_jsonrpc_line(int sockfd)
             memset(recv_buffer, 0, BUFFER_SIZE);
             nbytes = recv(sockfd, recv_buffer, BUFFER_SIZE - 1, 0);
             if (nbytes == -1) {
-                perror("recv");
+                //perror("recv");
+                ESP_LOGE(TAG, "recv");
+                ESP_LOGI(TAG, "Restarting System because of Error: recv");
+                vTaskDelay(1000 / portTICK_PERIOD_MS);
                 esp_restart();
             }
 
@@ -118,25 +123,32 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
             result = MINING_SET_DIFFICULTY;
         } else if (strcmp("mining.set_version_mask", method_json->valuestring) == 0) {
             result = MINING_SET_VERSION_MASK;
+        } else {
+            ESP_LOGI(TAG, "unhandled method in stratum message: %s", stratum_json);
         }
     } else {
         // parse results
         cJSON * result_json = cJSON_GetObjectItem(json, "result");
-        if (result_json != NULL && cJSON_IsBool(result_json)) {
-
-            result = STRATUM_RESULT;
-
-            bool response_success = false;
-            if (result_json != NULL && cJSON_IsTrue(result_json)) {
-                response_success = true;
-            }
-
-            message->response_success = response_success;
+        cJSON * error_json = cJSON_GetObjectItem(json, "error");
+        if (result_json == NULL) {
+            message->response_success = false;
         } else {
             cJSON * mask = cJSON_GetObjectItem(result_json, "version-rolling.mask");
             if (mask != NULL) {
                 result = STRATUM_RESULT_VERSION_MASK;
                 message->version_mask = strtoul(mask->valuestring, NULL, 16);
+            } else if (cJSON_IsBool(result_json)) {
+                result = STRATUM_RESULT;
+                if (cJSON_IsTrue(result_json)) {
+                    message->response_success = true;
+                } else {
+                    message->response_success = false;
+                }
+            } else if (!cJSON_IsNull(error_json)) {
+                result = STRATUM_RESULT;
+                message->response_success = false;
+            } else {
+                ESP_LOGI(TAG, "unhandled result in stratum message: %s", stratum_json);
             }
         }
     }
@@ -318,8 +330,8 @@ void STRATUM_V1_configure_version_rolling(int socket, uint32_t * version_mask)
         cJSON * version_rolling_enabled = cJSON_GetObjectItem(result, "version-rolling");
         if (cJSON_IsBool(version_rolling_enabled) && cJSON_IsTrue(version_rolling_enabled)) {
             cJSON * mask = cJSON_GetObjectItem(result, "version-rolling.mask");
-            uint32_t version_mask = strtoul(mask->valuestring, NULL, 16);
-            ESP_LOGI(TAG, "Set version mask: %08lx", version_mask);
+            *version_mask = strtoul(mask->valuestring, NULL, 16);
+            ESP_LOGI(TAG, "Set version mask: %08lx", *version_mask);
         }
     }else{
         printf("configure_version result null\n");

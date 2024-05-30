@@ -9,12 +9,13 @@ export interface ISystemInfo {
     current: number,
     fanSpeed: number,
     temp: number,
-    boardtemp1: number,
-    boardtemp2: number,
+    tpsTemp: number,
     hashRate: number,
     bestDiff: string,
+    bestSessionDiff: string,
     freeHeap: number,
     coreVoltage: number,
+    hostname: string,
     ssid: string,
     wifiStatus: string,
     sharesAccepted: number,
@@ -30,5 +31,8 @@ export interface ISystemInfo {
     invertfanpolarity: number,
     autofanspeed: number,
     fanspeed: number,
-    coreVoltageActual: number
+    coreVoltageActual: number,
+
+    boardtemp1?: number,
+    boardtemp2?: number
 }

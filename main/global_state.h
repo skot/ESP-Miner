@@ -2,6 +2,7 @@
 #define GLOBAL_STATE_H_
 
 #include "asic_task.h"
+#include "bm1368.h"
 #include "bm1366.h"
 #include "bm1397.h"
 #include "common.h"
@@ -12,10 +13,11 @@
 #include "work_queue.h"
 
 #define STRATUM_USER CONFIG_STRATUM_USER
+#define _DEBUG_LOG_
 
 typedef struct
 {
-    void (*init_fn)(u_int64_t);
+    uint8_t (*init_fn)(u_int64_t);
     task_result * (*receive_result_fn)(void * GLOBAL_STATE);
     int (*set_max_baud_fn)(void);
     void (*set_difficulty_mask_fn)(int);

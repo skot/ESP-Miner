@@ -46,6 +46,18 @@ void app_main(void)
         GLOBAL_STATE.asic_job_frequency_ms = BM1366_FULLSCAN_MS;
 
         GLOBAL_STATE.ASIC_functions = ASIC_functions;
+    } else if (strcmp(GLOBAL_STATE.asic_model, "BM1368") == 0) {
+        ESP_LOGI(TAG, "ASIC: BM1368");
+        AsicFunctions ASIC_functions = {.init_fn = BM1368_init,
+                                        .receive_result_fn = BM1368_proccess_work,
+                                        .set_max_baud_fn = BM1368_set_max_baud,
+                                        .set_difficulty_mask_fn = BM1368_set_job_difficulty_mask,
+                                        .send_work_fn = BM1368_send_work};
+
+        uint64_t bm1368_hashrate = GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1368_CORE_COUNT * 1000000;
+        GLOBAL_STATE.asic_job_frequency_ms = ((double) NONCE_SPACE / (double) bm1368_hashrate) * 1000;
+
+        GLOBAL_STATE.ASIC_functions = ASIC_functions;
     } else if (strcmp(GLOBAL_STATE.asic_model, "BM1397") == 0) {
         ESP_LOGI(TAG, "ASIC: BM1397");
         AsicFunctions ASIC_functions = {.init_fn = BM1397_init,
@@ -68,19 +80,28 @@ void app_main(void)
         GLOBAL_STATE.ASIC_functions = ASIC_functions;
     }
 
-    ESP_LOGI(TAG, "Welcome to the bitaxe!");
+    bool is_max = strcmp(GLOBAL_STATE.asic_model, "BM1397") == 0;
+    uint64_t best_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF, 0);
+    uint16_t should_self_test = nvs_config_get_u16(NVS_CONFIG_SELF_TEST, 0);
+    if (should_self_test == 1 && !is_max && best_diff < 1) {
+        self_test((void *) &GLOBAL_STATE);
+        vTaskDelay(60 * 60 * 1000 / portTICK_PERIOD_MS);
+    }
 
     xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void *) &GLOBAL_STATE, 3, NULL);
 
-    // pull the wifi credentials out of NVS
+    ESP_LOGI(TAG, "Welcome to the bitaxe!");
+
+    // pull the wifi credentials and hostname out of NVS
     char * wifi_ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, WIFI_SSID);
     char * wifi_pass = nvs_config_get_string(NVS_CONFIG_WIFI_PASS, WIFI_PASS);
+    char * hostname  = nvs_config_get_string(NVS_CONFIG_HOSTNAME, HOSTNAME);
 
     // copy the wifi ssid to the global state
     strncpy(GLOBAL_STATE.SYSTEM_MODULE.ssid, wifi_ssid, 20);
 
     // init and connect to wifi
-    wifi_init(wifi_ssid, wifi_pass);
+    wifi_init(wifi_ssid, wifi_pass, hostname);
     start_rest_server((void *) &GLOBAL_STATE);
     EventBits_t result_bits = wifi_connect();
 
@@ -108,24 +129,27 @@ void app_main(void)
 
     free(wifi_ssid);
     free(wifi_pass);
+    free(hostname);
 
     // set the startup_done flag
     GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
 
     xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
 
-    if (GLOBAL_STATE.board_version == 302) {
+    if (GLOBAL_STATE.board_version >= 302&&GLOBAL_STATE.board_version<400) {
         // this is a HEX board
         ESP_LOGI(TAG, "Starting HEX power management");
         vTaskDelay(2000 / portTICK_PERIOD_MS);
         xTaskCreate(POWER_MANAGEMENT_HEX_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
-    } else {
-        // this is NOT a HEX board
+    } else if(GLOBAL_STATE.board_version >= 402 && GLOBAL_STATE.board_version < 500){
+        ESP_LOGI(TAG, "Starting Supra-402 power management");
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+        xTaskCreate(POWER_MANAGEMENT_Supra402_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
+    }else {
         ESP_LOGI(TAG, "Starting BITAXE power management");
         xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
     }
 
-    ESP_LOGI(TAG, "Starting init functions");
     if (GLOBAL_STATE.ASIC_functions.init_fn != NULL) {
         wifi_softap_off();
 
@@ -134,6 +158,8 @@ void app_main(void)
 
         SERIAL_init();
         (*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value);
+        SERIAL_set_baud((*GLOBAL_STATE.ASIC_functions.set_max_baud_fn)());
+        SERIAL_clear_buffer();
 
         xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
         xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);
@@ -145,7 +171,7 @@ void app_main(void)
 void MINER_set_wifi_status(wifi_status_t status, uint16_t retry_count)
 {
     if (status == WIFI_RETRYING) {
-        snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Retrying: %d/%d", retry_count, WIFI_MAXIMUM_RETRY);
+        snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Retrying: %d", retry_count);
         return;
     } else if (status == WIFI_CONNECT_FAILED) {
         snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Connect Failed!");

@@ -277,6 +277,9 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "wifiPass")) != NULL) {
         nvs_config_set_string(NVS_CONFIG_WIFI_PASS, item->valuestring);
     }
+    if ((item = cJSON_GetObjectItem(root, "hostname")) != NULL) {
+        nvs_config_set_string(NVS_CONFIG_HOSTNAME, item->valuestring);
+    }
     if ((item = cJSON_GetObjectItem(root, "coreVoltage")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, item->valueint);
     }
@@ -306,7 +309,19 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
 
 static esp_err_t POST_restart(httpd_req_t * req)
 {
+    ESP_LOGI(TAG, "Restarting System because of API Request");
+
+    // Send HTTP response before restarting
+    const char* resp_str = "System will restart shortly.";
+    httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
+
+    // Delay to ensure the response is sent
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    // Restart the system
     esp_restart();
+
+    // This return statement will never be reached, but it's good practice to include it
     return ESP_OK;
 }
 
@@ -337,6 +352,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     }
 
     char * ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, CONFIG_ESP_WIFI_SSID);
+    char * hostname = nvs_config_get_string(NVS_CONFIG_HOSTNAME, CONFIG_LWIP_LOCAL_HOSTNAME);
     char * stratumURL = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, CONFIG_STRATUM_URL);
     char * stratumUser = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, CONFIG_STRATUM_USER);
     char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, 'unknown');
@@ -345,18 +361,21 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "power", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power);
     cJSON_AddNumberToObject(root, "voltage", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.voltage);
     cJSON_AddNumberToObject(root, "current", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.current);
-    cJSON_AddNumberToObject(root, "fanSpeed", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_speed);
-    cJSON_AddNumberToObject(root, "temp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp);
+    cJSON_AddNumberToObject(root, "fanSpeedRpm", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_speed);
+    //cJSON_AddNumberToObject(root, "temp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp);   //Hex no ASIC chip temp
+    cJSON_AddNumberToObject(root, "tpsTemp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.tps546_temp);
     cJSON_AddNumberToObject(root, "boardtemp1", TMP1075_read_temperature(0));
     cJSON_AddNumberToObject(root, "boardtemp2", TMP1075_read_temperature(1));
     cJSON_AddNumberToObject(root, "hashRate", GLOBAL_STATE->SYSTEM_MODULE.current_hashrate);
     cJSON_AddStringToObject(root, "bestDiff", GLOBAL_STATE->SYSTEM_MODULE.best_diff_string);
+    cJSON_AddStringToObject(root, "bestSessionDiff", GLOBAL_STATE->SYSTEM_MODULE.best_session_diff_string);
 
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "coreVoltage", nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE));
     cJSON_AddNumberToObject(root, "coreVoltageActual", Get_vcore());
     cJSON_AddNumberToObject(root, "frequency", nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY));
     cJSON_AddStringToObject(root, "ssid", ssid);
+    cJSON_AddStringToObject(root, "hostname", hostname);
     cJSON_AddStringToObject(root, "wifiStatus", GLOBAL_STATE->SYSTEM_MODULE.wifi_status);
     cJSON_AddNumberToObject(root, "sharesAccepted", GLOBAL_STATE->SYSTEM_MODULE.shares_accepted);
     cJSON_AddNumberToObject(root, "sharesRejected", GLOBAL_STATE->SYSTEM_MODULE.shares_rejected);
@@ -378,6 +397,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "fanspeed", nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100));
 
     free(ssid);
+    free(hostname);
     free(stratumURL);
     free(stratumUser);
     free(board_version);
@@ -468,8 +488,8 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
     }
 
     httpd_resp_sendstr(req, "Firmware update complete, rebooting now!\n");
-
-    vTaskDelay(500 / portTICK_PERIOD_MS);
+    ESP_LOGI(TAG, "Restarting System because of Firmware update complete");
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     esp_restart();
 
     return ESP_OK;
@@ -477,19 +497,50 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
 
 void log_to_websocket(const char * format, va_list args)
 {
-    char * log_buffer = (char *) malloc(2048);
-    vsnprintf(log_buffer, 2048, format, args);
+    va_list args_copy;
+    va_copy(args_copy, args);
 
+    // Calculate the required buffer size
+    int needed_size = vsnprintf(NULL, 0, format, args_copy) + 1;
+    va_end(args_copy);
+
+    // Allocate the buffer dynamically
+    char * log_buffer = (char *) malloc(needed_size);
+    if (log_buffer == NULL) {
+        // Handle allocation failure
+        return;
+    }
+
+    // Format the string into the allocated buffer
+    va_copy(args_copy, args);
+    vsnprintf(log_buffer, needed_size, format, args_copy);
+    va_end(args_copy);
+
+    // Prepare the WebSocket frame
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.payload = (uint8_t *) log_buffer;
     ws_pkt.len = strlen(log_buffer);
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-    vprintf(format, args);
+
+    // Print to standard output
+    va_copy(args_copy, args);
+    vprintf(format, args_copy);
+    va_end(args_copy);
+
+    // Ensure server and fd are valid
+    if (server == NULL || fd < 0) {
+        // Handle invalid server or socket descriptor
+        free(log_buffer);
+        return;
+    }
+
+    // Send the WebSocket frame asynchronously
     if (httpd_ws_send_frame_async(server, fd, &ws_pkt) != ESP_OK) {
         esp_log_set_vprintf(vprintf);
     }
 
+    // Free the allocated buffer
     free(log_buffer);
 }
 

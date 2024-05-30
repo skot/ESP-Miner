@@ -60,18 +60,12 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
 
         // Wait a little
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
+        vTaskDelay(2500 / portTICK_PERIOD_MS);
+        esp_wifi_connect();
+        s_retry_num++;
+        ESP_LOGI(TAG, "Retrying WiFi connection...");
+        MINER_set_wifi_status(WIFI_RETRYING, s_retry_num);
 
-        if (s_retry_num < WIFI_MAXIMUM_RETRY) {
-            esp_wifi_connect();
-            s_retry_num++;
-            ESP_LOGI(TAG, "Retrying WiFi connection...");
-            MINER_set_wifi_status(WIFI_RETRYING, s_retry_num);
-        } else {
-            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
-            ESP_LOGI(TAG, "Could not connect to WiFi.");
-            MINER_set_wifi_status(WIFI_CONNECT_FAILED, 0);
-        }
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t * event = (ip_event_got_ip_t *) event_data;
         ESP_LOGI(TAG, "Bitaxe ip:" IPSTR, IP2STR(&event->ip_info.ip));
@@ -84,7 +78,6 @@ void generate_ssid(char * ssid)
 {
     uint8_t mac[6];
     esp_wifi_get_mac(ESP_IF_WIFI_AP, mac);
-
     // Format the last 4 bytes of the MAC address as a hexadecimal string
     snprintf(ssid, 32, "Bitaxe_%02X%02X", mac[4], mac[5]);
 }
@@ -133,6 +126,12 @@ void wifi_softap_off(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
 }
 
+void wifi_softap_on(void)
+{
+    ESP_LOGI(TAG, "ESP_WIFI Access Point On");
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+}
+
 /* Initialize wifi station */
 esp_netif_t * wifi_init_sta(const char * wifi_ssid, const char * wifi_pass)
 {
@@ -163,7 +162,7 @@ esp_netif_t * wifi_init_sta(const char * wifi_ssid, const char * wifi_pass)
     return esp_netif_sta;
 }
 
-void wifi_init(const char * wifi_ssid, const char * wifi_pass)
+void wifi_init(const char * wifi_ssid, const char * wifi_pass, const char * hostname)
 {
     s_wifi_event_group = xEventGroupCreate();
 
@@ -191,6 +190,14 @@ void wifi_init(const char * wifi_ssid, const char * wifi_pass)
 
     /* Start WiFi */
     ESP_ERROR_CHECK(esp_wifi_start());
+
+    /* Set Hostname */
+    esp_err_t err = esp_netif_set_hostname(esp_netif_sta, hostname);
+    if (err != ERR_OK) {
+        ESP_LOGW(TAG, "esp_netif_set_hostname failed: %s", esp_err_to_name(err));
+    } else {
+        ESP_LOGI(TAG, "ESP_WIFI setting hostname to: %s", hostname);
+    }
 
     ESP_LOGI(TAG, "wifi_init_sta finished.");
 

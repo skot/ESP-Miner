@@ -8,6 +8,8 @@
 #include "EMC2302.h"
 #include "TMP1075.h"
 #include "INA260.h"
+
+#include "TMP1075.h"
 #include "adc.h"
 #include "connect.h"
 #include "global_state.h"
@@ -47,6 +49,7 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
     module->shares_accepted = 0;
     module->shares_rejected = 0;
     module->best_nonce_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF, 0);
+    module->best_session_nonce_diff = 0;
     module->start_time = esp_timer_get_time();
     module->lastClockSync = 0;
     module->FOUND_BLOCK = false;
@@ -60,6 +63,7 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
 
     // set the best diff string
     _suffix_string(module->best_nonce_diff, module->best_diff_string, DIFF_STRING_SIZE, 0);
+    _suffix_string(module->best_session_nonce_diff, module->best_session_diff_string, DIFF_STRING_SIZE, 0);
 
     // set the ssid string to blank
     memset(module->ssid, 0, 20);
@@ -106,9 +110,15 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
                 ESP_LOGI(TAG, "Temperature sensor 1: %d", TMP1075_read_temperature(1));
             }
             break;
+        case 402: /* Supra */
+            TPS546_init();
+            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            EMC2101_set_fan_speed(1);
+            break;
         default:
             ESP_LOGI(TAG, "ERROR- invalid board version");
     }
+
 
     vTaskDelay(500 / portTICK_PERIOD_MS);
 
@@ -230,7 +240,7 @@ static void _init_connection(SystemModule * module)
 {
     if (OLED_status()) {
         memset(module->oled_buf, 0, 20);
-        snprintf(module->oled_buf, 20, "Connecting to ssid:");
+        snprintf(module->oled_buf, 20, "Connecting to SSID:");
         OLED_writeString(0, 0, module->oled_buf);
     }
 }
@@ -242,10 +252,16 @@ static void _update_connection(SystemModule * module)
         memset(module->oled_buf, 0, 20);
         snprintf(module->oled_buf, 20, "%s", module->ssid);
         OLED_writeString(0, 1, module->oled_buf);
-
-        OLED_clearLine(3);
+        
         memset(module->oled_buf, 0, 20);
-        snprintf(module->oled_buf, 20, "%s", module->wifi_status);
+        snprintf(module->oled_buf, 20, "Configuration SSID:");
+        OLED_writeString(0, 2, module->oled_buf);
+
+
+        char ap_ssid[13];
+        generate_ssid(ap_ssid);
+        memset(module->oled_buf, 0, 20);
+        snprintf(module->oled_buf, 20, ap_ssid);
         OLED_writeString(0, 3, module->oled_buf);
     }
 }
@@ -280,7 +296,7 @@ static void show_ap_information(const char * error)
         if (error != NULL) {
             OLED_writeString(0, 0, error);
         }
-        OLED_writeString(0, 1, "connect to ssid:");
+        OLED_writeString(0, 1, "Configuration SSID:");
         char ap_ssid[13];
         generate_ssid(ap_ssid);
         OLED_writeString(0, 2, ap_ssid);
@@ -301,18 +317,21 @@ static double _calculate_network_difficulty(uint32_t nBits)
 
 static void _check_for_best_diff(SystemModule * module, double diff, uint32_t nbits)
 {
-    if (diff < module->best_nonce_diff) {
-        return;
+    if ((uint64_t) diff > module->best_session_nonce_diff) {
+        module->best_session_nonce_diff = (uint64_t) diff;
+        _suffix_string((uint64_t) diff, module->best_session_diff_string, DIFF_STRING_SIZE, 0);
     }
 
-    uint64_t old = module->best_nonce_diff;
-    module->best_nonce_diff = diff;
-    // only write to flash if new > old
-    if (module->best_nonce_diff > old) {
-        nvs_config_set_u64(NVS_CONFIG_BEST_DIFF, module->best_nonce_diff);
+    if ((uint64_t) diff <= module->best_nonce_diff) {
+        return;
     }
+    module->best_nonce_diff = (uint64_t) diff;
+
+    nvs_config_set_u64(NVS_CONFIG_BEST_DIFF, module->best_nonce_diff);
+
     // make the best_nonce_diff into a string
     _suffix_string((uint64_t) diff, module->best_diff_string, DIFF_STRING_SIZE, 0);
+
     double network_diff = _calculate_network_difficulty(nbits);
     if (diff > network_diff) {
         module->FOUND_BLOCK = true;
@@ -399,15 +418,8 @@ void SYSTEM_task(void * pvParameters)
     ESP_LOGI(TAG, "Show the connection screen...");
     // show the connection screen
     while (!module->startup_done) {
-        result = esp_wifi_get_mode(&wifi_mode);
-        if (result == ESP_OK && (wifi_mode == WIFI_MODE_APSTA || wifi_mode == WIFI_MODE_AP) &&
-            strcmp(module->wifi_status, "Failed to connect") == 0) {
-            show_ap_information(NULL);
-            vTaskDelay(5000 / portTICK_PERIOD_MS);
-        } else {
-            _update_connection(module);
-        }
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        _update_connection(module);
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 
     ESP_LOGI(TAG, "Entering System Loop...");
