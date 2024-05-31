@@ -142,12 +142,20 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
 
         //if it's an error, then it's a fail
         } else if (!cJSON_IsNull(error_json)) {
-            result = STRATUM_RESULT;
+            if (parsed_id < 5) {
+                result = STRATUM_RESULT_SETUP;
+            } else {
+                result = STRATUM_RESULT;
+            }
             message->response_success = false;
 
         //if the result is a boolean, then parse it
         } else if (cJSON_IsBool(result_json)) {
-            result = STRATUM_RESULT;
+            if (parsed_id < 5) {
+                result = STRATUM_RESULT_SETUP;
+            } else {
+                result = STRATUM_RESULT;
+            }
             if (cJSON_IsTrue(result_json)) {
                 message->response_success = true;
             } else {

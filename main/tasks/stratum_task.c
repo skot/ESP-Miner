@@ -169,6 +169,12 @@ void stratum_task(void * pvParameters)
                     ESP_LOGE(TAG, "message result rejected");
                     SYSTEM_notify_rejected_share(&GLOBAL_STATE->SYSTEM_MODULE);
                 }
+            } else if (stratum_api_v1_message.method == STRATUM_RESULT_SETUP) {
+                if (stratum_api_v1_message.response_success) {
+                    ESP_LOGI(TAG, "setup message accepted");
+                } else {
+                    ESP_LOGE(TAG, "setup message rejected");
+                }
             }
         }
 
