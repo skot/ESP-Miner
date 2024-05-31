@@ -102,17 +102,12 @@ void stratum_task(void * pvParameters)
         }
 
         ///// Start Stratum Action
-
         // mining.subscribe - ID: 1
-        // STRATUM_V1_subscribe(GLOBAL_STATE->sock, &GLOBAL_STATE->extranonce_str, &GLOBAL_STATE->extranonce_2_len, GLOBAL_STATE->asic_model);
         STRATUM_V1_subscribe(GLOBAL_STATE->sock, GLOBAL_STATE->asic_model);
-
 
         // mining.configure - ID: 2
         STRATUM_V1_configure_version_rolling(GLOBAL_STATE->sock, &GLOBAL_STATE->version_mask);
 
-
-        // This should come before the final step of authenticate so the first job is sent with the proper difficulty set
         //mining.suggest_difficulty - ID: 3
         STRATUM_V1_suggest_difficulty(GLOBAL_STATE->sock, STRATUM_DIFFICULTY);
 
@@ -123,11 +118,6 @@ void stratum_task(void * pvParameters)
         STRATUM_V1_authenticate(GLOBAL_STATE->sock, username, password);
         free(password);
         free(username);
-
-
-
-        //ESP_LOGI(TAG, "Extranonce: %s", GLOBAL_STATE->extranonce_str);
-        //ESP_LOGI(TAG, "Extranonce 2 length: %d", GLOBAL_STATE->extranonce_2_len);
 
         while (1) {
             char * line = STRATUM_V1_receive_jsonrpc_line(GLOBAL_STATE->sock);
@@ -164,13 +154,12 @@ void stratum_task(void * pvParameters)
                     ESP_LOGI(TAG, "Set stratum difficulty: %ld", SYSTEM_TASK_MODULE.stratum_difficulty);
                 }
             } else if (stratum_api_v1_message.method == MINING_SET_VERSION_MASK ||
-                       stratum_api_v1_message.method == STRATUM_RESULT_VERSION_MASK) {
+                       stratum_api_v1_message.method == .0) {
                 // 1fffe000
                 ESP_LOGI(TAG, "Set version mask: %08lx", stratum_api_v1_message.version_mask);
                 GLOBAL_STATE->version_mask = stratum_api_v1_message.version_mask;
-            } else if (stratum_api_v1_message.method == STRATUM_RESULT_CONFIGURE) {
-                //copy the extranonce_str and extranonce_2_len from the stratum_api_v1_message to GLOBAL_STATE
-                strcpy(GLOBAL_STATE->extranonce_str, stratum_api_v1_message.extranonce_str);
+            } else if (stratum_api_v1_message.method == STRATUM_RESULT_SUBSCRIBE) {
+                GLOBAL_STATE->extranonce_str = stratum_api_v1_message.extranonce_str;
                 GLOBAL_STATE->extranonce_2_len = stratum_api_v1_message.extranonce_2_len;
             } else if (stratum_api_v1_message.method == STRATUM_RESULT) {
                 if (stratum_api_v1_message.response_success) {
