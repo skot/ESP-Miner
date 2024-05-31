@@ -331,7 +331,7 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
             EMC2302_set_fan_speed(1,(float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
         }
 
-        //ESP_LOGI(TAG, "VIN: %f, VOUT: %f, IOUT: %f", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
+        ESP_LOGI(TAG, "VIN: %f, VOUT: %f, IOUT: %f", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
         //ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
         //ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
 

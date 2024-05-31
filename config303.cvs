@@ -10,7 +10,7 @@ asicfrequency,data,u16,485
 asicvoltage,data,u16,1200
 asicmodel,data,string,BM1366
 devicemodel,data,string,hex
-boardversion,data,string,303
+boardversion,data,string,302
 flipscreen,data,u16,1
 invertfanpol,data,u16,1
 autofanspeed,data,u16,1
