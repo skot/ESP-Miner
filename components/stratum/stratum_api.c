@@ -186,8 +186,9 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
             if (mask != NULL) {
                 result = STRATUM_RESULT_VERSION_MASK;
                 message->version_mask = strtoul(mask->valuestring, NULL, 16);
+                ESP_LOGI(TAG, "Set version mask: %08lx", message->version_mask);
             } else {
-                ESP_LOGI(TAG, "unhandled result in stratum message: %s", stratum_json);
+                ESP_LOGI(TAG, "error setting version mask: %s", stratum_json);
             }
 
         } else {
