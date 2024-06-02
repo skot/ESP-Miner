@@ -522,7 +522,7 @@ static uint8_t _send_init(uint64_t frequency)
 static void _reset(void)
 {
     gpio_set_level(BM1366_RST_PIN, 0);
-
+    
     // delay for 100ms
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
@@ -552,6 +552,7 @@ uint8_t BM1366_init(uint64_t frequency)
 
     // reset the bm1366
     _reset();
+    //vTaskDelay(2000 / portTICK_PERIOD_MS);
 
     // send the init command
     //_send_read_address();

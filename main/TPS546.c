@@ -496,7 +496,7 @@ void TPS546_write_entire_config(void)
 
     /* vin voltage */
     ESP_LOGI(TAG, "Setting VIN");
-    smb_write_word(PMBUS_VIN_ON, float_2_slinear11(TPS546_INIT_VIN_ON));
+    smb_write_word(PMBUS_VIN_ON, float_2_slinear11(11.5));
     smb_write_word(PMBUS_VIN_OFF, float_2_slinear11(TPS546_INIT_VIN_OFF));
     smb_write_word(PMBUS_VIN_UV_WARN_LIMIT, float_2_slinear11(TPS546_INIT_VIN_UV_WARN_LIMIT));
     smb_write_word(PMBUS_VIN_OV_FAULT_LIMIT, float_2_slinear11(TPS546_INIT_VIN_OV_FAULT_LIMIT));

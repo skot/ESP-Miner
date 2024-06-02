@@ -306,7 +306,7 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
         power_management->tps546_temp = (float)TPS546_get_temperature();
 
         // Two board temperature sensors
-        ESP_LOGI(TAG, "Board Temp: %d, %d", TMP1075_read_temperature(0), TMP1075_read_temperature(1));
+        //ESP_LOGI(TAG, "Board Temp: %d, %d", TMP1075_read_temperature(0), TMP1075_read_temperature(1));
 
         // TODO figure out best way to detect overheating on the Hex
         if (power_management->chip_temp > TPS546_THROTTLE_TEMP &&
@@ -333,7 +333,7 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
 
         ESP_LOGI(TAG, "VIN: %f, VOUT: %f, IOUT: %f", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
         //ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
-        //ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
+        ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
 
         vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
     }
