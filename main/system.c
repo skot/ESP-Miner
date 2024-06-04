@@ -96,6 +96,7 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
             EMC2101_set_fan_speed(1);
             break;
         case 302:  /* HEX */
+        case 303:
             // Initialize the core voltage regulator
             TPS546_init();
             // Fan config - Hex has two fans

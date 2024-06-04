@@ -22,15 +22,12 @@
 #define THROTTLE_TEMP 75.0
 #define THROTTLE_TEMP_RANGE (MAX_TEMP - THROTTLE_TEMP)
 
-#define TPS546_THROTTLE_TEMP 105.0
-#define TPS546_MAX_TEMP 145.0
+#define TPS546_THROTTLE_TEMP 85.0
+#define TPS546_MAX_TEMP 95.0
 
 #define VOLTAGE_START_THROTTLE 4900
 #define VOLTAGE_MIN_THROTTLE 3500
 #define VOLTAGE_RANGE (VOLTAGE_START_THROTTLE - VOLTAGE_MIN_THROTTLE)
-
-#define TPS546_THROTTLE_TEMP 105.0
-#define TPS546_MAX_TEMP 145.0
 
 static const char * TAG = "power_management";
 
@@ -64,11 +61,11 @@ static void automatic_fan_speed(float chip_temp)
     }
 }
 
-static void automatic_fan_speed_hex(float chip_temp)
+static double automatic_fan_speed_hex(float chip_temp)
 {
     double result = 0.0;
     double min_temp = 50.0;
-    double min_fan_speed = 20.0;
+    double min_fan_speed = 45.0;
 
     if (chip_temp < min_temp) {
         result = min_fan_speed;
@@ -84,6 +81,7 @@ static void automatic_fan_speed_hex(float chip_temp)
 
     EMC2302_set_fan_speed(0,(float) result / 100);
     EMC2302_set_fan_speed(1,(float) result / 100);
+    return result;
 }
 
 // Returns the vcore voltage using the appropriate source
@@ -250,6 +248,12 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     }
 }
 
+static void ResetBM1366(void){
+    gpio_set_level(GPIO_NUM_1,0);
+    vTaskDelay(100/portTICK_PERIOD_MS);
+    gpio_set_level(GPIO_NUM_1,1);
+    vTaskDelay(100/portTICK_PERIOD_MS);
+}
 
 void POWER_MANAGEMENT_HEX_task(void * pvParameters)
 {
@@ -269,10 +273,12 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
     int want_vcore = nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE);
     want_vcore *= 3;  // across 3 domains
     ESP_LOGI(TAG, "---TURNING ON VCORE---");
+    //TPS546_set_vout(0);
     TPS546_set_vout(want_vcore);
-
+    TPS546_turnON();
+    ESP_LOGI(TAG,"==================>%fV",TPS546_get_vout());
     vTaskDelay(3000 / portTICK_PERIOD_MS);
-
+    
     while (1) {
 
         // power_management members
@@ -304,7 +310,7 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
         power_management->fan_speed = (EMC2302_get_fan_speed(0)+EMC2302_get_fan_speed(1))/2;
         // get regulator internal temperature
         power_management->tps546_temp = (float)TPS546_get_temperature();
-
+        
         // Two board temperature sensors
         //ESP_LOGI(TAG, "Board Temp: %d, %d", TMP1075_read_temperature(0), TMP1075_read_temperature(1));
 
@@ -323,9 +329,20 @@ void POWER_MANAGEMENT_HEX_task(void * pvParameters)
             exit(EXIT_FAILURE);
         }
 
+        TPS546_check_status();
+        // if(TPS546_get_iout()<5.00){
+            
+        //     TPS546_turnOFF();
+        //     TPS546_set_vout(3600);
+        //     TPS546_turnON();
+        //     ResetBM1366();
+        //     // abort();
+        // }
+
         // TODO fix fan driver
         if (auto_fan_speed == 1) {
-            automatic_fan_speed_hex(power_management->chip_temp);
+            power_management->fan_percentage = (int)automatic_fan_speed_hex(power_management->tps546_temp);
+            
         } else {
             EMC2302_set_fan_speed(0,(float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
             EMC2302_set_fan_speed(1,(float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
