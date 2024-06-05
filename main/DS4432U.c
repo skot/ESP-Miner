@@ -1,7 +1,6 @@
 #include <stdio.h>
 #include <math.h>
 #include "esp_log.h"
-#include "driver/i2c.h"
 
 #include "DS4432U.h"
 
@@ -51,35 +50,6 @@ static uint8_t voltage_to_reg(float vout)
 }
 
 /**
- * @brief i2c master initialization
- */
-esp_err_t i2c_master_init(void)
-{
-    int i2c_master_port = I2C_MASTER_NUM;
-
-    i2c_config_t conf = {
-        .mode = I2C_MODE_MASTER,
-        .sda_io_num = I2C_MASTER_SDA_IO,
-        .scl_io_num = I2C_MASTER_SCL_IO,
-        .sda_pullup_en = GPIO_PULLUP_ENABLE,
-        .scl_pullup_en = GPIO_PULLUP_ENABLE,
-        .master.clk_speed = I2C_MASTER_FREQ_HZ,
-    };
-
-    i2c_param_config(i2c_master_port, &conf);
-
-    return i2c_driver_install(i2c_master_port, conf.mode, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
-}
-
-/**
- * @brief i2c master delete
- */
-esp_err_t i2c_master_delete(void)
-{
-    return i2c_driver_delete(I2C_MASTER_NUM);
-}
-
-/**
  * @brief Read a sequence of I2C bytes
  */
 static esp_err_t register_read(uint8_t reg_addr, uint8_t *data, size_t len)
@@ -90,7 +60,7 @@ static esp_err_t register_read(uint8_t reg_addr, uint8_t *data, size_t len)
 /**
  * @brief Write a byte to a I2C register
  */
-static esp_err_t register_write_byte(uint8_t reg_addr, uint8_t data)
+esp_err_t register_write_byte(uint8_t reg_addr, uint8_t data)
 {
     int ret;
     uint8_t write_buf[2] = {reg_addr, data};

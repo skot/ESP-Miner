@@ -1,4 +1,3 @@
-#include "driver/i2c.h"
 #include "esp_log.h"
 #include <stdio.h>
 
