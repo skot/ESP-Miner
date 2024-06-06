@@ -21,8 +21,8 @@
 
 static const char *TAG = "vcore.c";
 
-void VCORE_init(GlobalState global_state) {
-    if (global_state.device_model == DEVICE_HEX) {
+void VCORE_init(GlobalState * global_state) {
+    if (global_state->device_model == DEVICE_HEX) {
         TPS546_init();
     }
     ADC_init();
