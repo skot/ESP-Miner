@@ -15,9 +15,23 @@
 #define STRATUM_USER CONFIG_STRATUM_USER
 #define _DEBUG_LOG_
 
+typedef enum
+{
+    DEVICE_MAX = 0,
+    DEVICE_ULTRA = 1,
+    DEVICE_SUPRA = 2,
+} DeviceModel;
+
+typedef enum
+{
+    ASIC_BM1397 = 0,
+    ASIC_BM1366 = 1,
+    ASIC_BM1368 = 2,
+} AsicModel;
+
 typedef struct
 {
-    uint8_t (*init_fn)(u_int64_t);
+    uint8_t (*init_fn)(uint64_t);
     task_result * (*receive_result_fn)(void * GLOBAL_STATE);
     int (*set_max_baud_fn)(void);
     void (*set_difficulty_mask_fn)(int);
@@ -26,9 +40,13 @@ typedef struct
 
 typedef struct
 {
-    char * asic_model;
+    DeviceModel device_model;
+    char * device_model_str;
+    AsicModel asic_model;
+    char * asic_model_str;
     AsicFunctions ASIC_functions;
     double asic_job_frequency_ms;
+    uint32_t initial_ASIC_difficulty;
 
     work_queue stratum_queue;
     work_queue ASIC_jobs_queue;

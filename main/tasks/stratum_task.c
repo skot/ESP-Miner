@@ -48,30 +48,35 @@ void stratum_task(void * pvParameters)
     char *stratum_url = GLOBAL_STATE->SYSTEM_MODULE.pool_url;
     uint16_t port = GLOBAL_STATE->SYSTEM_MODULE.pool_port;
 
-    // check to see if the STRATUM_URL is an ip address already
-    if (inet_pton(AF_INET, stratum_url, &ip_Addr) == 1) {
-        bDNSFound = true;
-    }
-    else
-    {
-        ESP_LOGI(TAG, "Get IP for URL: %s\n", stratum_url);
-        dns_gethostbyname(stratum_url, &ip_Addr, dns_found_cb, NULL);
-        while (!bDNSFound);
+    while (1) {
+        //clear flags used by the dns callback, dns_found_cb()
+        bDNSFound = false;
+        bDNSInvalid = false;
 
-        if (bDNSInvalid) {
-            ESP_LOGE(TAG, "DNS lookup failed for URL: %s\n", stratum_url);
-            //set ip_Addr to 0.0.0.0 so that connect() will fail
-            IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
+        // check to see if the STRATUM_URL is an ip address already
+        if (inet_pton(AF_INET, stratum_url, &ip_Addr) == 1) {
+            bDNSFound = true;
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Get IP for URL: %s", stratum_url);
+            dns_gethostbyname(stratum_url, &ip_Addr, dns_found_cb, NULL);
+            while (!bDNSFound);
+
+            if (bDNSInvalid) {
+                ESP_LOGE(TAG, "DNS lookup failed for URL: %s", stratum_url);
+                //set ip_Addr to 0.0.0.0 so that connect() will fail
+                IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
+            }
+
         }
 
-    }
+        // make IP address string from ip_Addr
+        snprintf(host_ip, sizeof(host_ip), "%d.%d.%d.%d", ip4_addr1(&ip_Addr.u_addr.ip4), ip4_addr2(&ip_Addr.u_addr.ip4),
+                    ip4_addr3(&ip_Addr.u_addr.ip4), ip4_addr4(&ip_Addr.u_addr.ip4));
+        ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d (%s)", stratum_url, port, host_ip);
 
-    // make IP address string from ip_Addr
-    snprintf(host_ip, sizeof(host_ip), "%d.%d.%d.%d", ip4_addr1(&ip_Addr.u_addr.ip4), ip4_addr2(&ip_Addr.u_addr.ip4),
-             ip4_addr3(&ip_Addr.u_addr.ip4), ip4_addr4(&ip_Addr.u_addr.ip4));
-    ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d (%s)\n", stratum_url, port, host_ip);
-
-    while (1) {
+    
         struct sockaddr_in dest_addr;
         dest_addr.sin_addr.s_addr = inet_addr(host_ip);
         dest_addr.sin_family = AF_INET;
@@ -101,29 +106,23 @@ void stratum_task(void * pvParameters)
             continue;
         }
 
-        // mining.subscribe
-        STRATUM_V1_subscribe(GLOBAL_STATE->sock, &GLOBAL_STATE->extranonce_str, &GLOBAL_STATE->extranonce_2_len,
-                             GLOBAL_STATE->asic_model);
+        ///// Start Stratum Action
+        // mining.subscribe - ID: 1
+        STRATUM_V1_subscribe(GLOBAL_STATE->sock, GLOBAL_STATE->asic_model_str);
 
-
-        // mining.configure
+        // mining.configure - ID: 2
         STRATUM_V1_configure_version_rolling(GLOBAL_STATE->sock, &GLOBAL_STATE->version_mask);
 
-
-        // This should come before the final step of authenticate so the first job is sent with the proper difficulty set
-        //mining.suggest_difficulty
+        //mining.suggest_difficulty - ID: 3
         STRATUM_V1_suggest_difficulty(GLOBAL_STATE->sock, STRATUM_DIFFICULTY);
 
         char * username = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, STRATUM_USER);
         char * password = nvs_config_get_string(NVS_CONFIG_STRATUM_PASS, STRATUM_PW);
+
+        //mining.authorize - ID: 4
         STRATUM_V1_authenticate(GLOBAL_STATE->sock, username, password);
         free(password);
         free(username);
-
-
-
-        //ESP_LOGI(TAG, "Extranonce: %s", GLOBAL_STATE->extranonce_str);
-        //ESP_LOGI(TAG, "Extranonce 2 length: %d", GLOBAL_STATE->extranonce_2_len);
 
         while (1) {
             char * line = STRATUM_V1_receive_jsonrpc_line(GLOBAL_STATE->sock);
@@ -160,10 +159,13 @@ void stratum_task(void * pvParameters)
                     ESP_LOGI(TAG, "Set stratum difficulty: %ld", SYSTEM_TASK_MODULE.stratum_difficulty);
                 }
             } else if (stratum_api_v1_message.method == MINING_SET_VERSION_MASK ||
-                       stratum_api_v1_message.method == STRATUM_RESULT_VERSION_MASK) {
+                       stratum_api_v1_message.method == .0) {
                 // 1fffe000
                 ESP_LOGI(TAG, "Set version mask: %08lx", stratum_api_v1_message.version_mask);
                 GLOBAL_STATE->version_mask = stratum_api_v1_message.version_mask;
+            } else if (stratum_api_v1_message.method == STRATUM_RESULT_SUBSCRIBE) {
+                GLOBAL_STATE->extranonce_str = stratum_api_v1_message.extranonce_str;
+                GLOBAL_STATE->extranonce_2_len = stratum_api_v1_message.extranonce_2_len;
             } else if (stratum_api_v1_message.method == STRATUM_RESULT) {
                 if (stratum_api_v1_message.response_success) {
                     ESP_LOGI(TAG, "message result accepted");
@@ -171,6 +173,12 @@ void stratum_task(void * pvParameters)
                 } else {
                     ESP_LOGE(TAG, "message result rejected");
                     SYSTEM_notify_rejected_share(&GLOBAL_STATE->SYSTEM_MODULE);
+                }
+            } else if (stratum_api_v1_message.method == STRATUM_RESULT_SETUP) {
+                if (stratum_api_v1_message.response_success) {
+                    ESP_LOGI(TAG, "setup message accepted");
+                } else {
+                    ESP_LOGE(TAG, "setup message rejected");
                 }
             }
         }
