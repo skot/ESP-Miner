@@ -44,6 +44,11 @@ void app_main(void)
         GLOBAL_STATE.device_model = DEVICE_SUPRA;
         GLOBAL_STATE.asic_count = 1;
         GLOBAL_STATE.voltage_domain = 1;
+    } else if (strcmp(GLOBAL_STATE.device_model_str, "hex") == 0) {
+        ESP_LOGI(TAG, "DEVICE: Hex");
+        GLOBAL_STATE.device_model = DEVICE_HEX;
+        GLOBAL_STATE.asic_count = 6;
+        GLOBAL_STATE.voltage_domain = 3;
     } else {
         ESP_LOGE(TAG, "Invalid DEVICE model");
         // maybe should return here to now execute anything with a faulty device parameter !
