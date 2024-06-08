@@ -132,7 +132,7 @@ void BM1397_send_hash_frequency(float frequency)
     float deffreq = 200.0;
 
     float fa, fb, fc1, fc2, newf;
-    float f1, basef, famax = 0xf0, famin = 0x10;
+    float f1, basef, famax = 0x104, famin = 0x10;
     int i;
 
     // bound the frequency setting
@@ -142,9 +142,9 @@ void BM1397_send_hash_frequency(float frequency)
     {
         f1 = 50;
     }
-    else if (frequency > 500)
+    else if (frequency > 650)
     {
-        f1 = 500;
+        f1 = 475;
     }
     else
     {
@@ -154,7 +154,7 @@ void BM1397_send_hash_frequency(float frequency)
     fb = 2;
     fc1 = 1;
     fc2 = 5; // initial multiplier of 10
-    if (f1 >= 500)
+    if (f1 > 650)
     {
         // halve down to '250-400'
         fb = 1;
