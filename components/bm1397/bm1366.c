@@ -118,12 +118,12 @@ static void _send_chain_inactive(void)
     _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_INACTIVE), read_address, 2, false);
 }
 
-static void _set_chip_address(uint8_t chipAddr)
+static void _set_chip_address(uint8_t new_address)
 {
 
-    unsigned char read_address[2] = {chipAddr, 0x00};
+    unsigned char send_address[2] = {new_address, 0x00};
     // send serial data
-    _send_BM1366((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, false);
+    _send_BM1366((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), send_address, 2, false);
 }
 
 void BM1366_send_hash_frequency(float target_freq)
@@ -456,51 +456,67 @@ static uint8_t _send_init(uint64_t frequency)
     }
     ESP_LOGI(TAG, "%i chip(s) detected on the chain", chip_counter);
 
+    //Reg_A8
     unsigned char init4[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0xA8, 0x00, 0x07, 0x00, 0x00, 0x03};
     _send_simple(init4, 11);
 
+    //Misc Control
     unsigned char init5[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x18, 0xFF, 0x0F, 0xC1, 0x00, 0x00};
     _send_simple(init5, 11);
 
-    unsigned char init6[7] = {0x55, 0xAA, 0x53, 0x05, 0x00, 0x00, 0x03};
-    _send_simple(init6, 7);
+    //chain inactive
+    _send_chain_inactive();
 
-    unsigned char init7[7] = {0x55, 0xAA, 0x40, 0x05, 0x00, 0x00, 0x1C};
-    _send_simple(init7, 7);
+    //set chip address
+    for (int i = 0; i < chip_counter; i++) {
+        _set_chip_address(i * (0x100 / chip_counter));
+    }
 
+    //Core Register Control
     unsigned char init135[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x3C, 0x80, 0x00, 0x85, 0x40, 0x0C};
     _send_simple(init135, 11);
 
+    //Core Register Control
     unsigned char init136[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x3C, 0x80, 0x00, 0x80, 0x20, 0x19};
     _send_simple(init136, 11);
 
+    //set ticket mask
     unsigned char init137[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xFF, 0x08};
     _send_simple(init137, 11);
 
+    //Analog Mux Control
     unsigned char init138[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x54, 0x00, 0x00, 0x00, 0x03, 0x1D};
     _send_simple(init138, 11);
 
+    //Set the IO Driver Strength
     unsigned char init139[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x58, 0x02, 0x11, 0x11, 0x11, 0x06};
     _send_simple(init139, 11);
 
+    //UART Relay for each chip
     unsigned char init171[11] = {0x55, 0xAA, 0x41, 0x09, 0x00, 0x2C, 0x00, 0x7C, 0x00, 0x03, 0x03};
     _send_simple(init171, 11);
 
+    //FAST_UART_CONFIGURATION
     unsigned char init173[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x28, 0x11, 0x30, 0x02, 0x00, 0x03};
     _send_simple(init173, 11);
 
+    //Reg_A8 for each chip
     unsigned char init174[11] = {0x55, 0xAA, 0x41, 0x09, 0x00, 0xA8, 0x00, 0x07, 0x01, 0xF0, 0x15};
     _send_simple(init174, 11);
 
+    //Misc Control for each chip
     unsigned char init175[11] = {0x55, 0xAA, 0x41, 0x09, 0x00, 0x18, 0xF0, 0x00, 0xC1, 0x00, 0x0C};
     _send_simple(init175, 11);
 
+    //Core Register Control for each chip
     unsigned char init176[11] = {0x55, 0xAA, 0x41, 0x09, 0x00, 0x3C, 0x80, 0x00, 0x85, 0x40, 0x04};
     _send_simple(init176, 11);
 
+    //Core Register Control for each chip
     unsigned char init177[11] = {0x55, 0xAA, 0x41, 0x09, 0x00, 0x3C, 0x80, 0x00, 0x80, 0x20, 0x11};
     _send_simple(init177, 11);
 
+    //Core Register Control for each chip
     unsigned char init178[11] = {0x55, 0xAA, 0x41, 0x09, 0x00, 0x3C, 0x80, 0x00, 0x82, 0xAA, 0x05};
     _send_simple(init178, 11);
 
@@ -540,6 +556,49 @@ static void _send_read_address(void)
     _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_READ), read_address, 2, false);
 }
 
+static int _calculate_chip_number(unsigned int actual_chip_count)
+{
+    int i = 0;
+    if(actual_chip_count == 1)
+    {
+        i = 1;
+    }
+    else if(actual_chip_count == 2)
+    {
+        i = 2;
+    }
+    else if((actual_chip_count > 2) && (actual_chip_count <= 4))
+    {
+        i = 4;
+    }
+    else if((actual_chip_count > 4) && (actual_chip_count <= 8))
+    {
+        i = 8;
+    }
+    else if((actual_chip_count > 8) && (actual_chip_count <= 16))
+    {
+        i = 16;
+    }
+    else if((actual_chip_count > 16) && (actual_chip_count <= 32))
+    {
+        i = 32;
+    }
+    else if((actual_chip_count > 32) && (actual_chip_count <= 64))
+    {
+        i = 64;
+    }
+    else if((actual_chip_count > 64) && (actual_chip_count <= 128))
+    {
+        i = 128;
+    }
+    else
+    {
+        ESP_LOGE(TAG,"actual_chip_count = %d, but it is error\n", actual_chip_count);
+        return -1;
+    }
+    return i;
+}
+
 uint8_t BM1366_init(uint64_t frequency)
 {
     ESP_LOGI(TAG, "Initializing BM1366");
@@ -556,6 +615,63 @@ uint8_t BM1366_init(uint64_t frequency)
     //_send_read_address();
 
     return _send_init(frequency);
+}
+
+void BM1366_set_single_chip_address(uint8_t new_address)
+{
+    // set all chips to chain_inactive mode
+    _send_chain_inactive();
+
+    // set new chip address to first chip in chain_inactive mode.
+    _set_chip_address(new_address);
+}
+
+void BM1366_set_nonce_mask(int chip_count)
+{
+    if (chip_count < 1) { chip_count = 1; }
+    if (chip_count > 128) { chip_count = 128; }
+
+    chip_count = _calculate_chip_number(chip_count); // Because of the way the nonce ranges calculated, we need to use a fixed chip address interval (for now)
+
+    // Every nonce returned by chip (except those sent by opencore) encodes address of the
+    // chip and core that computed it, because of the way they divide the search space.
+
+    // uint8_t chip_address = (asic_result->nonce >> 9) & 0x7f; // Range 0x00-0xFF. Chip address seems to be 8 bits in size. However the first bit should always be 0 because the chip address is increment by 2. The last bit is always low for addresses < 0x80 and always high for addresses >= 0x80
+    // uint8_t core_small_core_address = (asic_result->nonce >> 29) & 0x7; // Range 0x0-0x7. Helps to identify if the nonce was calculated by what small_core but not really important for now.
+
+    // It seems the nonces calculation use the following structure:
+    // 31.................16 15..................0
+    // 0byyy00000 0b0000000x 0bxxxxxxx0 0b00000000 // nonce calculated, one can compute the chip address and small core address from the nonce as outlines above
+    // 0b00000000 0b0000mmmm 0bmmmmmmm0 0b00000000 // nonce mask
+    // x = chip address (0x00 - 0xFF)
+    // y = small_core address (0x0 - 0x7)
+    // m = nonce mask used for nonce calculation.
+
+    // The following are known configurations:
+    // 55 AA 51 09 00 10 00 00 11 5A 04 //s19kPro (77 chips) -> 0x115a
+    // unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010001, 0b01011010};
+    // 55 AA 51 09 00 10 00 00 14 46 04 //s19xp_luxos (110 chips) -> 0x1446
+    // unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010100, 0b01000110};
+    // 55 AA 51 09 00 10 00 00 15 1C 02 //s19xp-stock / BitaxeUltra -> 0x151c
+    // unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010101, 0b00011100};
+    // 55 AA 51 09 00 10 00 00 15 A4 0A //s21 (bm1368 - 108 chips)
+    // unsigned char command[9] = {0x00, 0x10, 0b00000000, 0b00000000, 0b00010101, 0b10100100};
+
+    // command template
+    unsigned char command[9] = {0x00, 0x10, 0x00, 0x00, 0x00, 0x00};
+
+    // This nonce_mask is used in combination with the chip address to calculate the nonce ranges for the chip.
+    uint32_t offset = (0x15FF / 2); // found by try-and-error. 15FF seems to be max value. Any higher number result in duplicated nonces because the way (using addr interval) I'm moving bits to the left.
+    uint32_t nonce_mask = offset * (0x100 / chip_count);
+
+    // convert into char array and mix with command template
+    for (int i = 0; i < 4; i++) {
+        char value = (nonce_mask >> (8 * i)) & 0xFF;
+        command[5 - i] = command[5 - i] | value;
+    }
+
+    ESP_LOGI(TAG, "Setting Nonce mask to %08lX", nonce_mask);
+    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), command, 6, false);
 }
 
 // Baud formula = 25M/((denominator+1)*8)

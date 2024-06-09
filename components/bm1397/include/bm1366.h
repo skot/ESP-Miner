@@ -41,5 +41,7 @@ int BM1366_set_max_baud(void);
 int BM1366_set_default_baud(void);
 void BM1366_send_hash_frequency(float frequency);
 task_result * BM1366_proccess_work(void * GLOBAL_STATE);
+void BM1366_set_single_chip_address(uint8_t chipAddr);
+void BM1366_set_nonce_mask(int chip_count);
 
 #endif /* BM1366_H_ */
