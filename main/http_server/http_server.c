@@ -1,5 +1,4 @@
 #include "http_server.h"
-#include "adc.h"
 #include "cJSON.h"
 #include "esp_chip_info.h"
 #include "esp_http_server.h"
@@ -13,6 +12,7 @@
 #include "freertos/task.h"
 #include "global_state.h"
 #include "nvs_config.h"
+#include "vcore.h"
 #include <fcntl.h>
 #include <string.h>
 #include <sys/param.h>
@@ -309,8 +309,18 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
 static esp_err_t POST_restart(httpd_req_t * req)
 {
     ESP_LOGI(TAG, "Restarting System because of API Request");
+
+    // Send HTTP response before restarting
+    const char* resp_str = "System will restart shortly.";
+    httpd_resp_send(req, resp_str, HTTPD_RESP_USE_STRLEN);
+
+    // Delay to ensure the response is sent
     vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    // Restart the system
     esp_restart();
+
+    // This return statement will never be reached, but it's good practice to include it
     return ESP_OK;
 }
 
@@ -358,7 +368,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "coreVoltage", nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE));
-    cJSON_AddNumberToObject(root, "coreVoltageActual", ADC_get_vcore());
+    cJSON_AddNumberToObject(root, "coreVoltageActual", VCORE_get_voltage_mv(GLOBAL_STATE));
     cJSON_AddNumberToObject(root, "frequency", nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY));
     cJSON_AddStringToObject(root, "ssid", ssid);
     cJSON_AddStringToObject(root, "hostname", hostname);
@@ -366,7 +376,21 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "sharesAccepted", GLOBAL_STATE->SYSTEM_MODULE.shares_accepted);
     cJSON_AddNumberToObject(root, "sharesRejected", GLOBAL_STATE->SYSTEM_MODULE.shares_rejected);
     cJSON_AddNumberToObject(root, "uptimeSeconds", (esp_timer_get_time() - GLOBAL_STATE->SYSTEM_MODULE.start_time) / 1000000);
-    cJSON_AddStringToObject(root, "ASICModel", GLOBAL_STATE->asic_model);
+    cJSON_AddNumberToObject(root, "asicCount", GLOBAL_STATE->asic_count);
+    uint16_t core_count = 0;
+    switch (GLOBAL_STATE->asic_model){
+        case ASIC_BM1397:
+            core_count = BM1397_CORE_COUNT;
+            break;
+        case ASIC_BM1366:
+            core_count = BM1366_CORE_COUNT;
+            break;
+        case ASIC_BM1368:
+            core_count = BM1368_CORE_COUNT;
+            break;
+    }
+    cJSON_AddNumberToObject(root, "coreCount", core_count);
+    cJSON_AddStringToObject(root, "ASICModel", GLOBAL_STATE->asic_model_str);
     cJSON_AddStringToObject(root, "stratumURL", stratumURL);
     cJSON_AddNumberToObject(root, "stratumPort", nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, CONFIG_STRATUM_PORT));
     cJSON_AddStringToObject(root, "stratumUser", stratumUser);
@@ -483,19 +507,50 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
 
 void log_to_websocket(const char * format, va_list args)
 {
-    char * log_buffer = (char *) malloc(2048);
-    vsnprintf(log_buffer, 2048, format, args);
+    va_list args_copy;
+    va_copy(args_copy, args);
 
+    // Calculate the required buffer size
+    int needed_size = vsnprintf(NULL, 0, format, args_copy) + 1;
+    va_end(args_copy);
+
+    // Allocate the buffer dynamically
+    char * log_buffer = (char *) malloc(needed_size);
+    if (log_buffer == NULL) {
+        // Handle allocation failure
+        return;
+    }
+
+    // Format the string into the allocated buffer
+    va_copy(args_copy, args);
+    vsnprintf(log_buffer, needed_size, format, args_copy);
+    va_end(args_copy);
+
+    // Prepare the WebSocket frame
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.payload = (uint8_t *) log_buffer;
     ws_pkt.len = strlen(log_buffer);
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-    vprintf(format, args);
+
+    // Print to standard output
+    va_copy(args_copy, args);
+    vprintf(format, args_copy);
+    va_end(args_copy);
+
+    // Ensure server and fd are valid
+    if (server == NULL || fd < 0) {
+        // Handle invalid server or socket descriptor
+        free(log_buffer);
+        return;
+    }
+
+    // Send the WebSocket frame asynchronously
     if (httpd_ws_send_frame_async(server, fd, &ws_pkt) != ESP_OK) {
         esp_log_set_vprintf(vprintf);
     }
 
+    // Free the allocated buffer
     free(log_buffer);
 }
 

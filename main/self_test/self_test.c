@@ -1,13 +1,14 @@
+#include "i2c_master.h"
 #include "DS4432U.h"
 #include "EMC2101.h"
 #include "INA260.h"
 #include "adc.h"
-#include "driver/i2c.h"
 #include "esp_log.h"
 #include "global_state.h"
 #include "nvs_config.h"
 #include "nvs_flash.h"
 #include "oled.h"
+#include "vcore.h"
 #include "utils.h"
 
 static const char * TAG = "self_test";
@@ -32,9 +33,9 @@ static bool power_consumption_pass()
     return false;
 }
 
-static bool core_voltage_pass()
+static bool core_voltage_pass(GlobalState * global_state)
 {
-    uint16_t core_voltage = ADC_get_vcore();
+    uint16_t core_voltage = VCORE_get_voltage_mv(global_state);
     ESP_LOGI(TAG, "Voltage: %u", core_voltage);
 
     if (core_voltage > 1100 && core_voltage < 1300) {
@@ -66,8 +67,8 @@ void self_test(void * pvParameters)
     ESP_ERROR_CHECK(i2c_master_init());
     ESP_LOGI(TAG, "I2C initialized successfully");
 
-    ADC_init();
-    DS4432U_set_vcore(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0);
+    VCORE_init(GLOBAL_STATE);
+    VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
 
     EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
     EMC2101_set_fan_speed(1);
@@ -97,8 +98,8 @@ void self_test(void * pvParameters)
 
 
     SERIAL_init();
-    uint8_t chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value);
-    ESP_LOGI(TAG, "%u chips detected", chips_detected);
+    uint8_t chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE->asic_count);
+    ESP_LOGI(TAG, "%u chips detected, %u expected", chips_detected, GLOBAL_STATE->asic_count);
 
     int baud = (*GLOBAL_STATE->ASIC_functions.set_max_baud_fn)();
     vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -178,7 +179,7 @@ void self_test(void * pvParameters)
     free(GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs);
     free(GLOBAL_STATE->valid_jobs);
 
-    if (!core_voltage_pass()) {
+    if (!core_voltage_pass(GLOBAL_STATE)) {
         if (OLED_status()) {
             memset(module->oled_buf, 0, 20);
             snprintf(module->oled_buf, 20, "POWER:     FAIL");

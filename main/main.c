@@ -25,22 +25,46 @@ void app_main(void)
 {
     ESP_ERROR_CHECK(nvs_flash_init());
 
-    ESP_LOGI(TAG, "NVS_CONFIG_ASIC_FREQ %f", (float) nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY));
     GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
+    ESP_LOGI(TAG, "NVS_CONFIG_ASIC_FREQ %f", (float)GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value);
 
-    GLOBAL_STATE.asic_model = nvs_config_get_string(NVS_CONFIG_ASIC_MODEL, "");
-    if (strcmp(GLOBAL_STATE.asic_model, "BM1366") == 0) {
+    GLOBAL_STATE.device_model_str = nvs_config_get_string(NVS_CONFIG_DEVICE_MODEL, "");
+    if (strcmp(GLOBAL_STATE.device_model_str, "max") == 0) {
+        ESP_LOGI(TAG, "DEVICE: Max");
+        GLOBAL_STATE.device_model = DEVICE_MAX;
+        GLOBAL_STATE.asic_count = 1;
+        GLOBAL_STATE.voltage_domain = 1;
+    } else if (strcmp(GLOBAL_STATE.device_model_str, "ultra") == 0) {
+        ESP_LOGI(TAG, "DEVICE: Ultra");
+        GLOBAL_STATE.device_model = DEVICE_ULTRA;
+        GLOBAL_STATE.asic_count = 1;
+        GLOBAL_STATE.voltage_domain = 1;
+    } else if (strcmp(GLOBAL_STATE.device_model_str, "supra") == 0) {
+        ESP_LOGI(TAG, "DEVICE: Supra");
+        GLOBAL_STATE.device_model = DEVICE_SUPRA;
+        GLOBAL_STATE.asic_count = 1;
+        GLOBAL_STATE.voltage_domain = 1;
+    } else {
+        ESP_LOGE(TAG, "Invalid DEVICE model");
+        // maybe should return here to now execute anything with a faulty device parameter !
+    }
+
+    GLOBAL_STATE.asic_model_str = nvs_config_get_string(NVS_CONFIG_ASIC_MODEL, "");
+    if (strcmp(GLOBAL_STATE.asic_model_str, "BM1366") == 0) {
         ESP_LOGI(TAG, "ASIC: BM1366");
+        GLOBAL_STATE.asic_model = ASIC_BM1366;
         AsicFunctions ASIC_functions = {.init_fn = BM1366_init,
                                         .receive_result_fn = BM1366_proccess_work,
                                         .set_max_baud_fn = BM1366_set_max_baud,
                                         .set_difficulty_mask_fn = BM1366_set_job_difficulty_mask,
                                         .send_work_fn = BM1366_send_work};
-        GLOBAL_STATE.asic_job_frequency_ms = BM1366_FULLSCAN_MS;
+        GLOBAL_STATE.asic_job_frequency_ms = BM1366_FULLSCAN_MS / (double) GLOBAL_STATE.asic_count;
+        GLOBAL_STATE.initial_ASIC_difficulty = BM1366_INITIAL_DIFFICULTY;
 
         GLOBAL_STATE.ASIC_functions = ASIC_functions;
-    } else if (strcmp(GLOBAL_STATE.asic_model, "BM1368") == 0) {
+    } else if (strcmp(GLOBAL_STATE.asic_model_str, "BM1368") == 0) {
         ESP_LOGI(TAG, "ASIC: BM1368");
+        GLOBAL_STATE.asic_model = ASIC_BM1368;
         AsicFunctions ASIC_functions = {.init_fn = BM1368_init,
                                         .receive_result_fn = BM1368_proccess_work,
                                         .set_max_baud_fn = BM1368_set_max_baud,
@@ -48,11 +72,13 @@ void app_main(void)
                                         .send_work_fn = BM1368_send_work};
 
         uint64_t bm1368_hashrate = GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1368_CORE_COUNT * 1000000;
-        GLOBAL_STATE.asic_job_frequency_ms = ((double) NONCE_SPACE / (double) bm1368_hashrate) * 1000;
+        GLOBAL_STATE.asic_job_frequency_ms = (((double) NONCE_SPACE / (double) bm1368_hashrate) * 1000) / (double) GLOBAL_STATE.asic_count;
+        GLOBAL_STATE.initial_ASIC_difficulty = BM1368_INITIAL_DIFFICULTY;
 
         GLOBAL_STATE.ASIC_functions = ASIC_functions;
-    } else if (strcmp(GLOBAL_STATE.asic_model, "BM1397") == 0) {
+    } else if (strcmp(GLOBAL_STATE.asic_model_str, "BM1397") == 0) {
         ESP_LOGI(TAG, "ASIC: BM1397");
+        GLOBAL_STATE.asic_model = ASIC_BM1397;
         AsicFunctions ASIC_functions = {.init_fn = BM1397_init,
                                         .receive_result_fn = BM1397_proccess_work,
                                         .set_max_baud_fn = BM1397_set_max_baud,
@@ -60,20 +86,22 @@ void app_main(void)
                                         .send_work_fn = BM1397_send_work};
 
         uint64_t bm1397_hashrate = GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1397_CORE_COUNT * 1000000;
-        GLOBAL_STATE.asic_job_frequency_ms = ((double) NONCE_SPACE / (double) bm1397_hashrate) * 1000;
+        GLOBAL_STATE.asic_job_frequency_ms = (((double) NONCE_SPACE / (double) bm1397_hashrate) * 1000) / (double) GLOBAL_STATE.asic_count;
+        GLOBAL_STATE.initial_ASIC_difficulty = BM1397_INITIAL_DIFFICULTY;
 
         GLOBAL_STATE.ASIC_functions = ASIC_functions;
     } else {
-        ESP_LOGI(TAG, "Invalid ASIC model");
+        ESP_LOGE(TAG, "Invalid ASIC model");
         AsicFunctions ASIC_functions = {.init_fn = NULL,
                                         .receive_result_fn = NULL,
                                         .set_max_baud_fn = NULL,
                                         .set_difficulty_mask_fn = NULL,
                                         .send_work_fn = NULL};
         GLOBAL_STATE.ASIC_functions = ASIC_functions;
+        // maybe should return here to now execute anything with a faulty device parameter !
     }
 
-    bool is_max = strcmp(GLOBAL_STATE.asic_model, "BM1397") == 0;
+    bool is_max = GLOBAL_STATE.asic_model == ASIC_BM1397;
     uint64_t best_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF, 0);
     uint16_t should_self_test = nvs_config_get_u16(NVS_CONFIG_SELF_TEST, 0);
     if (should_self_test == 1 && !is_max && best_diff < 1) {
@@ -82,7 +110,7 @@ void app_main(void)
     }
 
     xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void *) &GLOBAL_STATE, 3, NULL);
-
+    xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
     ESP_LOGI(TAG, "Welcome to the bitaxe!");
 
     // pull the wifi credentials and hostname out of NVS
@@ -128,7 +156,7 @@ void app_main(void)
     GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
 
     xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
-    xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
+
 
     if (GLOBAL_STATE.ASIC_functions.init_fn != NULL) {
         wifi_softap_off();
@@ -137,7 +165,7 @@ void app_main(void)
         queue_init(&GLOBAL_STATE.ASIC_jobs_queue);
 
         SERIAL_init();
-        (*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value);
+        (*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE.asic_count);
         SERIAL_set_baud((*GLOBAL_STATE.ASIC_functions.set_max_baud_fn)());
         SERIAL_clear_buffer();
 

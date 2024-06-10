@@ -2,7 +2,7 @@
 
 #include "esp_log.h"
 
-#include "DS4432U.h"
+#include "i2c_master.h"
 #include "EMC2101.h"
 #include "INA260.h"
 #include "adc.h"
@@ -11,9 +11,9 @@
 #include "led_controller.h"
 #include "nvs_config.h"
 #include "oled.h"
+#include "vcore.h"
 
 #include "driver/gpio.h"
-#include "driver/i2c.h"
 #include "esp_app_desc.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
@@ -27,12 +27,19 @@
 #include <string.h>
 #include <sys/time.h>
 
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/queue.h"
+#include "driver/gpio.h"
+
 static const char * TAG = "SystemModule";
 
 static void _suffix_string(uint64_t, char *, size_t, int);
 
 static esp_netif_t * netif;
 static esp_netif_ip_info_t ip_info;
+
+QueueHandle_t user_input_queue;
 
 static void _init_system(GlobalState * global_state, SystemModule * module)
 {
@@ -75,13 +82,18 @@ static void _init_system(GlobalState * global_state, SystemModule * module)
     ESP_ERROR_CHECK(i2c_master_init());
     ESP_LOGI(TAG, "I2C initialized successfully");
 
-    ADC_init();
+    // Initialize the core voltage regulator
+    VCORE_init(global_state);
+    VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, global_state);
 
-    // DS4432U tests
-    DS4432U_set_vcore(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0);
-
-    EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
-
+    switch (global_state->device_model) {
+        case DEVICE_MAX:
+        case DEVICE_ULTRA:
+        case DEVICE_SUPRA:
+            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            break;
+        default:
+    }
 
     vTaskDelay(500 / portTICK_PERIOD_MS);
 
@@ -168,11 +180,12 @@ static void _update_system_info(GlobalState * GLOBAL_STATE)
     }
 }
 
-static void _update_esp32_info(SystemModule * module)
+static void _update_esp32_info(GlobalState * GLOBAL_STATE)
 {
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
     uint32_t free_heap_size = esp_get_free_heap_size();
 
-    uint16_t vcore = ADC_get_vcore();
+    uint16_t vcore = VCORE_get_voltage_mv(GLOBAL_STATE);
 
     if (OLED_status()) {
 
@@ -363,12 +376,16 @@ void SYSTEM_task(void * pvParameters)
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     _init_system(GLOBAL_STATE, module);
+    user_input_queue = xQueueCreate(10, sizeof(char[10])); // Create a queue to handle user input events
 
     _clear_display();
     _init_connection(module);
 
     wifi_mode_t wifi_mode;
     esp_err_t result;
+
+    char input_event[10];
+    ESP_LOGI(TAG, "SYSTEM_task started");
 
     while (GLOBAL_STATE->ASIC_functions.init_fn == NULL) {
         show_ap_information("ASIC MODEL INVALID");
@@ -382,20 +399,37 @@ void SYSTEM_task(void * pvParameters)
     }
 
     while (1) {
-        _clear_display();
-        module->screen_page = 0;
-        _update_system_performance(GLOBAL_STATE);
-        vTaskDelay(40000 / portTICK_PERIOD_MS);
+        // Automatically cycle through screens
+        for (int screen = 0; screen < 3; screen++) {
+            _clear_display();
+            module->screen_page = screen;
 
-        _clear_display();
-        module->screen_page = 1;
-        _update_system_info(GLOBAL_STATE);
-        vTaskDelay(10000 / portTICK_PERIOD_MS);
+            switch (module->screen_page) {
+                case 0:
+                    _update_system_performance(GLOBAL_STATE);
+                    break;
+                case 1:
+                    _update_system_info(GLOBAL_STATE);
+                    break;
+                case 2:
+                    _update_esp32_info(GLOBAL_STATE);
+                    break;
+            }
 
-        _clear_display();
-        module->screen_page = 2;
-        _update_esp32_info(module);
-        vTaskDelay(10000 / portTICK_PERIOD_MS);
+            // Wait for 10 seconds or until a button press
+            for (int i = 0; i < 10; i++) {
+                if (xQueueReceive(user_input_queue, &input_event, pdMS_TO_TICKS(1000))) {
+                    if (strcmp(input_event, "SHORT") == 0) {
+                        ESP_LOGI(TAG, "Short button press detected, switching to next screen");
+                        screen = (screen + 1) % 3; // Move to next screen
+                        break;
+                    } else if (strcmp(input_event, "LONG") == 0) {
+                        ESP_LOGI(TAG, "Long button press detected, toggling WiFi SoftAP");
+                        toggle_wifi_softap(); // Toggle AP 
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -432,7 +466,6 @@ void SYSTEM_notify_new_ntime(SystemModule * module, uint32_t ntime)
 void SYSTEM_notify_found_nonce(SystemModule * module, double pool_diff, double found_diff, uint32_t nbits, float power)
 {
     // Calculate the time difference in seconds with sub-second precision
-
     // hashrate = (nonce_difficulty * 2^32) / time_to_find
 
     module->historical_hashrate[module->historical_hashrate_rolling_index] = pool_diff;

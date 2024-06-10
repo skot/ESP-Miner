@@ -1,6 +1,7 @@
 idf_component_register(
 SRCS
     "adc.c"
+    "i2c_master.c"
     "DS4432U.c"
     "EMC2101.c"
     "fonts.c"
@@ -10,6 +11,7 @@ SRCS
     "nvs_config.c"
     "oled.c"
     "system.c"
+    "vcore.c"
     "work_queue.c"
     "./tasks/stratum_task.c"
     "./tasks/create_jobs_task.c"
