@@ -118,16 +118,11 @@ void app_main(void)
     }
 
     xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void *) &GLOBAL_STATE, 3, NULL);
-    if (GLOBAL_STATE.board_version >= 300 && GLOBAL_STATE.board_version < 400) {
-        // this is a HEX board
-        ESP_LOGI(TAG, "Starting HEX power management");
+    if (GLOBAL_STATE.device_model == DEVICE_HEX) {
         vTaskDelay(2000 / portTICK_PERIOD_MS);
-        xTaskCreate(POWER_MANAGEMENT_HEX_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
-    } else {
-        // this is NOT a HEX board
-        ESP_LOGI(TAG, "Starting BITAXE power management");
-        xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
     }
+    ESP_LOGI(TAG, "Starting power management task");
+    xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
     ESP_LOGI(TAG, "Welcome to the bitaxe!");
 
     // pull the wifi credentials and hostname out of NVS

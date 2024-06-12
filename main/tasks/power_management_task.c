@@ -62,7 +62,7 @@ static void automatic_fan_speed(float chip_temp, GlobalState * GLOBAL_STATE)
             EMC2101_set_fan_speed((float) result / 100);
             break;
         case DEVICE_HEX:
-            // TODO
+            EMC2302_set_fan_speed(1, (float) result / 100);
             break;
         default:
     }
@@ -106,6 +106,13 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 gpio_set_level(GPIO_NUM_10, 1);
             }
             break;
+        case DEVICE_HEX:
+            // turn on ASIC core voltage (three domains in series)
+            int want_vcore = nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE);
+            want_vcore *= 3;  // across 3 domains
+            ESP_LOGI(TAG, "---TURNING ON VCORE---");
+            TPS546_set_vout(want_vcore);
+            break;
         default:
     }
 
@@ -123,6 +130,31 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     power_management->current = INA260_read_current();
                 }
                 power_management->fan_speed = EMC2101_get_fan_speed();
+                break;
+            case DEVICE_HEX:
+                // For reference:
+                // TPS546_get_vin()- board input voltage
+                //    we don't have a way to measure board input current
+                // TPS546_get_vout()- core voltage *3 (across all domains)
+                // TPS546_get_iout()- Current output of regulator
+                //    we don't have a way to measure power, we have to calculate it
+                //    but we don't have total board current, so calculate regulator power
+                // TPS546_get_temperature()- gets internal regulator temperature
+                // TMP1075_read_temperature(index)- gets the values from the two board sensors
+                // TPS546_get_frequency()- gets the regulator switching frequency (probably no need to display)
+
+                /* check for faults */
+                TPS546_check_status();
+
+                power_management->voltage = TPS546_get_vin() * 1000;
+                power_management->current = TPS546_get_iout() * 1000;
+
+                // calculate regulator power (in milliwatts)
+                power_management->power = (TPS546_get_vout() * power_management->current) / 1000;
+
+                // get the fan RPM
+                power_management->fan_speed = EMC2302_get_fan_speed(0);
+                power_management->fan_speed = EMC2302_get_fan_speed(1);
                 break;
             default:
         }
@@ -219,7 +251,32 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     // ESP_LOGI(TAG, "target %f, Freq %f, Volt %f, Power %f", target_frequency, power_management->frequency_value,
                     // power_management->voltage, power_management->power);
                     break;
+                case DEVICE_HEX:        // Two board temperature sensors
+                    ESP_LOGI(TAG, "Board Temp: %d, %d", TMP1075_read_temperature(0), TMP1075_read_temperature(1));
 
+                    // get regulator internal temperature
+                    power_management->chip_temp_avg = (float)TPS546_get_temperature();
+                    ESP_LOGI(TAG, "TPS546 Temp: %2f", power_management->chip_temp_avg);
+
+                    // TODO figure out best way to detect overheating on the Hex
+                    if (power_management->chip_temp_avg > TPS546_THROTTLE_TEMP &&
+                        (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
+                        ESP_LOGE(TAG, "OVERHEAT");
+
+                        // Turn off core voltage
+                        TPS546_set_vout(0);
+
+                        nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, 990);
+                        nvs_config_set_u16(NVS_CONFIG_ASIC_FREQ, 50);
+                        nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, 100);
+                        nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, 0);
+                        exit(EXIT_FAILURE);
+                    }
+
+                    ESP_LOGI(TAG, "VIN: %f, VOUT: %f, IOUT: %f", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
+                    ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
+                    ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
+                    break;
                 default:
             }
         }
@@ -232,6 +289,17 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 case DEVICE_ULTRA:
                 case DEVICE_SUPRA:
                     EMC2101_set_fan_speed((float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
+                    break;
+                case DEVICE_HEX:
+                    EMC2302_set_fan_speed(1, 100);
+
+                    // This causes the fan to cycle on/off quickly, need some hysteresis
+                    // for active fan control 
+                    //if (power_management->chip_temp > 65) {
+                    //    EMC2302_set_fan_speed(1, 100);
+                    //} else {
+                    //    EMC2302_set_fan_speed(1, 60);
+                    //}
                     break;
                 default:
             }
@@ -249,109 +317,3 @@ void POWER_MANAGEMENT_task(void * pvParameters)
         vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
     }
 }
-
-
-void POWER_MANAGEMENT_HEX_task(void * pvParameters)
-{
-    GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
-
-    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
-
-    power_management->frequency_multiplier = 1;
-
-    int last_frequency_increase = 0;
-
-    uint16_t frequency_target = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
-
-    uint16_t auto_fan_speed = nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1);
-
-    // turn on ASIC core voltage (three domains in series)
-    int want_vcore = nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE);
-    want_vcore *= 3;  // across 3 domains
-    ESP_LOGI(TAG, "---TURNING ON VCORE---");
-    TPS546_set_vout(want_vcore);
-
-    vTaskDelay(3000 / portTICK_PERIOD_MS);
-
-    while (1) {
-
-        // power_management members
-        //uint16_t fan_speed;
-        //float chip_temp;
-        //float voltage;
-        //float frequency_multiplier;
-        //float frequency_value;
-        //float power;
-        //float current;
-
-        // For reference:
-        // TPS546_get_vin()- board input voltage
-        //    we don't have a way to measure board input current
-        // TPS546_get_vout()- core voltage *3 (across all domains)
-        // TPS546_get_iout()- Current output of regulator
-        //    we don't have a way to measure power, we have to calculate it
-        //    but we don't have total board current, so calculate regulator power
-        // TPS546_get_temperature()- gets internal regulator temperature
-        // TMP1075_read_temperature(index)- gets the values from the two board sensors
-        // TPS546_get_frequency()- gets the regulator switching frequency (probably no need to display)
-
-        /* check for faults */
-        TPS546_check_status();
-
-        power_management->voltage = TPS546_get_vin() * 1000;
-        power_management->current = TPS546_get_iout() * 1000;
-
-        // calculate regulator power (in milliwatts)
-        power_management->power = (TPS546_get_vout() * power_management->current) / 1000;
-
-        // get the fan RPM
-        power_management->fan_speed = EMC2302_get_fan_speed(0);
-        power_management->fan_speed = EMC2302_get_fan_speed(1);
-
-        // Two board temperature sensors
-        ESP_LOGI(TAG, "Board Temp: %d, %d", TMP1075_read_temperature(0), TMP1075_read_temperature(1));
-
-        // get regulator internal temperature
-        power_management->chip_temp = (float)TPS546_get_temperature();
-        ESP_LOGI(TAG, "TPS546 Temp: %2f", power_management->chip_temp);
-
-        EMC2302_set_fan_speed(1, 100);
-
-        // This causes the fan to cycle on/off quickly, need some hysteresis
-        // for active fan control 
-        //if (power_management->chip_temp > 65) {
-        //    EMC2302_set_fan_speed(1, 100);
-        //} else {
-        //    EMC2302_set_fan_speed(1, 60);
-        //}
-
-        // TODO figure out best way to detect overheating on the Hex
-        if (power_management->chip_temp > TPS546_THROTTLE_TEMP &&
-            (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
-            ESP_LOGE(TAG, "OVERHEAT");
-
-            // Turn off core voltage
-            TPS546_set_vout(0);
-
-            nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, 990);
-            nvs_config_set_u16(NVS_CONFIG_ASIC_FREQ, 50);
-            nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, 100);
-            nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, 0);
-            exit(EXIT_FAILURE);
-        }
-
-        // TODO fix fan driver
-        //if (auto_fan_speed == 1) {
-        //    automatic_fan_speed(power_management->chip_temp);
-        //} else {
-        //    EMC2101_set_fan_speed((float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100) / 100);
-        //}
-
-        ESP_LOGI(TAG, "VIN: %f, VOUT: %f, IOUT: %f", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
-        ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
-        ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
-
-        vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
-    }
-}
-
