@@ -3,7 +3,8 @@
 
 typedef struct
 {
-    uint16_t fan_speed;
+    uint16_t fan_perc;
+    uint16_t fan_rpm;
     float chip_temp[6];
     float chip_temp_avg;
     float voltage;

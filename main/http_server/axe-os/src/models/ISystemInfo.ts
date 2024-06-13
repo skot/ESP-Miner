@@ -7,7 +7,6 @@ export interface ISystemInfo {
     power: number,
     voltage: number,
     current: number,
-    fanSpeed: number,
     temp: number,
     hashRate: number,
     bestDiff: string,
@@ -32,6 +31,7 @@ export interface ISystemInfo {
     invertfanpolarity: number,
     autofanspeed: number,
     fanspeed: number,
+    fanrpm: number,
     coreVoltageActual: number,
 
     boardtemp1?: number,
