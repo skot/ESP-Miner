@@ -123,6 +123,7 @@ static void _init_system(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
+        case DEVICE_HEX:
             // oled
             if (!OLED_init()) {
                 ESP_LOGI(TAG, "OLED init failed!");
@@ -150,6 +151,7 @@ static void _update_hashrate(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
+        case DEVICE_HEX:
             float efficiency = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power / (module->current_hashrate / 1000.0);
             OLED_clearLine(0);
             memset(module->oled_buf, 0, 20);
@@ -172,6 +174,7 @@ static void _update_shares(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
+        case DEVICE_HEX:
             OLED_clearLine(1);
             memset(module->oled_buf, 0, 20);
             snprintf(module->oled_buf, 20, "A/R: %u/%u", module->shares_accepted, module->shares_rejected);
@@ -193,6 +196,7 @@ static void _update_best_diff(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
+        case DEVICE_HEX:
             OLED_clearLine(3);
             memset(module->oled_buf, 0, 20);
             snprintf(module->oled_buf, 20, module->FOUND_BLOCK ? "!!! BLOCK FOUND !!!" : "BD: %s", module->best_diff_string);
@@ -208,6 +212,7 @@ static void _clear_display(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
+        case DEVICE_HEX:
             OLED_clearLine(0);
             OLED_clearLine(1);
             OLED_clearLine(2);
@@ -226,6 +231,7 @@ static void _update_system_info(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
+        case DEVICE_HEX:
             if (OLED_status()) {
 
                 memset(module->oled_buf, 0, 20);
@@ -260,6 +266,7 @@ static void _update_esp32_info(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
+        case DEVICE_HEX:
             if (OLED_status()) {
 
                 memset(module->oled_buf, 0, 20);
@@ -293,6 +300,7 @@ static void _init_connection(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
+        case DEVICE_HEX:
             if (OLED_status()) {
                 memset(module->oled_buf, 0, 20);
                 snprintf(module->oled_buf, 20, "Connecting to SSID:");
@@ -311,6 +319,7 @@ static void _update_connection(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
+        case DEVICE_HEX:
             if (OLED_status()) {
                 OLED_clearLine(2);
                 memset(module->oled_buf, 0, 20);
@@ -347,6 +356,7 @@ static void _update_system_performance(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
+        case DEVICE_HEX:
             if (OLED_status()) {
 
                 _update_hashrate(GLOBAL_STATE);
@@ -368,6 +378,7 @@ static void show_ap_information(const char * error, GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
+        case DEVICE_HEX:
             if (OLED_status()) {
                 _clear_display(GLOBAL_STATE);
                 if (error != NULL) {
