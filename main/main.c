@@ -49,7 +49,7 @@ void app_main(void)
         // maybe should return here to now execute anything with a faulty device parameter !
         // this stops crashes/reboots and allows dev testing without an asic
         GLOBAL_STATE.device_model = DEVICE_UNKNOWN;
-        GLOBAL_STATE.asic_count = 1;
+        GLOBAL_STATE.asic_count = -1;
         GLOBAL_STATE.voltage_domain = 1;
     }
     GLOBAL_STATE.board_version = atoi(nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "000"));
