@@ -144,7 +144,7 @@ void BM1397_send_hash_frequency(float frequency)
     }
     else if (frequency > 650)
     {
-        f1 = 475;
+        f1 = 650;
     }
     else
     {
