@@ -1,7 +1,6 @@
 [![](https://dcbadge.vercel.app/api/server/3E8ca2dkcC)](https://discord.gg/3E8ca2dkcC)
 
 # ESP-Miner
-# Forked from v2.1.6
 
 | Supported Targets | ESP32-S3 (BitAxe v2+) |
 | ----------------- | --------------------- |
