@@ -154,7 +154,7 @@ void BM1397_send_hash_frequency(float frequency)
     fb = 2;
     fc1 = 1;
     fc2 = 5; // initial multiplier of 10
-    if (f1 > 650)
+    if (f1 >= 500)
     {
         // halve down to '250-400'
         fb = 1;
