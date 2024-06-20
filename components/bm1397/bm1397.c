@@ -171,7 +171,7 @@ void BM1397_send_hash_frequency(float frequency)
     }
     // else f1 is 250-500
 
-    // f1 * fb * fc1 * fc2 is between 2500 and 5000
+    // f1 * fb * fc1 * fc2 is between 2500 and 6500
     // - so round up to the next 25 (freq_mult)
     basef = FREQ_MULT * ceil(f1 * fb * fc1 * fc2 / FREQ_MULT);
 
@@ -185,6 +185,7 @@ void BM1397_send_hash_frequency(float frequency)
     }
     else
     {
+        freqbuf[2] = 0x40 + (char)(fa >> 8);
         freqbuf[3] = (int)fa;
         freqbuf[4] = (int)fb;
         // fc1, fc2 'should' already be 1..15
