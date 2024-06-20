@@ -185,8 +185,8 @@ void BM1397_send_hash_frequency(float frequency)
     }
     else
     {
-        freqbuf[2] = 0x40 + (unsigned char)(fa >> 8);
-        freqbuf[3] = (unsigned char)(fa & 0xff);
+        freqbuf[2] = 0x40 + (unsigned char)((int)fa >> 8);
+        freqbuf[3] = (unsigned char)((int)fa & 0xff);
         freqbuf[4] = (unsigned char)fb;
         // fc1, fc2 'should' already be 1..15
         freqbuf[5] = (((unsigned char)fc1 & 0x7) << 4) + ((unsigned char)fc2 & 0x7);
