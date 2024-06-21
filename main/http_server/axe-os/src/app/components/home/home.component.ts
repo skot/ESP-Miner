@@ -123,6 +123,7 @@ export class HomeComponent {
         info.current = parseFloat((info.current / 1000).toFixed(1));
         info.coreVoltageActual = parseFloat((info.coreVoltageActual / 1000).toFixed(2));
         info.coreVoltage = parseFloat((info.coreVoltage / 1000).toFixed(2));
+        info.temp = parseFloat(info.temp.toFixed(1));
 
 
 
@@ -132,7 +133,7 @@ export class HomeComponent {
     );
 
     this.expectedHashRate$ = this.info$.pipe(map(info => {
-      return Math.floor(info.frequency * ((info.coreCount * info.asicCount) / 1000))
+      return Math.floor(info.frequency * ((info.smallCoreCount * info.asicCount) / 1000))
     }))
 
     this.quickLink$ = this.info$.pipe(

@@ -20,6 +20,7 @@
 static GlobalState GLOBAL_STATE = {.extranonce_str = NULL, .extranonce_2_len = 0, .abandon_work = 0, .version_mask = 0};
 
 static const char * TAG = "miner";
+static const double NONCE_SPACE = 4294967296.0; //  2^32
 
 void app_main(void)
 {
@@ -47,6 +48,10 @@ void app_main(void)
     } else {
         ESP_LOGE(TAG, "Invalid DEVICE model");
         // maybe should return here to now execute anything with a faulty device parameter !
+        // this stops crashes/reboots and allows dev testing without an asic
+        GLOBAL_STATE.device_model = DEVICE_UNKNOWN;
+        GLOBAL_STATE.asic_count = -1;
+        GLOBAL_STATE.voltage_domain = 1;
     }
     GLOBAL_STATE.board_version = atoi(nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "000"));
     ESP_LOGI(TAG, "Found Device Model: %s", GLOBAL_STATE.device_model_str);
@@ -61,7 +66,7 @@ void app_main(void)
                                         .set_max_baud_fn = BM1366_set_max_baud,
                                         .set_difficulty_mask_fn = BM1366_set_job_difficulty_mask,
                                         .send_work_fn = BM1366_send_work};
-        GLOBAL_STATE.asic_job_frequency_ms = BM1366_FULLSCAN_MS / (double) GLOBAL_STATE.asic_count;
+        GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1366_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
         GLOBAL_STATE.initial_ASIC_difficulty = BM1366_INITIAL_DIFFICULTY;
 
         GLOBAL_STATE.ASIC_functions = ASIC_functions;
@@ -73,9 +78,7 @@ void app_main(void)
                                         .set_max_baud_fn = BM1368_set_max_baud,
                                         .set_difficulty_mask_fn = BM1368_set_job_difficulty_mask,
                                         .send_work_fn = BM1368_send_work};
-
-        uint64_t bm1368_hashrate = GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1368_CORE_COUNT * 1000000;
-        GLOBAL_STATE.asic_job_frequency_ms = (((double) NONCE_SPACE / (double) bm1368_hashrate) * 1000) / (double) GLOBAL_STATE.asic_count;
+        GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1368_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
         GLOBAL_STATE.initial_ASIC_difficulty = BM1368_INITIAL_DIFFICULTY;
 
         GLOBAL_STATE.ASIC_functions = ASIC_functions;
@@ -87,9 +90,7 @@ void app_main(void)
                                         .set_max_baud_fn = BM1397_set_max_baud,
                                         .set_difficulty_mask_fn = BM1397_set_job_difficulty_mask,
                                         .send_work_fn = BM1397_send_work};
-
-        uint64_t bm1397_hashrate = GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1397_CORE_COUNT * 1000000;
-        GLOBAL_STATE.asic_job_frequency_ms = (((double) NONCE_SPACE / (double) bm1397_hashrate) * 1000) / (double) GLOBAL_STATE.asic_count;
+        GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1397_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // no version-rolling so same Nonce Space is splitted between Small Cores
         GLOBAL_STATE.initial_ASIC_difficulty = BM1397_INITIAL_DIFFICULTY;
 
         GLOBAL_STATE.ASIC_functions = ASIC_functions;
@@ -122,7 +123,10 @@ void app_main(void)
     char * hostname  = nvs_config_get_string(NVS_CONFIG_HOSTNAME, HOSTNAME);
 
     // copy the wifi ssid to the global state
-    strncpy(GLOBAL_STATE.SYSTEM_MODULE.ssid, wifi_ssid, 20);
+    strncpy(GLOBAL_STATE.SYSTEM_MODULE.ssid,
+            wifi_ssid,
+            sizeof(GLOBAL_STATE.SYSTEM_MODULE.ssid));
+    GLOBAL_STATE.SYSTEM_MODULE.ssid[sizeof(GLOBAL_STATE.SYSTEM_MODULE.ssid)-1] = 0;
 
     // init and connect to wifi
     wifi_init(wifi_ssid, wifi_pass, hostname);

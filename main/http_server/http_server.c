@@ -1,4 +1,5 @@
 #include "http_server.h"
+#include "recovery_page.h"
 #include "cJSON.h"
 #include "esp_chip_info.h"
 #include "esp_http_server.h"
@@ -117,6 +118,13 @@ static esp_err_t set_cors_headers(httpd_req_t * req)
                    httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type") == ESP_OK
                ? ESP_OK
                : ESP_FAIL;
+}
+
+/* Recovery handler */
+static esp_err_t rest_recovery_handler(httpd_req_t * req)
+{
+    httpd_resp_send(req, recovery_page, HTTPD_RESP_USE_STRLEN);
+    return ESP_OK;
 }
 
 /* Send HTTP response with the contents of the requested file */
@@ -354,13 +362,12 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     char * hostname = nvs_config_get_string(NVS_CONFIG_HOSTNAME, CONFIG_LWIP_LOCAL_HOSTNAME);
     char * stratumURL = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, CONFIG_STRATUM_URL);
     char * stratumUser = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, CONFIG_STRATUM_USER);
-    char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, 'unknown');
+    char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "unknown");
 
         cJSON * root = cJSON_CreateObject();
     cJSON_AddNumberToObject(root, "power", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power);
     cJSON_AddNumberToObject(root, "voltage", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.voltage);
     cJSON_AddNumberToObject(root, "current", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.current);
-    cJSON_AddNumberToObject(root, "fanSpeedRpm", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_speed);
     cJSON_AddNumberToObject(root, "temp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp_avg);
     cJSON_AddNumberToObject(root, "vrTemp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.vr_temp);
     cJSON_AddNumberToObject(root, "hashRate", GLOBAL_STATE->SYSTEM_MODULE.current_hashrate);
@@ -378,19 +385,23 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "sharesRejected", GLOBAL_STATE->SYSTEM_MODULE.shares_rejected);
     cJSON_AddNumberToObject(root, "uptimeSeconds", (esp_timer_get_time() - GLOBAL_STATE->SYSTEM_MODULE.start_time) / 1000000);
     cJSON_AddNumberToObject(root, "asicCount", GLOBAL_STATE->asic_count);
-    uint16_t core_count = 0;
+    uint16_t small_core_count = 0;
     switch (GLOBAL_STATE->asic_model){
         case ASIC_BM1397:
-            core_count = BM1397_CORE_COUNT;
+            small_core_count = BM1397_SMALL_CORE_COUNT;
             break;
         case ASIC_BM1366:
-            core_count = BM1366_CORE_COUNT;
+            small_core_count = BM1366_SMALL_CORE_COUNT;
             break;
         case ASIC_BM1368:
-            core_count = BM1368_CORE_COUNT;
+            small_core_count = BM1368_SMALL_CORE_COUNT;
+            break;
+        case ASIC_UNKNOWN:
+        default:
+            small_core_count = -1;
             break;
     }
-    cJSON_AddNumberToObject(root, "coreCount", core_count);
+    cJSON_AddNumberToObject(root, "smallCoreCount", small_core_count);
     cJSON_AddStringToObject(root, "ASICModel", GLOBAL_STATE->asic_model_str);
     cJSON_AddStringToObject(root, "stratumURL", stratumURL);
     cJSON_AddNumberToObject(root, "stratumPort", nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, CONFIG_STRATUM_PORT));
@@ -405,7 +416,9 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
     cJSON_AddNumberToObject(root, "invertfanpolarity", nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
     cJSON_AddNumberToObject(root, "autofanspeed", nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1));
-    cJSON_AddNumberToObject(root, "fanspeed", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_percentage);
+
+    cJSON_AddNumberToObject(root, "fanspeed", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc);
+    cJSON_AddNumberToObject(root, "fanrpm", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_rpm);
 
     free(ssid);
     free(hostname);
@@ -429,6 +442,12 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
         esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "www");
     if (www_partition == NULL) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "WWW partition not found");
+        return ESP_FAIL;
+    }
+
+    // Don't attempt to write more than what can be stored in the partition
+    if (remaining > www_partition->size) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "File provided is too large for device");
         return ESP_FAIL;
     }
 
@@ -591,7 +610,12 @@ esp_err_t start_rest_server(void * pvParameters)
     GLOBAL_STATE = (GlobalState *) pvParameters;
     const char * base_path = "";
 
-    ESP_ERROR_CHECK(init_fs());
+    bool enter_recovery = false;
+    if (init_fs() != ESP_OK) {
+        // Unable to initialize the web app filesystem.
+        // Enter recovery mode
+        enter_recovery = true;
+    }
 
     REST_CHECK(base_path, "wrong base path", err);
     rest_server_context_t * rest_context = calloc(1, sizeof(rest_server_context_t));
@@ -604,6 +628,10 @@ esp_err_t start_rest_server(void * pvParameters)
 
     ESP_LOGI(TAG, "Starting HTTP Server");
     REST_CHECK(httpd_start(&server, &config) == ESP_OK, "Start server failed", err_start);
+
+    httpd_uri_t recovery_explicit_get_uri = {
+        .uri = "/recovery", .method = HTTP_GET, .handler = rest_recovery_handler, .user_ctx = rest_context};
+    httpd_register_uri_handler(server, &recovery_explicit_get_uri);
 
     /* URI handler for fetching system info */
     httpd_uri_t system_info_get_uri = {
@@ -652,9 +680,17 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_uri_t ws = {.uri = "/api/ws", .method = HTTP_GET, .handler = echo_handler, .user_ctx = NULL, .is_websocket = true};
     httpd_register_uri_handler(server, &ws);
 
-    /* URI handler for getting web server files */
-    httpd_uri_t common_get_uri = {.uri = "/*", .method = HTTP_GET, .handler = rest_common_get_handler, .user_ctx = rest_context};
-    httpd_register_uri_handler(server, &common_get_uri);
+    if (enter_recovery) {
+        /* Make default route serve Recovery */
+        httpd_uri_t recovery_implicit_get_uri = {
+            .uri = "/*", .method = HTTP_GET, .handler = rest_recovery_handler, .user_ctx = rest_context};
+        httpd_register_uri_handler(server, &recovery_implicit_get_uri);
+
+    } else {
+        /* URI handler for getting web server files */
+        httpd_uri_t common_get_uri = {.uri = "/*", .method = HTTP_GET, .handler = rest_common_get_handler, .user_ctx = rest_context};
+        httpd_register_uri_handler(server, &common_get_uri);
+    }
 
     httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
 

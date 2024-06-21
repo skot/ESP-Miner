@@ -168,7 +168,7 @@ void stratum_task(void * pvParameters)
                 free(line);
 
                 if (stratum_api_v1_message.method == MINING_NOTIFY) {
-                    SYSTEM_notify_new_ntime(&GLOBAL_STATE->SYSTEM_MODULE, stratum_api_v1_message.mining_notification->ntime);
+                    SYSTEM_notify_new_ntime(GLOBAL_STATE, stratum_api_v1_message.mining_notification->ntime);
                     if (stratum_api_v1_message.should_abandon_work &&
                         (GLOBAL_STATE->stratum_queue.count > 0 || GLOBAL_STATE->ASIC_jobs_queue.count > 0)) {
                         ESP_LOGI(TAG, "abandoning work");
@@ -196,7 +196,7 @@ void stratum_task(void * pvParameters)
                         ESP_LOGI(TAG, "Set stratum difficulty: %ld", SYSTEM_TASK_MODULE.stratum_difficulty);
                     }
                 } else if (stratum_api_v1_message.method == MINING_SET_VERSION_MASK ||
-                        stratum_api_v1_message.method == .0) {
+                        stratum_api_v1_message.method == STRATUM_RESULT_VERSION_MASK) {
                     // 1fffe000
                     ESP_LOGI(TAG, "Set version mask: %08lx", stratum_api_v1_message.version_mask);
                     GLOBAL_STATE->version_mask = stratum_api_v1_message.version_mask;
@@ -206,10 +206,10 @@ void stratum_task(void * pvParameters)
                 } else if (stratum_api_v1_message.method == STRATUM_RESULT) {
                     if (stratum_api_v1_message.response_success) {
                         ESP_LOGI(TAG, "message result accepted");
-                        SYSTEM_notify_accepted_share(&GLOBAL_STATE->SYSTEM_MODULE);
+                        SYSTEM_notify_accepted_share(GLOBAL_STATE);
                     } else {
                         ESP_LOGE(TAG, "message result rejected");
-                        SYSTEM_notify_rejected_share(&GLOBAL_STATE->SYSTEM_MODULE);
+                        SYSTEM_notify_rejected_share(GLOBAL_STATE);
                     }
                 } else if (stratum_api_v1_message.method == STRATUM_RESULT_SETUP) {
                     if (stratum_api_v1_message.response_success) {
