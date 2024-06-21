@@ -10,4 +10,7 @@ int16_t SERIAL_rx(uint8_t *, uint16_t, uint16_t);
 void SERIAL_clear_buffer(void);
 void SERIAL_set_baud(int baud);
 
+// recieve packet with 0xaa 0x55 header
+void *SERIAL_rx_aa55(uint8_t *data,const int length);
+
 #endif /* SERIAL_H_ */
