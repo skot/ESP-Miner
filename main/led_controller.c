@@ -4,12 +4,12 @@
 #include "driver/gpio.h"
 
 // LEDS
-#define LEDX_R GPIO_NUM_35
-#define LEDX_G GPIO_NUM_36
-#define LEDX_B GPIO_NUM_37
-#define LEDZ_R GPIO_NUM_5
-#define LEDZ_G GPIO_NUM_6
-#define LEDZ_B GPIO_NUM_7
+#define LEDX_R      35
+#define LEDX_G      36
+#define LEDX_B      37
+#define LEDZ_R      5
+#define LEDZ_G      6
+#define LEDZ_B      7
 
 void initLEDs(void)
 {
