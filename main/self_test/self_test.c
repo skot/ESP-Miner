@@ -96,7 +96,7 @@ void self_test(void * pvParameters)
     }
 
     // Init I2C
-    ESP_ERROR_CHECK(i2c_master_init());
+    ESP_ERROR_CHECK(i2c_master_init(47, 48));
     ESP_LOGI(TAG, "I2C initialized successfully");
 
     VCORE_init(GLOBAL_STATE);
