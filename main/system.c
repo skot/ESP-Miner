@@ -81,7 +81,7 @@ static void _init_system(GlobalState * GLOBAL_STATE)
     //  led_set();
 
     // Init I2C
-    ESP_ERROR_CHECK(i2c_master_init());
+    ESP_ERROR_CHECK(i2c_master_init(47, 48));
     ESP_LOGI(TAG, "I2C initialized successfully");
 
     // Initialize the core voltage regulator
