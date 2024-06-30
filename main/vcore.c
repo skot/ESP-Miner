@@ -16,8 +16,6 @@
 #define BITAXE_RA 4750.0       // R14
 #define BITAXE_RB 3320.0       // R15
 #define BITAXE_VNOM 1.451   // this is with the current DAC set to 0. Should be pretty close to (VFB*(RA+RB))/RB
-#define BITAXE_VMAX 2.39
-#define BITAXE_VMIN 0.046
 
 static const char *TAG = "vcore.c";
 
@@ -38,15 +36,13 @@ static uint8_t ds4432_tps40305_bitaxe_voltage_to_reg(float vout)
     float change;
     uint8_t reg;
 
-    // make sure the requested voltage is in within range of BITAXE_VMIN and BITAXE_VMAX
-    if (vout > BITAXE_VMAX || vout < BITAXE_VMIN)
-    {
-        return 0;
-    }
-
     // this is the transfer function. comes from the DS4432U+ datasheet
     change = fabs((((TPS40305_VFB / BITAXE_RB) - ((vout - TPS40305_VFB) / BITAXE_RA)) / BITAXE_IFS) * 127);
     reg = (uint8_t)ceil(change);
+
+     // make sure the requested voltage is in within range
+    if (reg > 127)
+        return 0;
 
     // Set the MSB high if the requested voltage is BELOW nominal
     if (vout < BITAXE_VNOM)
