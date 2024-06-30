@@ -49,19 +49,20 @@ static uint8_t ds4432_voltage_to_reg(uint32_t vout_mv, uint32_t vnom_mv,
     return reg;
 }
 
-bool VCORE_set_voltage(float core_voltage, GlobalState * global_state)
+bool VCORE_set_voltage(uint16_t vcore_mv, GlobalState * global_state)
 {
+    uint32_t sum_vcore_mv = vcore_mv * global_state->voltage_domain;
+
     switch (global_state->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
             if (global_state->board_version == 402) {
-                ESP_LOGI(TAG, "Set ASIC voltage = %.3fV", core_voltage);
-                TPS546_set_vout(core_voltage * (float)global_state->voltage_domain);
+                ESP_LOGI(TAG, "Set ASIC voltage = %umV", vcore_mv);
+                TPS546_set_vout((float)sum_vcore_mv / 1000.0);
             } else {
-                uint16_t vcore_mv = core_voltage * 1000 * global_state->voltage_domain;
                 uint8_t reg_setting = ds4432_voltage_to_reg(
-                    vcore_mv, BITAXE_VNOM, BITAXE_RTOP, BITAXE_RBOT, BITAXE_IFS, 600);
+                    sum_vcore_mv, BITAXE_VNOM, BITAXE_RTOP, BITAXE_RBOT, BITAXE_IFS, 600);
                 ESP_LOGI(TAG, "Set ASIC voltage = %umV [0x%02X]", vcore_mv, reg_setting);
                 DS4432U_set_current_code(0, reg_setting); /// eek!
             }
