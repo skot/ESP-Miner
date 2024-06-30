@@ -7,15 +7,10 @@
 #include "DS4432U.h"
 #include "TPS546.h"
 
-#define TPS40305_VFB 0.6
-
-// DS4432U Transfer function constants for Bitaxe board
-// #define BITAXE_RFS 80000.0     // R16
-// #define BITAXE_IFS ((DS4432_VRFS * 127.0) / (BITAXE_RFS * 16))
-#define BITAXE_IFS 0.000098921 // (Vrfs / Rfs) x (127/16)  -> Vrfs = 0.997, Rfs = 80000
-#define BITAXE_RA 4750.0       // R14
-#define BITAXE_RB 3320.0       // R15
-#define BITAXE_VNOM 1.451   // this is with the current DAC set to 0. Should be pretty close to (VFB*(RA+RB))/RB
+#define BITAXE_IFS     98921 // nA
+#define BITAXE_RTOP    4750  // Ohm
+#define BITAXE_RBOT    3320  // Ohm
+#define BITAXE_VNOM    1451  // mV
 
 static const char *TAG = "vcore.c";
 
@@ -27,28 +22,29 @@ void VCORE_init(GlobalState * global_state) {
     ADC_ch_init(ADC_CHANNEL_1);
 }
 
-/**
- * @brief ds4432_tps40305_bitaxe_voltage_to_reg takes a voltage and returns a register setting for the DS4432U to get that voltage on the TPS40305
- * careful with this one!!
- */
-static uint8_t ds4432_tps40305_bitaxe_voltage_to_reg(float vout)
+static uint8_t ds4432_voltage_to_reg(uint32_t vout_mv, uint32_t vnom_mv,
+                                     uint32_t ra_ohm, uint32_t rb_ohm,
+                                     int32_t ifs_na, uint32_t vfb_mv)
 {
-    float change;
     uint8_t reg;
+    // Calculate current flowing though bottom resistor (Rb) in nA
+    int32_t irb_na = (vfb_mv * 1000 * 1000) / rb_ohm;
+    // Calculate current required through top resistor (Ra) to achieve vout in nA
+    int32_t ira_na = ((vout_mv - vfb_mv) * 1000 * 1000) / ra_ohm;
+    // Calculate the delta current the DAC needs to sink/source in nA
+    uint32_t dac_na = abs(irb_na - ira_na);
+    // Calculate required DAC steps to get dac_na (rounded)
+    uint32_t dac_steps = ((dac_na * 127) + (ifs_na / 2)) / ifs_na;
 
-    // this is the transfer function. comes from the DS4432U+ datasheet
-    change = fabs((((TPS40305_VFB / BITAXE_RB) - ((vout - TPS40305_VFB) / BITAXE_RA)) / BITAXE_IFS) * 127);
-    reg = (uint8_t)ceil(change);
-
-     // make sure the requested voltage is in within range
-    if (reg > 127)
+    // make sure the requested voltage is in within range
+    if (dac_steps > 127)
         return 0;
 
-    // Set the MSB high if the requested voltage is BELOW nominal
-    if (vout < BITAXE_VNOM)
-    {
+    reg = dac_steps;
+
+    // dac_steps is absolute. For sink S = 0; for source S = 1.
+    if (vout_mv < vnom_mv)
         reg |= 0x80;
-    }
 
     return reg;
 }
@@ -63,8 +59,10 @@ bool VCORE_set_voltage(float core_voltage, GlobalState * global_state)
                 ESP_LOGI(TAG, "Set ASIC voltage = %.3fV", core_voltage);
                 TPS546_set_vout(core_voltage * (float)global_state->voltage_domain);
             } else {
-                uint8_t reg_setting = ds4432_tps40305_bitaxe_voltage_to_reg(core_voltage * (float)global_state->voltage_domain);
-                ESP_LOGI(TAG, "Set ASIC voltage = %.3fV [0x%02X]", core_voltage, reg_setting);
+                uint16_t vcore_mv = core_voltage * 1000 * global_state->voltage_domain;
+                uint8_t reg_setting = ds4432_voltage_to_reg(
+                    vcore_mv, BITAXE_VNOM, BITAXE_RTOP, BITAXE_RBOT, BITAXE_IFS, 600);
+                ESP_LOGI(TAG, "Set ASIC voltage = %umV [0x%02X]", vcore_mv, reg_setting);
                 DS4432U_set_current_code(0, reg_setting); /// eek!
             }
             break;
