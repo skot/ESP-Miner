@@ -13,13 +13,11 @@
 #include "serial.h"
 #include "utils.h"
 
-#define ECHO_TEST_TXD (17)
-#define ECHO_TEST_RXD (18)
 #define BUF_SIZE (1024)
 
 static const char *TAG = "serial";
 
-void SERIAL_init(void)
+void SERIAL_init(uint8_t pin_txd, uint8_t pin_rxd)
 {
     ESP_LOGI(TAG, "Initializing serial");
     // Configure UART1 parameters
@@ -34,7 +32,7 @@ void SERIAL_init(void)
     // Configure UART1 parameters
     uart_param_config(UART_NUM_1, &uart_config);
     // Set UART1 pins(TX: IO17, RX: I018)
-    uart_set_pin(UART_NUM_1, ECHO_TEST_TXD, ECHO_TEST_RXD, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    uart_set_pin(UART_NUM_1, pin_txd, pin_rxd, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
 
     // Install UART driver (we don't need an event queue here)
     // tx buffer 0 so the tx time doesn't overlap with the job wait time
