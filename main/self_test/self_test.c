@@ -145,7 +145,7 @@ void self_test(void * pvParameters)
     }
 
 
-    SERIAL_init();
+    SERIAL_init(GPIO_NUM_17, GPIO_NUM_18);
     uint8_t chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE->asic_count);
     ESP_LOGI(TAG, "%u chips detected, %u expected", chips_detected, GLOBAL_STATE->asic_count);
 
