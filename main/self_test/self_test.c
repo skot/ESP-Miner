@@ -96,11 +96,11 @@ void self_test(void * pvParameters)
     }
 
     // Init I2C
-    ESP_ERROR_CHECK(i2c_master_init());
+    ESP_ERROR_CHECK(i2c_master_init(47, 48));
     ESP_LOGI(TAG, "I2C initialized successfully");
 
     VCORE_init(GLOBAL_STATE);
-    VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
+    VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE), GLOBAL_STATE);
 
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
@@ -145,7 +145,7 @@ void self_test(void * pvParameters)
     }
 
 
-    SERIAL_init();
+    SERIAL_init(GPIO_NUM_17, GPIO_NUM_18);
     uint8_t chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE->asic_count);
     ESP_LOGI(TAG, "%u chips detected, %u expected", chips_detected, GLOBAL_STATE->asic_count);
 

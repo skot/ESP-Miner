@@ -1,16 +1,7 @@
-#ifndef COMMON_H_
-#define COMMON_H_
 
-#include <stdint.h>
+#include "common.h"
 
-typedef struct __attribute__((__packed__))
-{
-    uint8_t job_id;
-    uint32_t nonce;
-    uint32_t rolled_version;
-} task_result;
-
-static unsigned char _reverse_bits(unsigned char num)
+unsigned char _reverse_bits(unsigned char num)
 {
     unsigned char reversed = 0;
     int i;
@@ -24,7 +15,7 @@ static unsigned char _reverse_bits(unsigned char num)
     return reversed;
 }
 
-static int _largest_power_of_two(int num)
+int _largest_power_of_two(int num)
 {
     int power = 0;
 
@@ -35,5 +26,3 @@ static int _largest_power_of_two(int num)
 
     return 1 << power;
 }
-
-#endif

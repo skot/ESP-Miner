@@ -46,3 +46,30 @@ bool DS4432U_test(void)
     ESP_LOGI(TAG, "DS4432U+ OUT0 = 0x%02X", data);
     return register_result == ESP_OK;
 }
+
+uint8_t DS4432U_voltage_to_reg(uint32_t vout_mv, uint32_t vnom_mv,
+                               uint32_t ra_ohm, uint32_t rb_ohm,
+                               int32_t ifs_na, uint32_t vfb_mv)
+{
+    uint8_t reg;
+    // Calculate current flowing though bottom resistor (Rb) in nA
+    int32_t irb_na = (vfb_mv * 1000 * 1000) / rb_ohm;
+    // Calculate current required through top resistor (Ra) to achieve vout in nA
+    int32_t ira_na = ((vout_mv - vfb_mv) * 1000 * 1000) / ra_ohm;
+    // Calculate the delta current the DAC needs to sink/source in nA
+    uint32_t dac_na = abs(irb_na - ira_na);
+    // Calculate required DAC steps to get dac_na (rounded)
+    uint32_t dac_steps = ((dac_na * 127) + (ifs_na / 2)) / ifs_na;
+
+    // make sure the requested voltage is in within range
+    if (dac_steps > 127)
+        return 0;
+
+    reg = dac_steps;
+
+    // dac_steps is absolute. For sink S = 0; for source S = 1.
+    if (vout_mv < vnom_mv)
+        reg |= 0x80;
+
+    return reg;
+}

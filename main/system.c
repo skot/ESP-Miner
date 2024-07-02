@@ -81,12 +81,12 @@ static void _init_system(GlobalState * GLOBAL_STATE)
     //  led_set();
 
     // Init I2C
-    ESP_ERROR_CHECK(i2c_master_init());
+    ESP_ERROR_CHECK(i2c_master_init(47, 48));
     ESP_LOGI(TAG, "I2C initialized successfully");
 
     // Initialize the core voltage regulator
     VCORE_init(GLOBAL_STATE);
-    VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
+    VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE), GLOBAL_STATE);
 
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
@@ -130,7 +130,7 @@ static void _update_hashrate(GlobalState * GLOBAL_STATE)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
-            float efficiency = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power / (module->current_hashrate / 1000.0);
+            float efficiency = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power_mw / module->current_hashrate;
             OLED_clearLine(0);
             memset(module->oled_buf, 0, 20);
             snprintf(module->oled_buf, 20, "Gh%s: %.1f J/Th: %.1f", module->historical_hashrate_init < HISTORY_LENGTH ? "*" : "",
@@ -217,11 +217,12 @@ static void _update_system_info(GlobalState * GLOBAL_STATE)
                 OLED_writeString(0, 1, module->oled_buf);
 
                 memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, " Pwr: %.3f W", power_management->power);
+                snprintf(module->oled_buf, 20, " Pwr: %d mW", power_management->power_mw);
                 OLED_writeString(0, 2, module->oled_buf);
 
                 memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, " %i mV: %i mA", (int) power_management->voltage, (int) power_management->current);
+                snprintf(module->oled_buf, 20, " %i mV: %i mA",
+                    power_management->voltage_mv, power_management->current_ma);
                 OLED_writeString(0, 3, module->oled_buf);
             }
             break;
@@ -302,7 +303,7 @@ static void _update_connection(GlobalState * GLOBAL_STATE)
                 OLED_writeString(0, 2, module->oled_buf);
 
                 char ap_ssid[13];
-                generate_ssid(ap_ssid);
+                generate_ssid(ap_ssid, sizeof(ap_ssid));
                 memset(module->oled_buf, 0, 20);
                 snprintf(module->oled_buf, 20, ap_ssid);
                 OLED_writeString(0, 3, module->oled_buf);
@@ -355,7 +356,7 @@ static void show_ap_information(const char * error, GlobalState * GLOBAL_STATE)
                 }
                 OLED_writeString(0, 1, "Configuration SSID:");
                 char ap_ssid[13];
-                generate_ssid(ap_ssid);
+                generate_ssid(ap_ssid, sizeof(ap_ssid));
                 OLED_writeString(0, 2, ap_ssid);
             }
             break;

@@ -393,7 +393,7 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
 {
     ESP_LOGI(TAG, "Initializing BM1368");
 
-    memset(asic_response_buffer, 0, 1024);
+    memset(asic_response_buffer, 0, sizeof(asic_response_buffer));
 
     esp_rom_gpio_pad_select_gpio(BM1368_RST_PIN);
     gpio_set_direction(BM1368_RST_PIN, GPIO_MODE_OUTPUT);
