@@ -39,11 +39,8 @@ void ASIC_result_task(void *pvParameters)
             asic_result->nonce,
             asic_result->rolled_version);
 
-        //log the nonce
-        ESP_LOGI(TAG, "Nonce %" PRIX32 " diff %.2f of %ld.", asic_result->nonce, nonce_diff, GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff);
-
-        //log the version
-        ESP_LOGI(TAG, "Version %" PRIX32 ".", asic_result->rolled_version);
+        //log the ASIC response
+        ESP_LOGI(TAG, "Ver %" PRIX32 ", Nonce %" PRIX32 " diff %.1f of %ld.", asic_result->rolled_version, asic_result->nonce, nonce_diff, GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff);
 
         if (nonce_diff > GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff)
         {
