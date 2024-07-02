@@ -25,7 +25,8 @@ void VCORE_init(GlobalState * global_state) {
     if (global_state->board_version == 402) {
         TPS546_init();
     }
-    ADC_init();
+    ADC_init(ADC_ATTEN_DB_11);
+    ADC_ch_init(ADC_CHANNEL_1);
 }
 
 /**
@@ -79,5 +80,5 @@ bool VCORE_set_voltage(float core_voltage, GlobalState * global_state)
 }
 
 uint16_t VCORE_get_voltage_mv(GlobalState * global_state) {
-    return ADC_get_vcore() / global_state->voltage_domain;
+    return ADC_ch_get(ADC_CHANNEL_1) / global_state->voltage_domain;
 }
