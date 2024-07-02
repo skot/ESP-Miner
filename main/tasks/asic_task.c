@@ -21,13 +21,14 @@ void ASIC_task(void *pvParameters)
     GLOBAL_STATE->valid_jobs = malloc(sizeof(uint8_t) * 128);
     for (int i = 0; i < 128; i++)
     {
-
         GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[i] = NULL;
         GLOBAL_STATE->valid_jobs[i] = 0;
     }
 
+    ESP_LOGI(TAG, "ASIC Job Interval: %.2f ms", GLOBAL_STATE->asic_job_frequency_ms);
     SYSTEM_notify_mining_started(GLOBAL_STATE);
     ESP_LOGI(TAG, "ASIC Ready!");
+
     while (1)
     {
 
@@ -43,6 +44,7 @@ void ASIC_task(void *pvParameters)
         (*GLOBAL_STATE->ASIC_functions.send_work_fn)(GLOBAL_STATE, next_bm_job); // send the job to the ASIC
 
         // Time to execute the above code is ~0.3ms
+        // Delay for ASIC(s) to finish the job
         vTaskDelay((GLOBAL_STATE->asic_job_frequency_ms - 0.3) / portTICK_PERIOD_MS);
     }
 }
