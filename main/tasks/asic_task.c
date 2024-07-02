@@ -14,8 +14,10 @@ static const char *TAG = "ASIC_task";
 
 void ASIC_task(void *pvParameters)
 {
-
     GlobalState *GLOBAL_STATE = (GlobalState *)pvParameters;
+
+    //initialize the semaphore
+    GLOBAL_STATE->ASIC_TASK_MODULE.semaphore = xSemaphoreCreateBinary();
 
     GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs = malloc(sizeof(bm_job *) * 128);
     GLOBAL_STATE->valid_jobs = malloc(sizeof(uint8_t) * 128);
@@ -45,6 +47,7 @@ void ASIC_task(void *pvParameters)
 
         // Time to execute the above code is ~0.3ms
         // Delay for ASIC(s) to finish the job
-        vTaskDelay((GLOBAL_STATE->asic_job_frequency_ms - 0.3) / portTICK_PERIOD_MS);
+        //vTaskDelay((GLOBAL_STATE->asic_job_frequency_ms - 0.3) / portTICK_PERIOD_MS);
+        xSemaphoreTake(GLOBAL_STATE->ASIC_TASK_MODULE.semaphore, ((GLOBAL_STATE->asic_job_frequency_ms - 0.3) / portTICK_PERIOD_MS));
     }
 }
