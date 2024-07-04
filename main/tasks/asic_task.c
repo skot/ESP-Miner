@@ -48,6 +48,6 @@ void ASIC_task(void *pvParameters)
         // Time to execute the above code is ~0.3ms
         // Delay for ASIC(s) to finish the job
         //vTaskDelay((GLOBAL_STATE->asic_job_frequency_ms - 0.3) / portTICK_PERIOD_MS);
-        xSemaphoreTake(GLOBAL_STATE->ASIC_TASK_MODULE.semaphore, ((GLOBAL_STATE->asic_job_frequency_ms - 0.3) / portTICK_PERIOD_MS));
+        xSemaphoreTake(GLOBAL_STATE->ASIC_TASK_MODULE.semaphore, (GLOBAL_STATE->asic_job_frequency_ms / portTICK_PERIOD_MS));
     }
 }

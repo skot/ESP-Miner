@@ -96,7 +96,7 @@ static void _send_BM1366(uint8_t header, uint8_t * data, uint8_t data_len, bool 
     }
 
     // send serial data
-    SERIAL_send(buf, total_length, debug);
+    SERIAL_send(buf, total_length, BM1366_DEBUG_CHIP_SERIAL);
 
     free(buf);
 }
@@ -105,7 +105,7 @@ static void _send_simple(uint8_t * data, uint8_t total_length)
 {
     unsigned char * buf = malloc(total_length);
     memcpy(buf, data, total_length);
-    SERIAL_send(buf, total_length, false);
+    SERIAL_send(buf, total_length, BM1366_DEBUG_CHIP_SERIAL);
 
     free(buf);
 }
@@ -517,8 +517,8 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
 
     // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x11, 0x5A}; //S19k Pro Default
     // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x14, 0x46}; //S19XP-Luxos Default
-    // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x15, 0x1C}; //S19XP-Stock Default
-    unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x0F, 0x00, 0x00}; //supposedly the "full" 32bit nonce range
+    unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x15, 0x1C}; //S19XP-Stock Default
+    // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x0F, 0x00, 0x00}; //supposedly the "full" 32bit nonce range
     _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_WRITE), set_10_hash_counting, 6, false);
 
     unsigned char init795[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0xA4, 0x90, 0x00, 0xFF, 0xFF, 0x1C};
@@ -578,14 +578,15 @@ int BM1366_set_default_baud(void)
 int BM1366_set_max_baud(void)
 {
 
-    /// return 115749;
 
-    // divider of 0 for 3,125,000
-    ESP_LOGI(TAG, "Setting max baud of 1000000 ");
-
-    unsigned char init8[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x28, 0x11, 0x30, 0x02, 0x00, 0x03};
-    _send_simple(init8, 11);
     return 1000000;
+
+    // // divider of 0 for 3,125,000
+    // ESP_LOGI(TAG, "Setting max baud of 1000000 ");
+
+    // unsigned char init8[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x28, 0x11, 0x30, 0x02, 0x00, 0x03};
+    // _send_simple(init8, 11);
+    // return 1000000;
 }
 
 void BM1366_set_job_difficulty_mask(int difficulty)
@@ -645,7 +646,9 @@ void BM1366_send_work(void * pvParameters, bm_job * next_bm_job)
 
     pthread_mutex_lock(&GLOBAL_STATE->valid_jobs_lock);
     GLOBAL_STATE->valid_jobs[job.job_id] = 1;
-    ESP_LOGI(TAG, "Send Job: %02X", job.job_id);
+    
+    //debug sent jobs - this can get crazy if the interval is short
+    //ESP_LOGI(TAG, "Send Job: %02X", job.job_id);
     pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
 
     _send_BM1366((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), &job, sizeof(BM1366_job), false);
