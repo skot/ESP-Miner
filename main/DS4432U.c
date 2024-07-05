@@ -49,13 +49,13 @@ bool DS4432U_test(void)
 
 uint8_t DS4432U_voltage_to_reg(uint32_t vout_mv, uint32_t vnom_mv,
                                uint32_t ra_ohm, uint32_t rb_ohm,
-                               int32_t ifs_na, uint32_t vfb_mv)
+                               uint32_t ifs_na, uint32_t vfb_mv)
 {
     uint8_t reg;
     // Calculate current flowing though bottom resistor (Rb) in nA
-    int32_t irb_na = (vfb_mv * 1000 * 1000) / rb_ohm;
+    int32_t irb_na = ((uint64_t)vfb_mv * 1000 * 1000) / rb_ohm;
     // Calculate current required through top resistor (Ra) to achieve vout in nA
-    int32_t ira_na = ((vout_mv - vfb_mv) * 1000 * 1000) / ra_ohm;
+    int32_t ira_na = ((uint64_t)(vout_mv - vfb_mv) * 1000 * 1000) / ra_ohm;
     // Calculate the delta current the DAC needs to sink/source in nA
     uint32_t dac_na = abs(irb_na - ira_na);
     // Calculate required DAC steps to get dac_na (rounded)
