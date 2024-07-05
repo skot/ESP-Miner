@@ -7,6 +7,7 @@
 
 #define NVS_CONFIG_WIFI_SSID "wifissid"
 #define NVS_CONFIG_WIFI_PASS "wifipass"
+#define NVS_CONFIG_WIFI_AP_SSID "wifiapssid"
 #define NVS_CONFIG_HOSTNAME "hostname"
 #define NVS_CONFIG_STRATUM_URL "stratumurl"
 #define NVS_CONFIG_STRATUM_PORT "stratumport"

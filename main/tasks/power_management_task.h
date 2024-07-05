@@ -8,11 +8,11 @@ typedef struct
     float chip_temp[6];
     float chip_temp_avg;
     float vr_temp;
-    float voltage;
+    int voltage_mv;
     float frequency_multiplier;
     float frequency_value;
-    float power;
-    float current;
+    int power_mw;
+    int current_ma;
     bool HAS_POWER_EN;
     bool HAS_PLUG_SENSE;
 } PowerManagementModule;

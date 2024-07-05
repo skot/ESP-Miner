@@ -7,6 +7,21 @@
 
 static uint8_t uart_initialized = 0;
 
+static void debug_rx(void)
+{
+    int ret;
+    uint8_t buf[CHUNK_SIZE];
+
+    ret = SERIAL_rx(buf, 100, 20);
+    if (ret < 0)
+    {
+        fprintf(stderr, "unable to read data\n");
+        return;
+    }
+
+    memset(buf, 0, 1024);
+}
+
 TEST_CASE("Check known working midstate + job command", "[bm1397]")
 {
     if (!uart_initialized)
@@ -17,7 +32,7 @@ TEST_CASE("Check known working midstate + job command", "[bm1397]")
         BM1397_init();
 
         // read back response
-        SERIAL_debug_rx();
+        debug_rx();
     }
 
     uint8_t work1[146] = {
