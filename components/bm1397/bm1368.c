@@ -523,6 +523,14 @@ static uint16_t reverse_uint16(uint16_t num)
     return (num >> 8) | (num << 8);
 }
 
+static uint32_t reverse_uint32(uint32_t val)
+{
+    return ((val >> 24) & 0xff) |      // Move byte 3 to byte 0
+           ((val << 8) & 0xff0000) |   // Move byte 1 to byte 2
+           ((val >> 8) & 0xff00) |     // Move byte 2 to byte 1
+           ((val << 24) & 0xff000000); // Move byte 0 to byte 3
+}
+
 task_result * BM1368_proccess_work(void * pvParameters)
 {
 
@@ -540,10 +548,10 @@ task_result * BM1368_proccess_work(void * pvParameters)
     // ESP_LOGI(TAG, "Job ID: %02X, Core: %01X", job_id, asic_result->job_id & 0x07);
 
     uint8_t job_id = (asic_result->job_id & 0xf0) >> 1;
-    uint8_t core_id = (asic_result->nonce >> 25) & 0x7f;
+    uint8_t core_id = (uint8_t)((reverse_uint32(asic_result->nonce) >> 25) & 0x7f); // BM1368 has 80 cores, so it should be coded on 7 bits
     uint8_t small_core_id = asic_result->job_id & 0x0f; // BM1368 has 16 small cores, so it should be coded on 4 bits
     uint32_t version_bits = (reverse_uint16(asic_result->version) << 13); // shift the 16 bit value left 13
-    ESP_LOGI(TAG, "Job ID: %02X, Core: %d, SmallCore: %d, VersionBits: %" PRIX32 "", job_id, core_id, small_core_id, version_bits);
+    ESP_LOGI(TAG, "Job ID: %02X, Core: %d, SmallCore: %d, VersionBits: %08" PRIX32 , job_id, core_id, small_core_id, version_bits);
 
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
