@@ -661,7 +661,7 @@ task_result * BM1366_proccess_work(void * pvParameters)
     uint8_t core_id = (asic_result->nonce >> 25) & 0x7f;
     uint8_t small_core_id = asic_result->job_id & 0x07; // BM1366 has 8 small cores, so it should be coded on 3 bits
     uint32_t version_bits = (reverse_uint16(asic_result->version) << 13); // shift the 16 bit value left 13
-    ESP_LOGI(TAG, "Job ID: %02X, Core: %d, SmallCore: %d, VersionBits: %08x", job_id, core_id, small_core_id, version_bits);
+    ESP_LOGI(TAG, "Job ID: %02X, Core: %d, SmallCore: %d, VersionBits: %" PRIX32 "", job_id, core_id, small_core_id, version_bits);
 
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
