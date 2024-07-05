@@ -540,7 +540,7 @@ task_result * BM1368_proccess_work(void * pvParameters)
     // ESP_LOGI(TAG, "Job ID: %02X, Core: %01X", job_id, asic_result->job_id & 0x07);
 
     uint8_t job_id = (asic_result->job_id & 0xf0) >> 1;
-    ESP_LOGI(TAG, "Job ID: %02X, Core: %01X", job_id, asic_result->job_id & 0x07);
+    ESP_LOGI(TAG, "Job ID: %02X, Core: %lu, SmallCore: %d", job_id, (asic_result->nonce >> 25) & 0x7f, asic_result->job_id & 0x0f); // BM1368 has 16 small cores, so it should be coded on 4 bits
 
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 

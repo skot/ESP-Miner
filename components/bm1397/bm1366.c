@@ -691,7 +691,7 @@ task_result * BM1366_proccess_work(void * pvParameters)
     }
 
     uint8_t job_id = asic_result->job_id & 0xf8;
-    ESP_LOGI(TAG, "Job ID: %02X, Core: %01X", job_id, asic_result->job_id & 0x07);
+    ESP_LOGI(TAG, "Job ID: %02X, Core: %lu, SmallCore: %d", job_id, (asic_result->nonce >> 25) & 0x7f, asic_result->job_id & 0x07);
 
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
