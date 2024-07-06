@@ -7,7 +7,7 @@
 
 #define CRC5_MASK 0x1F
 
-#define BM1368_INITIAL_DIFFICULTY 256
+#define BM1368_INITIAL_DIFFICULTY 128
 
 static const uint64_t BM1368_CORE_COUNT = 80;
 static const uint64_t BM1368_SMALL_CORE_COUNT = 1276;
