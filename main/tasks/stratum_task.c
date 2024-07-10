@@ -136,6 +136,8 @@ void stratum_task(void * pvParameters)
                 continue;
             }
 
+            STRATUM_V1_reset_uid();
+
             ///// Start Stratum Action
             // mining.subscribe - ID: 1
             STRATUM_V1_subscribe(GLOBAL_STATE->sock, GLOBAL_STATE->asic_model_str);
@@ -202,6 +204,12 @@ void stratum_task(void * pvParameters)
                 } else if (stratum_api_v1_message.method == STRATUM_RESULT_SUBSCRIBE) {
                     GLOBAL_STATE->extranonce_str = stratum_api_v1_message.extranonce_str;
                     GLOBAL_STATE->extranonce_2_len = stratum_api_v1_message.extranonce_2_len;
+                } else if (stratum_api_v1_message.method == CLIENT_RECONNECT) {
+                    ESP_LOGE(TAG, "Pool requested client reconnect...");
+                    shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
+                    close(GLOBAL_STATE->sock);
+                    vTaskDelay(1000 / portTICK_PERIOD_MS); // Delay before attempting to reconnect
+                    break;
                 } else if (stratum_api_v1_message.method == STRATUM_RESULT) {
                     if (stratum_api_v1_message.response_success) {
                         ESP_LOGI(TAG, "message result accepted");
