@@ -8,6 +8,8 @@ typedef struct
     float chip_temp[6];
     float chip_temp_avg;
     float vr_temp;
+    float board_temp_1;
+    float board_temp_2;
     float voltage;
     float frequency_multiplier;
     float frequency_value;

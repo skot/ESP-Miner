@@ -188,6 +188,9 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 case DEVICE_MAX:
                 case DEVICE_ULTRA:
                 case DEVICE_SUPRA:
+                    // board temperature is defined for Hex only
+                    power_management->board_temp_1 = 0.0;
+                    power_management->board_temp_2 = 0.0;
                     
 					if (GLOBAL_STATE->board_version == 402) {
                         power_management->chip_temp_avg = EMC2101_get_external_temp();
@@ -223,10 +226,13 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 
                     break;
                 case DEVICE_HEX:        // Two board temperature sensors
-                    ESP_LOGI(TAG, "Board Temp: %d, %d", TMP1075_read_temperature(0), TMP1075_read_temperature(1));
+                    power_management->board_temp_1 = TMP1075_read_temperature(0);
+                    power_management->board_temp_2 = TMP1075_read_temperature(1);
+
+                    ESP_LOGI(TAG, "Board Temp: %d, %d", power_management->board_temp_1, power_management->board_temp_2);
 
                     // get regulator internal temperature
-                    power_management->chip_temp_avg = (float)TPS546_get_temperature(); // use TPS546 temperature to display chip temperature for HEX
+                    power_management->chip_temp_avg = (float)TPS546_get_temperature(); // use TPS546 temperature to display chip temperature for Hex
                     power_management->vr_temp = (float)TPS546_get_temperature();
                     ESP_LOGI(TAG, "TPS546 Temp: %2f", power_management->vr_temp);
 
