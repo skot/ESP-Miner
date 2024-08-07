@@ -46,6 +46,11 @@ void app_main(void)
         GLOBAL_STATE.device_model = DEVICE_SUPRA;
         GLOBAL_STATE.asic_count = 1;
         GLOBAL_STATE.voltage_domain = 1;
+    } else if (strcmp(GLOBAL_STATE.device_model_str, "hex") == 0) {
+        ESP_LOGI(TAG, "DEVICE: Hex");
+        GLOBAL_STATE.device_model = DEVICE_HEX;
+        GLOBAL_STATE.asic_count = 6;
+        GLOBAL_STATE.voltage_domain = 3;
     } else {
         ESP_LOGE(TAG, "Invalid DEVICE model");
         // maybe should return here to now execute anything with a faulty device parameter !
@@ -60,7 +65,7 @@ void app_main(void)
 
     GLOBAL_STATE.asic_model_str = nvs_config_get_string(NVS_CONFIG_ASIC_MODEL, "");
     if (strcmp(GLOBAL_STATE.asic_model_str, "BM1366") == 0) {
-        ESP_LOGI(TAG, "ASIC: %dx BM1366 (%" PRIu64 " cores)", GLOBAL_STATE.asic_count, BM1366_CORE_COUNT);
+        ESP_LOGI(TAG, "ASIC: %dx BM1366 (%" PRIu64 " cores)", GLOBAL_STATE.asic_count, BM1366_CORE_COUNT * GLOBAL_STATE.asic_count);
         GLOBAL_STATE.asic_model = ASIC_BM1366;
         AsicFunctions ASIC_functions = {.init_fn = BM1366_init,
                                         .receive_result_fn = BM1366_proccess_work,
@@ -68,7 +73,7 @@ void app_main(void)
                                         .set_difficulty_mask_fn = BM1366_set_job_difficulty_mask,
                                         .send_work_fn = BM1366_send_work};
         //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1366_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
-        GLOBAL_STATE.asic_job_frequency_ms = 2000; //ms
+        GLOBAL_STATE.asic_job_frequency_ms = 2000 / (double) GLOBAL_STATE.asic_count; //ms
         GLOBAL_STATE.initial_ASIC_difficulty = BM1366_INITIAL_DIFFICULTY;
 
         GLOBAL_STATE.ASIC_functions = ASIC_functions;
@@ -117,6 +122,11 @@ void app_main(void)
     }
 
     xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void *) &GLOBAL_STATE, 3, NULL);
+
+    if (GLOBAL_STATE.device_model == DEVICE_HEX) {
+        vTaskDelay(2000 / portTICK_PERIOD_MS);
+    }
+
     xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
 
     // pull the wifi credentials and hostname out of NVS

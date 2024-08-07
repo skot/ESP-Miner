@@ -1,4 +1,5 @@
 #include "EMC2101.h"
+#include "EMC2302.h"
 #include "INA260.h"
 #include "bm1397.h"
 #include "esp_log.h"
@@ -56,13 +57,16 @@ static double automatic_fan_speed(float chip_temp, GlobalState * GLOBAL_STATE)
         result = ((chip_temp - min_temp) / temp_range) * fan_range + min_fan_speed;
     }
 
+    float perc = (float) result / 100;
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
-            float perc = (float) result / 100;
-            GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc = perc;
             EMC2101_set_fan_speed( perc );
+            break;
+        case DEVICE_HEX:
+            EMC2302_set_fan_speed(0, perc);
+            EMC2302_set_fan_speed(1, perc);
             break;
         default:
     }
@@ -109,13 +113,15 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 }
 			}
             break;
+        case DEVICE_HEX:
+            break;
         default:
     }
 
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     while (1) {
-
+        // get voltage, current, power, fan_rpm
         switch (GLOBAL_STATE->device_model) {
             case DEVICE_MAX:
             case DEVICE_ULTRA:
@@ -134,9 +140,23 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 power_management->fan_rpm = EMC2101_get_fan_speed();
             
                 break;
+            case DEVICE_HEX:
+                power_management->voltage = TPS546_get_vin() * 1000;
+                power_management->current = TPS546_get_iout() * 1000;
+
+                // calculate regulator power (in milliwatts)
+                power_management->power = (TPS546_get_vout() * power_management->current) / 1000;
+
+                // get the fan RPM
+                power_management->fan_rpm = EMC2302_get_fan_speed(0);
+                power_management->fan_rpm = EMC2302_get_fan_speed(1);
+
+                break;
             default:
         }
 
+        // get chip_temp_avg, vr_temp
+        // set overheat mode
         if (GLOBAL_STATE->asic_model == ASIC_BM1397) {
 
             switch (GLOBAL_STATE->device_model) {
@@ -202,7 +222,34 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 					}
 
                     break;
+                case DEVICE_HEX:        // Two board temperature sensors
+                    ESP_LOGI(TAG, "Board Temp: %d, %d", TMP1075_read_temperature(0), TMP1075_read_temperature(1));
 
+                    // get regulator internal temperature
+                    power_management->chip_temp_avg = (float)TPS546_get_temperature(); // use TPS546 temperature to display chip temperature for HEX
+                    power_management->vr_temp = (float)TPS546_get_temperature();
+                    ESP_LOGI(TAG, "TPS546 Temp: %2f", power_management->vr_temp);
+
+                    // TODO figure out best way to detect overheating on the Hex
+                    if (power_management->chip_temp_avg > TPS546_THROTTLE_TEMP &&
+                        (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
+                        ESP_LOGE(TAG, "OVERHEAT  VR: %fC ASIC %fC", power_management->vr_temp, power_management->chip_temp_avg );
+
+                        // Turn off core voltage
+                        VCORE_set_voltage(0.0, GLOBAL_STATE);
+
+                        nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, 990);
+                        nvs_config_set_u16(NVS_CONFIG_ASIC_FREQ, 50);
+                        nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, 100);
+                        nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, 0);
+                        nvs_config_set_u16(NVS_CONFIG_OVERHEAT_MODE, 1);
+                        exit(EXIT_FAILURE);
+                    }
+
+                    ESP_LOGI(TAG, "VIN: %f, VOUT: %f, IOUT: %f", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
+                    ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
+                    ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
+                    break;
                 default:
             }
         }
@@ -212,15 +259,19 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             power_management->fan_perc = (float)automatic_fan_speed(power_management->chip_temp_avg, GLOBAL_STATE);
 
         } else {
+            float fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
+
+            power_management->fan_perc = fs;
+            
             switch (GLOBAL_STATE->device_model) {
                 case DEVICE_MAX:
                 case DEVICE_ULTRA:
                 case DEVICE_SUPRA:
-
-                    float fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
-                    power_management->fan_perc = fs;
                     EMC2101_set_fan_speed((float) fs / 100);
-
+                    break;
+                case DEVICE_HEX:
+                    EMC2302_set_fan_speed(0, (float) fs / 100);
+                    EMC2302_set_fan_speed(1, (float) fs / 100);
                     break;
                 default:
             }

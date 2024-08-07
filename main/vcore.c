@@ -22,7 +22,7 @@
 static const char *TAG = "vcore.c";
 
 void VCORE_init(GlobalState * global_state) {
-    if (global_state->board_version == 402) {
+    if (global_state->board_version == 402 || global_state->device_model == DEVICE_HEX) { // init TPS546 for 402 & HEX
         TPS546_init();
     }
     ADC_init();
@@ -71,7 +71,10 @@ bool VCORE_set_voltage(float core_voltage, GlobalState * global_state)
                 DS4432U_set_current_code(0, reg_setting); /// eek!
             }
             break;
-        // case DEVICE_HEX:
+        case DEVICE_HEX: // turn on ASIC core voltage (three domains in series)
+            ESP_LOGI(TAG, "Set ASIC voltage = %.3fV", core_voltage);
+            TPS546_set_vout(core_voltage * (float)global_state->voltage_domain);
+            break;
         default:
     }
 
@@ -79,5 +82,8 @@ bool VCORE_set_voltage(float core_voltage, GlobalState * global_state)
 }
 
 uint16_t VCORE_get_voltage_mv(GlobalState * global_state) {
+    if (global_state->device_model == DEVICE_HEX) {
+        return (TPS546_get_vout() * 1000) / global_state->voltage_domain;
+    }
     return ADC_get_vcore() / global_state->voltage_domain;
 }
