@@ -229,7 +229,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     power_management->board_temp_1 = TMP1075_read_temperature(0);
                     power_management->board_temp_2 = TMP1075_read_temperature(1);
 
-                    ESP_LOGI(TAG, "Board Temp: %d, %d", power_management->board_temp_1, power_management->board_temp_2);
+                    ESP_LOGI(TAG, "Board Temp: %f, %f", power_management->board_temp_1, power_management->board_temp_2);
 
                     // get regulator internal temperature
                     power_management->chip_temp_avg = (float)TPS546_get_temperature(); // use TPS546 temperature to display chip temperature for Hex
