@@ -16,6 +16,25 @@
 
 #define TPS546_INIT_FREQUENCY 650  /* KHz */
 
+typedef struct
+{
+  /* vin voltage */
+  const float TPS546_INIT_VIN_ON;  /* V */
+  const float TPS546_INIT_VIN_OFF; /* V */
+  const float TPS546_INIT_VIN_UV_WARN_LIMIT; /* V */
+  const float TPS546_INIT_VIN_OV_FAULT_LIMIT; /* V */
+  const uint8_t TPS546_INIT_VIN_OV_FAULT_RESPONSE; /* retry 6 times */
+
+} TPS546_CONFIG;
+
+static TPS546_CONFIG DEFAULT_CONFIG = {
+  .TPS546_INIT_VIN_ON=4.8f,
+  .TPS546_INIT_VIN_OFF=4.5f,
+  .TPS546_INIT_VIN_UV_WARN_LIMIT=5.8f,
+  .TPS546_INIT_VIN_OV_FAULT_LIMIT=6.0f,
+  .TPS546_INIT_VIN_OV_FAULT_RESPONSE=0xB7
+  };
+
 /* vin voltage */
 #define TPS546_INIT_VIN_ON  4.8  /* V */
 #define TPS546_INIT_VIN_OFF 4.5  /* V */
