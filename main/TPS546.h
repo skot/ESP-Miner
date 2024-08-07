@@ -17,29 +17,42 @@
 #define TPS546_INIT_FREQUENCY 650  /* KHz */
 
 /* vin voltage */
-#define TPS546_INIT_VIN_ON  11.5  /* V */
-#define TPS546_INIT_VIN_OFF 11.0  /* V */
-#define TPS546_INIT_VIN_UV_WARN_LIMIT 11.0 /* V */
-#define TPS546_INIT_VIN_OV_FAULT_LIMIT 14.0 /* V */
+#define TPS546_INIT_VIN_ON  4.8  /* V */
+#define TPS546_INIT_VIN_OFF 4.5  /* V */
+#define TPS546_INIT_VIN_UV_WARN_LIMIT 5.8 /* V */
+#define TPS546_INIT_VIN_OV_FAULT_LIMIT 6.0 /* V */
+
+#define TPS546_INIT_VIN_ON_HEX  11.5  /* V */
+#define TPS546_INIT_VIN_OFF_HEX 11.0  /* V */
+#define TPS546_INIT_VIN_UV_WARN_LIMIT_HEX 11.0 /* V */
+#define TPS546_INIT_VIN_OV_FAULT_LIMIT_HEX 14.0 /* V */
+
 #define TPS546_INIT_VIN_OV_FAULT_RESPONSE 0xB7  /* retry 6 times */
 
-  /* vout voltage */
-#define TPS546_INIT_SCALE_LOOP 0.125  /* Voltage Scale factor */
-#define TPS546_INIT_VOUT_MAX 4.50 /* V */
+/* vout voltage */
+#define TPS546_INIT_SCALE_LOOP 0.25  /* Voltage Scale factor */
+#define TPS546_INIT_VOUT_MAX 3 /* V */
+#define TPS546_INIT_VOUT_MIN 1 /* v */
+#define TPS546_INIT_VOUT_COMMAND 1.2  /* V absolute value */
+
+#define TPS546_INIT_SCALE_LOOP_HEX 0.125  /* Voltage Scale factor */
+#define TPS546_INIT_VOUT_MAX_HEX 4.50 /* V */
+#define TPS546_INIT_VOUT_MIN_HEX 2.5 /* v */
+#define TPS546_INIT_VOUT_COMMAND_HEX 3.60  /* V absolute value */
+
 #define TPS546_INIT_VOUT_OV_FAULT_LIMIT 1.25 /* %/100 above VOUT_COMMAND */
 #define TPS546_INIT_VOUT_OV_WARN_LIMIT  1.1 /* %/100 above VOUT_COMMAND */
 #define TPS546_INIT_VOUT_MARGIN_HIGH 1.1 /* %/100 above VOUT */
-#define TPS546_INIT_VOUT_COMMAND 3.60  /* V absolute value */
 #define TPS546_INIT_VOUT_MARGIN_LOW 0.90 /* %/100 below VOUT */
 #define TPS546_INIT_VOUT_UV_WARN_LIMIT 0.90  /* %/100 below VOUT_COMMAND */
 #define TPS546_INIT_VOUT_UV_FAULT_LIMIT 0.75 /* %/100 below VOUT_COMMAND */
-#define TPS546_INIT_VOUT_MIN 2.5 /* v */
 
   /* iout current */
 #define TPS546_INIT_IOUT_OC_WARN_LIMIT  25.00 /* A */
 #define TPS546_INIT_IOUT_OC_FAULT_LIMIT 30.00 /* A */
-//#define TPS546_INIT_IOUT_OC_FAULT_RESPONSE 0xC0  /* shut down, no retries */
-#define TPS546_INIT_IOUT_OC_FAULT_RESPONSE 0x00  /* shut down, no retries */
+
+#define TPS546_INIT_IOUT_OC_FAULT_RESPONSE 0xC0  /* shut down, no retries */
+#define TPS546_INIT_IOUT_OC_FAULT_RESPONSE_HEX 0x00  /* shut down, no retries */
 
   /* temperature */
 // It is better to set the temperature warn limit for TPS546 more higher than Ultra 
@@ -68,19 +81,20 @@
 #define ON_OFF_CONFIG_POLARITY 0x00 // turn off POLARITY bit
 #define ON_OFF_CONFIG_DELAY 0x00 // turn off DELAY bit
 
+#include "global_state.h"
 
 /* public functions */
-int TPS546_init(void);
+int TPS546_init(GlobalState * global_state);
 void TPS546_read_mfr_info(uint8_t *);
 void TPS546_set_mfr_info(void);
-void TPS546_write_entire_config(void);
+void TPS546_write_entire_config(GlobalState * global_state);
 int TPS546_get_frequency(void);
 void TPS546_set_frequency(int);
 int TPS546_get_temperature(void);
 float TPS546_get_vin(void);
 float TPS546_get_iout(void);
 float TPS546_get_vout(void);
-void TPS546_set_vout(float volts);
+void TPS546_set_vout(float volts, GlobalState * global_state);
 void TPS546_show_voltage_settings(void);
 
 #endif /* TPS546_H_ */
