@@ -65,7 +65,7 @@ void app_main(void)
 
     GLOBAL_STATE.asic_model_str = nvs_config_get_string(NVS_CONFIG_ASIC_MODEL, "");
     if (strcmp(GLOBAL_STATE.asic_model_str, "BM1366") == 0) {
-        ESP_LOGI(TAG, "ASIC: %dx BM1366 (%" PRIu64 " cores)", GLOBAL_STATE.asic_count, BM1366_CORE_COUNT * GLOBAL_STATE.asic_count);
+        ESP_LOGI(TAG, "ASIC: %dx BM1366 (%" PRIu64 " cores)", GLOBAL_STATE.asic_count, BM1366_CORE_COUNT);
         GLOBAL_STATE.asic_model = ASIC_BM1366;
         AsicFunctions ASIC_functions = {.init_fn = BM1366_init,
                                         .receive_result_fn = BM1366_proccess_work,
