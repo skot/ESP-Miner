@@ -46,6 +46,11 @@ void app_main(void)
         GLOBAL_STATE.device_model = DEVICE_SUPRA;
         GLOBAL_STATE.asic_count = 1;
         GLOBAL_STATE.voltage_domain = 1;
+    } else if (strcmp(GLOBAL_STATE.device_model_str, "hex") == 0) {
+        ESP_LOGI(TAG, "DEVICE: Hex");
+        GLOBAL_STATE.device_model = DEVICE_HEX;
+        GLOBAL_STATE.asic_count = 6;
+        GLOBAL_STATE.voltage_domain = 3;
     } else {
         ESP_LOGE(TAG, "Invalid DEVICE model");
         // maybe should return here to now execute anything with a faulty device parameter !
@@ -68,7 +73,7 @@ void app_main(void)
                                         .set_difficulty_mask_fn = BM1366_set_job_difficulty_mask,
                                         .send_work_fn = BM1366_send_work};
         //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1366_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
-        GLOBAL_STATE.asic_job_frequency_ms = 2000; //ms
+        GLOBAL_STATE.asic_job_frequency_ms = 2000 / (double) GLOBAL_STATE.asic_count; //ms
         GLOBAL_STATE.initial_ASIC_difficulty = BM1366_INITIAL_DIFFICULTY;
 
         GLOBAL_STATE.ASIC_functions = ASIC_functions;

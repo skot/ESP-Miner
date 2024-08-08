@@ -30,6 +30,8 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 
+#include "TMP1075.h"
+
 static const char * TAG = "http_server";
 
 static GlobalState * GLOBAL_STATE;
@@ -368,11 +370,17 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "unknown");
 
         cJSON * root = cJSON_CreateObject();
+
+    cJSON_AddStringToObject(root, "powerLimitationType", (strcmp(GLOBAL_STATE->device_model_str, "hex") == 0) ? "hex" : "default");
     cJSON_AddNumberToObject(root, "power", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power);
     cJSON_AddNumberToObject(root, "voltage", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.voltage);
     cJSON_AddNumberToObject(root, "current", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.current);
     cJSON_AddNumberToObject(root, "temp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp_avg);
     cJSON_AddNumberToObject(root, "vrTemp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.vr_temp);
+    // for Hex
+    cJSON_AddNumberToObject(root, "boardtemp1", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.board_temp_1);
+    cJSON_AddNumberToObject(root, "boardtemp2", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.board_temp_2);
+
     cJSON_AddNumberToObject(root, "hashRate", GLOBAL_STATE->SYSTEM_MODULE.current_hashrate);
     cJSON_AddStringToObject(root, "bestDiff", GLOBAL_STATE->SYSTEM_MODULE.best_diff_string);
     cJSON_AddStringToObject(root, "bestSessionDiff", GLOBAL_STATE->SYSTEM_MODULE.best_session_diff_string);

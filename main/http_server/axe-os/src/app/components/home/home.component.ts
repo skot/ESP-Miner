@@ -24,6 +24,8 @@ export class HomeComponent {
   public dataData: number[] = [];
   public chartData?: any;
 
+  public powerLimitation: any;
+
   constructor(
     private systemService: SystemService
   ) {
@@ -91,6 +93,20 @@ export class HomeComponent {
       }
     };
 
+    this.powerLimitation = {
+      default: {
+        power: { min: 3.0, max: 20.0 },
+        voltage: { min: 4.5, max: 5.5 },
+        dangerVoltage: 4.8,
+        coreVoltage: { min: 0.9, max: 1.8 }
+      },
+      hex: {
+        power: { min: 10.0, max: 100.0 },
+        voltage: { min: 11.0, max: 14.0 },
+        dangerVoltage: 11.5,
+        coreVoltage: { min: 0.9, max: 1.8 }
+      }
+    };
 
     this.info$ = interval(5000).pipe(
       startWith(() => this.systemService.getInfo()),

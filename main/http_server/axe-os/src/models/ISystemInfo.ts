@@ -4,6 +4,7 @@ export interface ISystemInfo {
 
     flipscreen: number;
     invertscreen: number;
+    powerLimitationType: string,
     power: number,
     voltage: number,
     current: number,
