@@ -144,7 +144,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     vTaskDelay(3000 / portTICK_PERIOD_MS);
 
     while (1) {
-
+        auto_fan_speed = nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1);
         switch (GLOBAL_STATE->device_model) {
             case DEVICE_MAX:
             case DEVICE_ULTRA:
@@ -279,6 +279,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     break;
                 case DEVICE_HEX:
                     fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
+                    //ESP_LOGI(TAG, "Manual Fan = %.02f", fs);
                     power_management->fan_perc = fs;
                     EMC2302_set_fan_speed(0,(float) fs / 100);
                     EMC2302_set_fan_speed(1,(float) fs / 100);
