@@ -12,6 +12,7 @@
 #define BM1368_SERIALTX_DEBUG true
 #define BM1368_SERIALRX_DEBUG true
 #define BM1368_DEBUG_WORK false //causes insane amount of debug output
+#define BM1368_DEBUG_JOBS true //causes insane amount of debug output
 
 static const uint64_t BM1368_CORE_COUNT = 80;
 static const uint64_t BM1368_SMALL_CORE_COUNT = 1276;
