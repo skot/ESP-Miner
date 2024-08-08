@@ -18,6 +18,7 @@
 
 typedef struct
 {
+  const char* PROFILE;
   /* vin voltage */
   const float TPS546_INIT_VIN_ON;  /* V */
   const float TPS546_INIT_VIN_OFF; /* V */
@@ -25,34 +26,84 @@ typedef struct
   const float TPS546_INIT_VIN_OV_FAULT_LIMIT; /* V */
   const uint8_t TPS546_INIT_VIN_OV_FAULT_RESPONSE; /* retry 6 times */
 
+  /* vout voltage */
+  const float TPS546_INIT_SCALE_LOOP; /* Voltage Scale factor */
+  const float TPS546_INIT_VOUT_MAX;/* V */
+  const float TPS546_INIT_VOUT_OV_FAULT_LIMIT;/* %/100 above VOUT_COMMAND */
+  const float TPS546_INIT_VOUT_OV_WARN_LIMIT; /* %/100 above VOUT_COMMAND */
+  const float TPS546_INIT_VOUT_MARGIN_HIGH; /* %/100 above VOUT */
+  const float TPS546_INIT_VOUT_COMMAND;  /* V absolute value */
+  const float TPS546_INIT_VOUT_MARGIN_LOW; /* %/100 below VOUT */
+  const float TPS546_INIT_VOUT_UV_WARN_LIMIT;  /* %/100 below VOUT_COMMAND */
+  const float TPS546_INIT_VOUT_UV_FAULT_LIMIT; /* %/100 below VOUT_COMMAND */
+  const float TPS546_INIT_VOUT_MIN; /* v */
+
 } TPS546_CONFIG;
 
 static TPS546_CONFIG DEFAULT_CONFIG = {
+  .PROFILE = "TPS546 profile for Ultra and Supra",
+  /* vin voltage */
   .TPS546_INIT_VIN_ON=4.8f,
   .TPS546_INIT_VIN_OFF=4.5f,
   .TPS546_INIT_VIN_UV_WARN_LIMIT=5.8f,
   .TPS546_INIT_VIN_OV_FAULT_LIMIT=6.0f,
-  .TPS546_INIT_VIN_OV_FAULT_RESPONSE=0xB7
+  .TPS546_INIT_VIN_OV_FAULT_RESPONSE=0xB7,
+  
+  /* vout voltage */
+  .TPS546_INIT_SCALE_LOOP=0.25f,
+  .TPS546_INIT_VOUT_MAX=3.0f,
+  .TPS546_INIT_VOUT_OV_FAULT_LIMIT=1.25f,
+  .TPS546_INIT_VOUT_OV_WARN_LIMIT=1.1f,
+  .TPS546_INIT_VOUT_MARGIN_HIGH=1.1f,
+  .TPS546_INIT_VOUT_COMMAND=1.2f,
+  .TPS546_INIT_VOUT_MARGIN_LOW=0.9f,
+  .TPS546_INIT_VOUT_UV_WARN_LIMIT=0.9f,
+  .TPS546_INIT_VOUT_UV_FAULT_LIMIT=0.75f,
+  .TPS546_INIT_VOUT_MIN=1.0f,
+
   };
 
+static TPS546_CONFIG HEX_CONFIG = {
+  .PROFILE = "TPS546 profile for Hex",
+  /* vin voltage */
+  .TPS546_INIT_VIN_ON=11.5f,
+  .TPS546_INIT_VIN_OFF=11.0f,
+  .TPS546_INIT_VIN_UV_WARN_LIMIT=11.0f,
+  .TPS546_INIT_VIN_OV_FAULT_LIMIT=14.0f,
+  .TPS546_INIT_VIN_OV_FAULT_RESPONSE=0xB7,
+  
+  /* vout voltage */
+  .TPS546_INIT_SCALE_LOOP=0.125f,
+  .TPS546_INIT_VOUT_MAX=4.50f,
+  .TPS546_INIT_VOUT_OV_FAULT_LIMIT=1.25f,
+  .TPS546_INIT_VOUT_OV_WARN_LIMIT=1.1f,
+  .TPS546_INIT_VOUT_MARGIN_HIGH=1.1f,
+  .TPS546_INIT_VOUT_COMMAND=3.60f,
+  .TPS546_INIT_VOUT_MARGIN_LOW=0.9f,
+  .TPS546_INIT_VOUT_UV_WARN_LIMIT=0.9f,
+  .TPS546_INIT_VOUT_UV_FAULT_LIMIT=0.75f,
+  .TPS546_INIT_VOUT_MIN=2.5f,
+
+};
+
 /* vin voltage */
-#define TPS546_INIT_VIN_ON  4.8  /* V */
-#define TPS546_INIT_VIN_OFF 4.5  /* V */
-#define TPS546_INIT_VIN_UV_WARN_LIMIT 5.8 /* V */
-#define TPS546_INIT_VIN_OV_FAULT_LIMIT 6.0 /* V */
-#define TPS546_INIT_VIN_OV_FAULT_RESPONSE 0xB7  /* retry 6 times */
+// #define TPS546_INIT_VIN_ON  4.8  /* V */
+// #define TPS546_INIT_VIN_OFF 4.5  /* V */
+// #define TPS546_INIT_VIN_UV_WARN_LIMIT 5.8 /* V */
+// #define TPS546_INIT_VIN_OV_FAULT_LIMIT 6.0 /* V */
+// #define TPS546_INIT_VIN_OV_FAULT_RESPONSE 0xB7  /* retry 6 times */
 
   /* vout voltage */
-#define TPS546_INIT_SCALE_LOOP 0.25  /* Voltage Scale factor */
-#define TPS546_INIT_VOUT_MAX 3 /* V */
-#define TPS546_INIT_VOUT_OV_FAULT_LIMIT 1.25 /* %/100 above VOUT_COMMAND */
-#define TPS546_INIT_VOUT_OV_WARN_LIMIT  1.1 /* %/100 above VOUT_COMMAND */
-#define TPS546_INIT_VOUT_MARGIN_HIGH 1.1 /* %/100 above VOUT */
-#define TPS546_INIT_VOUT_COMMAND 1.2  /* V absolute value */
-#define TPS546_INIT_VOUT_MARGIN_LOW 0.90 /* %/100 below VOUT */
-#define TPS546_INIT_VOUT_UV_WARN_LIMIT 0.90  /* %/100 below VOUT_COMMAND */
-#define TPS546_INIT_VOUT_UV_FAULT_LIMIT 0.75 /* %/100 below VOUT_COMMAND */
-#define TPS546_INIT_VOUT_MIN 1 /* v */
+// #define TPS546_INIT_SCALE_LOOP 0.25  /* Voltage Scale factor */
+// #define TPS546_INIT_VOUT_MAX 3 /* V */
+// #define TPS546_INIT_VOUT_OV_FAULT_LIMIT 1.25 /* %/100 above VOUT_COMMAND */
+// #define TPS546_INIT_VOUT_OV_WARN_LIMIT  1.1 /* %/100 above VOUT_COMMAND */
+// #define TPS546_INIT_VOUT_MARGIN_HIGH 1.1 /* %/100 above VOUT */
+// #define TPS546_INIT_VOUT_COMMAND 1.2  /* V absolute value */
+// #define TPS546_INIT_VOUT_MARGIN_LOW 0.90 /* %/100 below VOUT */
+// #define TPS546_INIT_VOUT_UV_WARN_LIMIT 0.90  /* %/100 below VOUT_COMMAND */
+// #define TPS546_INIT_VOUT_UV_FAULT_LIMIT 0.75 /* %/100 below VOUT_COMMAND */
+// #define TPS546_INIT_VOUT_MIN 1 /* v */
 
   /* iout current */
 #define TPS546_INIT_IOUT_OC_WARN_LIMIT  25.00 /* A */
@@ -88,7 +139,7 @@ static TPS546_CONFIG DEFAULT_CONFIG = {
 
 
 /* public functions */
-int TPS546_init(void);
+int TPS546_init(TPS546_CONFIG);
 void TPS546_read_mfr_info(uint8_t *);
 void TPS546_set_mfr_info(void);
 void TPS546_write_entire_config(void);
