@@ -95,20 +95,20 @@
                 <h5>Power</h5>
                 <div class="grid text-center">
                     <div class="col-4">
-                        <p-knob [min]="3" [max]="20" [readonly]="true" [(ngModel)]="info.power"
+                        <p-knob [min]="powerLimitation[info.powerLimitationType].power.min" [max]="powerLimitation[info.powerLimitationType].power.max" [readonly]="true" [(ngModel)]="info.power"
                             valueTemplate="{value}W"></p-knob>
                         Power
                     </div>
 
                     <div class="col-4">
-                        <p-knob [min]="4.5" [max]="5.5" [readonly]="true" [(ngModel)]="info.voltage"
+                        <p-knob [min]="powerLimitation[info.powerLimitationType].voltage.min" [max]="powerLimitation[info.powerLimitationType].voltage.max" [readonly]="true" [(ngModel)]="info.voltage"
                             valueTemplate="{value}V"></p-knob>
                         Input Voltage
-                        <span class="danger" *ngIf="info.voltage < 4.8">&nbsp; Danger: Low voltage</span>
+                        <span class="danger" *ngIf="info.voltage < powerLimitation[info.powerLimitationType].dangerVoltage">&nbsp; Danger: Low voltage</span>
                     </div>
 
                     <div class="col-4">
-                        <p-knob [min]="0.9" [max]="1.8" [readonly]="true" [(ngModel)]="info.coreVoltage"
+                        <p-knob [min]="powerLimitation[info.powerLimitationType].coreVoltage.min" [max]="powerLimitation[info.powerLimitationType].coreVoltage.max" [readonly]="true" [(ngModel)]="info.coreVoltage"
                             valueTemplate="{value}V"></p-knob>
                         ASIC Voltage Requested
                     </div>

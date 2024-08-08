@@ -21,6 +21,7 @@ export class SystemService {
     } else {
       return of(
         {
+          powerLimitationType: "default",
           power: 11.670000076293945,
           voltage: 5208.75,
           current: 2237.5,
