@@ -52,7 +52,7 @@ void EMC2302_set_fan_speed(uint8_t devicenum, float percent)
     uint8_t speed;
 	uint8_t FAN_SETTING_REG = EMC2302_FAN1_SETTING + (devicenum * 0x10);
 
-    speed = (uint8_t) (255.0 * percent);
+    speed = (uint8_t) (255.0 * (1.0f-percent));
     ESP_ERROR_CHECK(register_write_byte(FAN_SETTING_REG, speed));
 }
 
