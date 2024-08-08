@@ -122,11 +122,6 @@ void app_main(void)
     }
 
     xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void *) &GLOBAL_STATE, 3, NULL);
-
-    if (GLOBAL_STATE.device_model == DEVICE_HEX) {
-        vTaskDelay(2000 / portTICK_PERIOD_MS);
-    }
-
     xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
 
     // pull the wifi credentials and hostname out of NVS
