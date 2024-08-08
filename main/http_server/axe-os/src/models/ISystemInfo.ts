@@ -34,7 +34,7 @@ export interface ISystemInfo {
     fanspeed: number,
     fanrpm: number,
     coreVoltageActual: number,
-
+    deviceModelStr: string,
     boardtemp1?: number,
     boardtemp2?: number,
     overheat: number

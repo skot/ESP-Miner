@@ -54,7 +54,7 @@ export class SystemService {
           autofanspeed: 1,
           fanspeed: 100,
           fanrpm: 0,
-
+          deviceModelStr: "unknown",
           boardtemp1: 30,
           boardtemp2: 40,
           overheat: 0
