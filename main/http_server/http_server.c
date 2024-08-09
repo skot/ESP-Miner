@@ -370,8 +370,6 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "unknown");
 
         cJSON * root = cJSON_CreateObject();
-
-    cJSON_AddStringToObject(root, "powerLimitationType", (strcmp(GLOBAL_STATE->device_model_str, "hex") == 0) ? "hex" : "default");
     cJSON_AddNumberToObject(root, "power", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power);
     cJSON_AddNumberToObject(root, "voltage", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.voltage);
     cJSON_AddNumberToObject(root, "current", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.current);
@@ -413,6 +411,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
             break;
     }
     cJSON_AddNumberToObject(root, "smallCoreCount", small_core_count);
+    cJSON_AddStringToObject(root, "deviceModel", GLOBAL_STATE->device_model_str);
     cJSON_AddStringToObject(root, "ASICModel", GLOBAL_STATE->asic_model_str);
     cJSON_AddStringToObject(root, "stratumURL", stratumURL);
     cJSON_AddNumberToObject(root, "stratumPort", nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, CONFIG_STRATUM_PORT));

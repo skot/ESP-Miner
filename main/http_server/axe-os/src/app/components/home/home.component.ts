@@ -2,7 +2,7 @@ import { Component } from '@angular/core';
 import { interval, map, Observable, shareReplay, startWith, switchMap, tap } from 'rxjs';
 import { HashSuffixPipe } from 'src/app/pipes/hash-suffix.pipe';
 import { SystemService } from 'src/app/services/system.service';
-import { eASICModel } from 'src/models/enum/eASICModel';
+import { eDeviceModel } from 'src/models/enum/eDeviceModel';
 import { ISystemInfo } from 'src/models/ISystemInfo';
 
 @Component({
@@ -24,7 +24,23 @@ export class HomeComponent {
   public dataData: number[] = [];
   public chartData?: any;
 
-  public powerLimitation: any;
+  public deviceModel!: eDeviceModel;
+
+  public targetPowerLimitation: any;
+  public powerLimitations = {
+    default: {
+      power: { min: 3.0, max: 20.0 },
+      voltage: { min: 4.5, max: 5.5 },
+      dangerVoltage: 4.8,
+      coreVoltage: { min: 0.9, max: 1.8 }
+    },
+    hex: {
+      power: { min: 10.0, max: 100.0 },
+      voltage: { min: 11.0, max: 14.0 },
+      dangerVoltage: 11.5,
+      coreVoltage: { min: 0.9, max: 1.8 }
+    }
+  };
 
   constructor(
     private systemService: SystemService
@@ -93,27 +109,26 @@ export class HomeComponent {
       }
     };
 
-    this.powerLimitation = {
-      default: {
-        power: { min: 3.0, max: 20.0 },
-        voltage: { min: 4.5, max: 5.5 },
-        dangerVoltage: 4.8,
-        coreVoltage: { min: 0.9, max: 1.8 }
-      },
-      hex: {
-        power: { min: 10.0, max: 100.0 },
-        voltage: { min: 11.0, max: 14.0 },
-        dangerVoltage: 11.5,
-        coreVoltage: { min: 0.9, max: 1.8 }
-      }
-    };
-
     this.info$ = interval(5000).pipe(
       startWith(() => this.systemService.getInfo()),
       switchMap(() => {
         return this.systemService.getInfo()
       }),
       tap(info => {
+        this.deviceModel = info.deviceModel;
+        switch (this.deviceModel) {
+          case eDeviceModel.max:
+          case eDeviceModel.supra:
+          case eDeviceModel.ultra:
+            this.targetPowerLimitation = this.powerLimitations.default;
+            break;
+          case eDeviceModel.hex:
+            this.targetPowerLimitation = this.powerLimitations.hex;
+            break;
+          default:
+            this.targetPowerLimitation = this.powerLimitations.default;
+            break;
+        }
 
         this.dataData.push(info.hashRate * 1000000000);
         this.dataLabel.push(new Date().getTime());

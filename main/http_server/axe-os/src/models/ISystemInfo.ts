@@ -1,10 +1,10 @@
 import { eASICModel } from './enum/eASICModel';
+import { eDeviceModel } from './enum/eDeviceModel';
 
 export interface ISystemInfo {
 
     flipscreen: number;
     invertscreen: number;
-    powerLimitationType: string,
     power: number,
     voltage: number,
     current: number,
@@ -23,6 +23,7 @@ export interface ISystemInfo {
     uptimeSeconds: number,
     asicCount: number,
     smallCoreCount: number,
+    deviceModel: eDeviceModel,
     ASICModel: eASICModel,
     stratumURL: string,
     stratumPort: number,

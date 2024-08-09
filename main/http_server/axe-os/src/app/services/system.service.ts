@@ -2,6 +2,7 @@ import { HttpClient, HttpEvent } from '@angular/common/http';
 import { Injectable } from '@angular/core';
 import { delay, Observable, of } from 'rxjs';
 import { eASICModel } from 'src/models/enum/eASICModel';
+import { eDeviceModel } from 'src/models/enum/eDeviceModel';
 import { ISystemInfo } from 'src/models/ISystemInfo';
 
 import { environment } from '../../environments/environment';
@@ -21,7 +22,6 @@ export class SystemService {
     } else {
       return of(
         {
-          powerLimitationType: "default",
           power: 11.670000076293945,
           voltage: 5208.75,
           current: 2237.5,
@@ -43,6 +43,7 @@ export class SystemService {
           asicCount: 1,
           smallCoreCount: 672,
           ASICModel: eASICModel.BM1366,
+          deviceModel: eDeviceModel.ultra,
           stratumURL: "public-pool.io",
           stratumPort: 21496,
           stratumUser: "bc1q99n3pu025yyu0jlywpmwzalyhm36tg5u37w20d.bitaxe-U1",
