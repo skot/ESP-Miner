@@ -30,6 +30,10 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 
+#define METRICS_BUFFER_SIZE 2000
+#define APPEND_TO_BUFFER(str, format, ...) \
+    snprintf(str + strlen(str), METRICS_BUFFER_SIZE - strlen(str), format, ##__VA_ARGS__)
+
 static const char * TAG = "http_server";
 
 static GlobalState * GLOBAL_STATE;
@@ -350,6 +354,69 @@ static esp_err_t GET_swarm(httpd_req_t * req)
     return ESP_OK;
 }
 
+static esp_err_t GET_metrics(httpd_req_t * req){
+    httpd_resp_set_type(req, "text/plain");
+
+    char * buffer = malloc(METRICS_BUFFER_SIZE);
+    memset(buffer, 0, METRICS_BUFFER_SIZE);
+
+    APPEND_TO_BUFFER(buffer, "# HELP miner_hashrate Hashrate of the ASIC\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_hashrate gauge\n");
+    APPEND_TO_BUFFER(buffer, "miner_hashrate{chip=\"%s\"} %f\n", GLOBAL_STATE->asic_model, GLOBAL_STATE->SYSTEM_MODULE.current_hashrate);
+    
+    APPEND_TO_BUFFER(buffer, "# HELP miner_core_temp Temperature of the ASIC core\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_core_temp gauge\n");
+    APPEND_TO_BUFFER(buffer, "miner_core_temp{chip=\"%s\"} %f\n", GLOBAL_STATE->asic_model, GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp);
+
+    APPEND_TO_BUFFER(buffer, "# HELP miner_input_voltage Input voltage \n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_input_voltage gauge\n");
+    APPEND_TO_BUFFER(buffer, "miner_input_voltage{chip=\"%s\"} %f\n", GLOBAL_STATE->asic_model, GLOBAL_STATE->POWER_MANAGEMENT_MODULE.voltage);
+    
+    APPEND_TO_BUFFER(buffer, "# HELP miner_input_current Input Current\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_input_current gauge\n");
+    APPEND_TO_BUFFER(buffer, "miner_input_current{chip=\"%s\"} %f\n", GLOBAL_STATE->asic_model, GLOBAL_STATE->POWER_MANAGEMENT_MODULE.current);
+    
+    APPEND_TO_BUFFER(buffer, "# HELP miner_fan_speed_rpm Fan speed of the ASIC\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_fan_speed_rpm gauge\n");
+    APPEND_TO_BUFFER(buffer, "miner_fan_speed_rpm{chip=\"%s\"} %d\n", GLOBAL_STATE->asic_model, GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_speed);
+    
+    APPEND_TO_BUFFER(buffer, "# HELP miner_shares_accepted_total Shares accepted by the pool\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_shares_accepted_total counter\n");
+    APPEND_TO_BUFFER(buffer, "miner_shares_accepted{chip=\"%s\"} %d\n", GLOBAL_STATE->asic_model, GLOBAL_STATE->SYSTEM_MODULE.shares_accepted);
+    
+    APPEND_TO_BUFFER(buffer, "# HELP miner_shares_rejected_total Shares rejected by the pool\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_shares_rejected_total counter\n");
+    APPEND_TO_BUFFER(buffer, "miner_shares_rejected_total{chip=\"%s\"} %d\n", GLOBAL_STATE->asic_model, GLOBAL_STATE->SYSTEM_MODULE.shares_rejected);
+    
+    APPEND_TO_BUFFER(buffer, "# HELP miner_best_difficulty Best difficulty achieved\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_best_difficulty gauge\n");
+    APPEND_TO_BUFFER(buffer, "miner_best_difficulty{chip=\"%s\"} %lu\n", GLOBAL_STATE->asic_model, GLOBAL_STATE->SYSTEM_MODULE.best_nonce_diff);
+    
+    APPEND_TO_BUFFER(buffer, "# HELP miner_power_consumption_watts Power consumption\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_power_consumption_watts gauge\n");
+    APPEND_TO_BUFFER(buffer, "miner_power_consumption_watts{chip=\"%s\"} %f\n", GLOBAL_STATE->asic_model, GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power);
+    
+    APPEND_TO_BUFFER(buffer, "# HELP miner_uptime_seconds Uptime of the ASIC\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_uptime_seconds gauge\n");
+    APPEND_TO_BUFFER(buffer, "miner_uptime_seconds{chip=\"%s\"} %lld\n", GLOBAL_STATE->asic_model, (esp_timer_get_time() - GLOBAL_STATE->SYSTEM_MODULE.start_time) / 1000000);
+
+    APPEND_TO_BUFFER(buffer, "# HELP miner_core_frequency Frequency of the ASIC core\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_core_frequency gauge\n");
+    APPEND_TO_BUFFER(buffer, "miner_core_frequency{chip=\"%s\"} %f\n", GLOBAL_STATE->asic_model, GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value);
+
+    APPEND_TO_BUFFER(buffer, "# HELP miner_core_voltage Voltage of the ASIC core\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_core_voltage gauge\n");
+    APPEND_TO_BUFFER(buffer, "miner_core_voltage{chip=\"%s\"} %d\n", GLOBAL_STATE->asic_model, ADC_get_vcore());
+
+    APPEND_TO_BUFFER(buffer, "# HELP miner_heap_free_bytes Free heap\n");
+    APPEND_TO_BUFFER(buffer, "# TYPE miner_heap_free_bytes gauge\n");
+    APPEND_TO_BUFFER(buffer, "miner_heap_free_bytes{chip=\"%s\"} %lu\n", GLOBAL_STATE->asic_model, esp_get_free_heap_size());
+
+    httpd_resp_sendstr(req, buffer);
+    free(buffer);
+    return ESP_OK;
+}
+
 /* Simple handler for getting system handler */
 static esp_err_t GET_system_info(httpd_req_t * req)
 {
@@ -641,6 +708,10 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_uri_t system_info_get_uri = {
         .uri = "/api/system/info", .method = HTTP_GET, .handler = GET_system_info, .user_ctx = rest_context};
     httpd_register_uri_handler(server, &system_info_get_uri);
+
+    httpd_uri_t system_metrics_get_uri = {
+        .uri = "/api/system/metrics", .method = HTTP_GET, .handler = GET_metrics, .user_ctx = rest_context};
+    httpd_register_uri_handler(server, &system_metrics_get_uri);
 
     httpd_uri_t swarm_get_uri = {.uri = "/api/swarm/info", .method = HTTP_GET, .handler = GET_swarm, .user_ctx = rest_context};
     httpd_register_uri_handler(server, &swarm_get_uri);
