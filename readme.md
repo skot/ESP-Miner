@@ -112,4 +112,4 @@ Some API examples in curl:
 
 ## Administration
 
-The firmware hosts a small web server on port 80 for administrative purposes. Once the Bitaxe device is connected to the local network, the admin web front end may be accessed via a web browser connected to the same network at `http://<IP>:80`, replacing `IP` with the LAN IP address of the Bitaxe device, or `http://bitaxe:80`, provided your network supports mDNS configuration.
+The firmware hosts a small web server on port 80 for administrative purposes. Once the Bitaxe device is connected to the local network, the admin web front end may be accessed via a web browser connected to the same network at `http://<IP>`, replacing `IP` with the LAN IP address of the Bitaxe device, or `http://bitaxe`, provided your network supports mDNS configuration.
