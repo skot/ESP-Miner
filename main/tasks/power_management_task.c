@@ -177,6 +177,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                         nvs_config_set_u16(NVS_CONFIG_ASIC_FREQ, 50);
                         nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, 100);
                         nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, 0);
+                        nvs_config_set_u16(NVS_CONFIG_OVERHEAT_MODE, 1);
                         exit(EXIT_FAILURE);
 					}
                     break;
@@ -188,10 +189,6 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 case DEVICE_MAX:
                 case DEVICE_ULTRA:
                 case DEVICE_SUPRA:
-                    // board temperature is defined for Hex only
-                    power_management->board_temp_1 = 0.0;
-                    power_management->board_temp_2 = 0.0;
-                    
 					if (GLOBAL_STATE->board_version == 402) {
                         power_management->chip_temp_avg = EMC2101_get_external_temp();
 						power_management->vr_temp = (float)TPS546_get_temperature();
@@ -229,22 +226,24 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     power_management->board_temp_1 = TMP1075_read_temperature(0);
                     power_management->board_temp_2 = TMP1075_read_temperature(1);
 
-                    ESP_LOGI(TAG, "Board Temp: %f, %f", power_management->board_temp_1, power_management->board_temp_2);
+                    // ESP_LOGI(TAG, "Board Temp: %f, %f", power_management->board_temp_1, power_management->board_temp_2);
 
                     // get regulator internal temperature
-                    power_management->chip_temp_avg = (float)TPS546_get_temperature(); // use TPS546 temperature to display chip temperature for Hex
+                    power_management->chip_temp_avg = (TMP1075_read_temperature(0) + TMP1075_read_temperature(1)) / 2 + 5;
                     power_management->vr_temp = (float)TPS546_get_temperature();
-                    ESP_LOGI(TAG, "TPS546 Temp: %2f", power_management->vr_temp);
 
                     // TODO figure out best way to detect overheating on the Hex
-                    if (power_management->chip_temp_avg > TPS546_THROTTLE_TEMP &&
+                    if ((power_management->vr_temp > TPS546_THROTTLE_TEMP || power_management->chip_temp_avg > THROTTLE_TEMP) &&
                         (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
                         ESP_LOGE(TAG, "OVERHEAT  VR: %fC ASIC %fC", power_management->vr_temp, power_management->chip_temp_avg );
+
+                        EMC2302_set_fan_speed(0, 1);
+                        EMC2302_set_fan_speed(1, 1);
 
                         // Turn off core voltage
                         VCORE_set_voltage(0.0, GLOBAL_STATE);
 
-                        nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, 990);
+                        nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, 1000);
                         nvs_config_set_u16(NVS_CONFIG_ASIC_FREQ, 50);
                         nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, 100);
                         nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, 0);
@@ -253,8 +252,9 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     }
 
                     ESP_LOGI(TAG, "VIN: %f, VOUT: %f, IOUT: %f", TPS546_get_vin(), TPS546_get_vout(), TPS546_get_iout());
-                    ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
-                    ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
+                    // ESP_LOGI(TAG, "Regulator power: %f mW", power_management->power);
+                    // ESP_LOGI(TAG, "TPS546 Temp: %2f", power_management->vr_temp);
+                    // ESP_LOGI(TAG, "TPS546 Frequency %d", TPS546_get_frequency());
                     break;
                 default:
             }
