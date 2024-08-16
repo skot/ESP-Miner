@@ -74,7 +74,7 @@ static void _init_system(GlobalState * GLOBAL_STATE)
     module->lastClockSync = 0;
     module->FOUND_BLOCK = false;
     module->startup_done = false;
-    
+
     // set the pool url
     module->pool_url = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, CONFIG_STRATUM_URL);
 
@@ -148,7 +148,7 @@ void SYSTEM_update_overheat_mode(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
     uint16_t new_overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
-    
+
     if (new_overheat_mode != module->overheat_mode) {
         module->overheat_mode = new_overheat_mode;
         ESP_LOGI(TAG, "Overheat mode updated to: %d", module->overheat_mode);
@@ -192,7 +192,7 @@ static void _update_hashrate(GlobalState * GLOBAL_STATE)
             float efficiency = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power / (module->current_hashrate / 1000.0);
             OLED_clearLine(0);
             memset(module->oled_buf, 0, 20);
-            snprintf(module->oled_buf, 20, "Gh%s: %.1f J/Th: %.1f", module->historical_hashrate_init < HISTORY_LENGTH ? "*" : "",
+            snprintf(module->oled_buf, 20, "Gh: %.1f J/Th: %.1f",
                     module->current_hashrate, efficiency);
             OLED_writeString(0, 0, module->oled_buf);
             break;
@@ -355,7 +355,7 @@ static void _update_connection(GlobalState * GLOBAL_STATE)
                 strncpy(module->oled_buf, module->ssid, sizeof(module->oled_buf));
                 module->oled_buf[sizeof(module->oled_buf) - 1] = 0;
                 OLED_writeString(0, 1, module->oled_buf);
-                
+
                 memset(module->oled_buf, 0, 20);
                 snprintf(module->oled_buf, 20, "Configuration SSID:");
                 OLED_writeString(0, 2, module->oled_buf);
@@ -578,7 +578,7 @@ void SYSTEM_task(void * pvParameters)
                         break;
                     } else if (strcmp(input_event, "LONG") == 0) {
                         ESP_LOGI(TAG, "Long button press detected, toggling WiFi SoftAP");
-                        toggle_wifi_softap(); // Toggle AP 
+                        toggle_wifi_softap(); // Toggle AP
                     }
                 }
             }
