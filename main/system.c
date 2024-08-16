@@ -641,6 +641,7 @@ void SYSTEM_notify_found_nonce(GlobalState * GLOBAL_STATE, double found_diff, ui
     int valid_shares = 0;
     for (int i = 0; i < HISTORY_LENGTH; i++) {
         // sum backwards
+        // avoid modulo of a negative number
         int rindex = (index - i + HISTORY_LENGTH) % HISTORY_LENGTH;
 
         uint64_t timestamp = module->historical_hashrate_time_stamps[rindex];
@@ -651,7 +652,6 @@ void SYSTEM_notify_found_nonce(GlobalState * GLOBAL_STATE, double found_diff, ui
         }
 
         // out of scope? break
-        // avoid modulo of a negative number
         if (current_time - timestamp > time_period) {
             break;
         }
