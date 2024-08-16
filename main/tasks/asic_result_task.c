@@ -39,10 +39,12 @@ void ASIC_result_task(void *pvParameters)
             asic_result->nonce,
             asic_result->rolled_version);
 
-        //log the ASIC response
-        ESP_LOGI(TAG, "Ver: %08" PRIX32 " Nonce %08" PRIX32 " diff %.1f of %ld.", asic_result->rolled_version, asic_result->nonce, nonce_diff, GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff);
+        uint32_t pool_difficulty = GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff;
 
-        if (nonce_diff > GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff)
+        //log the ASIC response
+        ESP_LOGI(TAG, "Ver: %08" PRIX32 " Nonce %08" PRIX32 " diff %.1f of %ld.", asic_result->rolled_version, asic_result->nonce, nonce_diff, pool_difficulty);
+
+        if (nonce_diff > pool_difficulty)
         {
 
             STRATUM_V1_submit_share(
@@ -54,8 +56,7 @@ void ASIC_result_task(void *pvParameters)
                 asic_result->nonce,
                 asic_result->rolled_version ^ GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->version);
 
+            SYSTEM_notify_found_nonce(GLOBAL_STATE, (double) pool_difficulty, job_id);
         }
-
-        SYSTEM_notify_found_nonce(GLOBAL_STATE, nonce_diff, job_id);
     }
 }
