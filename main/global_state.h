@@ -64,6 +64,7 @@ typedef struct
     char best_diff_string[DIFF_STRING_SIZE];
     uint64_t best_session_nonce_diff;
     char best_session_diff_string[DIFF_STRING_SIZE];
+    uint16_t blocks_found;
     bool FOUND_BLOCK;
     bool startup_done;
     char ssid[32];

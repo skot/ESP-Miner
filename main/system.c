@@ -71,6 +71,7 @@ static void _init_system(GlobalState * GLOBAL_STATE)
     module->best_session_nonce_diff = 0;
     module->start_time = esp_timer_get_time();
     module->lastClockSync = 0;
+    module->blocks_found = nvs_config_get_u16(NVS_CONFIG_BLOCKS_FOUND, 0);
     module->FOUND_BLOCK = false;
     module->startup_done = false;
     
@@ -468,6 +469,8 @@ static void _check_for_best_diff(GlobalState * GLOBAL_STATE, double diff, uint8_
     double network_diff = _calculate_network_difficulty(GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->target);
     if (diff > network_diff) {
         module->FOUND_BLOCK = true;
+        module->blocks_found++;
+        nvs_config_set_u16(NVS_CONFIG_BLOCKS_FOUND, module->blocks_found);
         ESP_LOGI(TAG, "FOUND BLOCK!!!!!!!!!!!!!!!!!!!!!! %f > %f", diff, network_diff);
     }
     ESP_LOGI(TAG, "Network diff: %f", network_diff);
