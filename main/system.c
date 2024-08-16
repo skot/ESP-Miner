@@ -60,9 +60,10 @@ static void _init_system(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
-    module->duration_start = 0;
     module->historical_hashrate_rolling_index = 0;
-    module->historical_hashrate_init = 0;
+    memset(module->historical_hashrate, 0, sizeof(module->historical_hashrate));
+    memset(module->historical_hashrate_time_stamps, 0, sizeof(module->historical_hashrate_time_stamps));
+
     module->current_hashrate = 0;
     module->screen_page = 0;
     module->shares_accepted = 0;
@@ -602,9 +603,6 @@ void SYSTEM_notify_rejected_share(GlobalState * GLOBAL_STATE)
 
 void SYSTEM_notify_mining_started(GlobalState * GLOBAL_STATE)
 {
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
-
-    module->duration_start = esp_timer_get_time();
 }
 
 void SYSTEM_notify_new_ntime(GlobalState * GLOBAL_STATE, uint32_t ntime)
@@ -627,37 +625,54 @@ void SYSTEM_notify_found_nonce(GlobalState * GLOBAL_STATE, double found_diff, ui
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
-    // Calculate the time difference in seconds with sub-second precision
     // hashrate = (nonce_difficulty * 2^32) / time_to_find
 
-    module->historical_hashrate[module->historical_hashrate_rolling_index] = GLOBAL_STATE->initial_ASIC_difficulty;
-    module->historical_hashrate_time_stamps[module->historical_hashrate_rolling_index] = esp_timer_get_time();
+    // let's calculate the 10min average hashrate
+    uint64_t time_period = 600 * 1e6;
+    uint64_t current_time = esp_timer_get_time();
 
-    module->historical_hashrate_rolling_index = (module->historical_hashrate_rolling_index + 1) % HISTORY_LENGTH;
+    int index = module->historical_hashrate_rolling_index;
 
-    // ESP_LOGI(TAG, "nonce_diff %.1f, ttf %.1f, res %.1f", nonce_diff, duration,
-    // historical_hashrate[historical_hashrate_rolling_index]);
+    module->historical_hashrate[index] = found_diff;
+    module->historical_hashrate_time_stamps[index] = current_time;
 
-    if (module->historical_hashrate_init < HISTORY_LENGTH) {
-        module->historical_hashrate_init++;
-    } else {
-        module->duration_start =
-            module->historical_hashrate_time_stamps[(module->historical_hashrate_rolling_index + 1) % HISTORY_LENGTH];
-    }
     double sum = 0;
-    for (int i = 0; i < module->historical_hashrate_init; i++) {
-        sum += module->historical_hashrate[i];
+    uint64_t oldest_time = 0;
+    int valid_shares = 0;
+    for (int i = 0; i < HISTORY_LENGTH; i++) {
+        // sum backwards
+        int rindex = (index - i + HISTORY_LENGTH) % HISTORY_LENGTH;
+
+        uint64_t timestamp = module->historical_hashrate_time_stamps[rindex];
+
+        // zero timestamps indicate that the "slot" is not used
+        if (timestamp == 0) {
+            break;
+        }
+
+        // out of scope? break
+        // avoid modulo of a negative number
+        if (current_time - timestamp > time_period) {
+            break;
+        }
+
+        sum += module->historical_hashrate[rindex];
+        oldest_time = timestamp;
+        valid_shares++;
     }
 
-    double duration = (double) (esp_timer_get_time() - module->duration_start) / 1000000;
+    // increment rolling index
+    // can't be done before summation
+    index = (index + 1) % HISTORY_LENGTH;
+    module->historical_hashrate_rolling_index = index;
 
-    double rolling_rate = (sum * 4294967296) / (duration * 1000000000);
-    if (module->historical_hashrate_init < HISTORY_LENGTH) {
-        module->current_hashrate = rolling_rate;
-    } else {
-        // More smoothing
-        module->current_hashrate = ((module->current_hashrate * 9) + rolling_rate) / 10;
-    }
+    double rolling_rate = (sum * 4.294967296e9) / (double) (time_period / 1e6);
+    double rolling_rate_gh = rolling_rate / 1.0e9;
+
+    ESP_LOGI(TAG, "hashrate: %.3fGH%s shares: %d (historical buffer spans %ds)", rolling_rate_gh,
+             (current_time - oldest_time >= time_period) ? "" : "*", valid_shares, (int) ((current_time - oldest_time) / 1e6));
+
+    module->current_hashrate = rolling_rate_gh;
 
     _update_hashrate(GLOBAL_STATE);
 
