@@ -15,7 +15,8 @@
 
 #define STRATUM_USER CONFIG_STRATUM_USER
 
-#define HISTORY_LENGTH 100
+// best is power of 2 for ring buffers
+#define HISTORY_LENGTH 512
 #define DIFF_STRING_SIZE 10
 
 typedef enum
@@ -46,11 +47,9 @@ typedef struct
 
 typedef struct
 {
-    double duration_start;
     int historical_hashrate_rolling_index;
-    double historical_hashrate_time_stamps[HISTORY_LENGTH];
+    uint64_t historical_hashrate_time_stamps[HISTORY_LENGTH];
     double historical_hashrate[HISTORY_LENGTH];
-    int historical_hashrate_init;
     double current_hashrate;
     int64_t start_time;
     uint64_t shares_accepted;
@@ -67,6 +66,7 @@ typedef struct
     char wifi_status[20];
     char * pool_url;
     uint16_t pool_port;
+    uint16_t overheat_mode;
 
     uint32_t lastClockSync;
 } SystemModule;

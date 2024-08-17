@@ -29,6 +29,7 @@
 #include "lwip/netdb.h"
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
+#include <pthread.h>
 
 static const char * TAG = "http_server";
 
@@ -296,7 +297,7 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "flipscreen")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_FLIP_SCREEN, item->valueint);
     }
-    if ((item = cJSON_GetObjectItem(root, "overheat")) != NULL) {
+    if ((item = cJSON_GetObjectItem(root, "overheat_mode")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
     }
     if ((item = cJSON_GetObjectItem(root, "invertscreen")) != NULL) {
@@ -347,6 +348,7 @@ static esp_err_t GET_swarm(httpd_req_t * req)
 
     char * swarm_config = nvs_config_get_string(NVS_CONFIG_SWARM, "[]");
     httpd_resp_sendstr(req, swarm_config);
+    free(swarm_config);
     return ESP_OK;
 }
 
@@ -418,7 +420,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddStringToObject(root, "runningPartition", esp_ota_get_running_partition()->label);
 
     cJSON_AddNumberToObject(root, "flipscreen", nvs_config_get_u16(NVS_CONFIG_FLIP_SCREEN, 1));
-    cJSON_AddNumberToObject(root, "overheat", nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE,0));
+    cJSON_AddNumberToObject(root, "overheat_mode", nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE,0));
     cJSON_AddNumberToObject(root, "invertscreen", nvs_config_get_u16(NVS_CONFIG_INVERT_SCREEN, 0));
 
     cJSON_AddNumberToObject(root, "invertfanpolarity", nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
@@ -532,8 +534,12 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
     return ESP_OK;
 }
 
+static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
+
 void log_to_websocket(const char * format, va_list args)
 {
+    pthread_mutex_lock(&log_mutex);
+
     va_list args_copy;
     va_copy(args_copy, args);
 
@@ -542,9 +548,9 @@ void log_to_websocket(const char * format, va_list args)
     va_end(args_copy);
 
     // Allocate the buffer dynamically
-    char * log_buffer = (char *) malloc(needed_size);
+    char * log_buffer = (char *) calloc(needed_size + 2, sizeof(char));  // +2 for potential \n and \0
     if (log_buffer == NULL) {
-        // Handle allocation failure
+        pthread_mutex_unlock(&log_mutex);
         return;
     }
 
@@ -553,32 +559,36 @@ void log_to_websocket(const char * format, va_list args)
     vsnprintf(log_buffer, needed_size, format, args_copy);
     va_end(args_copy);
 
+    // Ensure the log message ends with a newline
+    size_t len = strlen(log_buffer);
+    if (len > 0 && log_buffer[len - 1] != '\n') {
+        log_buffer[len] = '\n';
+        log_buffer[len + 1] = '\0';
+        len++;
+    }
+
     // Prepare the WebSocket frame
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
     ws_pkt.payload = (uint8_t *) log_buffer;
-    ws_pkt.len = strlen(log_buffer);
+    ws_pkt.len = len;
     ws_pkt.type = HTTPD_WS_TYPE_TEXT;
 
     // Print to standard output
-    va_copy(args_copy, args);
-    vprintf(format, args_copy);
-    va_end(args_copy);
+    printf("%s", log_buffer);
 
     // Ensure server and fd are valid
-    if (server == NULL || fd < 0) {
-        // Handle invalid server or socket descriptor
-        free(log_buffer);
-        return;
-    }
-
-    // Send the WebSocket frame asynchronously
-    if (httpd_ws_send_frame_async(server, fd, &ws_pkt) != ESP_OK) {
-        esp_log_set_vprintf(vprintf);
+    if (server != NULL && fd >= 0) {
+        // Send the WebSocket frame asynchronously
+        if (httpd_ws_send_frame_async(server, fd, &ws_pkt) != ESP_OK) {
+            esp_log_set_vprintf(vprintf);
+        }
     }
 
     // Free the allocated buffer
     free(log_buffer);
+
+    pthread_mutex_unlock(&log_mutex);
 }
 
 /*
