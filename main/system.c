@@ -4,6 +4,7 @@
 
 #include "i2c_master.h"
 #include "EMC2101.h"
+#include "EMC2302.h"
 #include "INA260.h"
 #include "TMP1075.h"
 #include "adc.h"
@@ -113,6 +114,9 @@ static void _init_system(GlobalState * GLOBAL_STATE)
         case DEVICE_SUPRA:
             EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
             break;
+        case DEVICE_HEX:
+            EMC2302_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            break;
         default:
     }
 
@@ -127,6 +131,7 @@ static void _init_system(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             // oled
             if (!OLED_init()) {
@@ -159,6 +164,7 @@ static void _show_overheat_screen(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             if (OLED_status()) {
                 OLED_clearLine(0);
@@ -187,6 +193,7 @@ static void _update_hashrate(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             float efficiency = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power / (module->current_hashrate / 1000.0);
             OLED_clearLine(0);
@@ -209,6 +216,7 @@ static void _update_shares(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             OLED_clearLine(1);
             memset(module->oled_buf, 0, 20);
@@ -230,6 +238,7 @@ static void _update_best_diff(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             OLED_clearLine(3);
             memset(module->oled_buf, 0, 20);
@@ -245,6 +254,7 @@ static void _clear_display(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             OLED_clearLine(0);
             OLED_clearLine(1);
@@ -263,6 +273,7 @@ static void _update_system_info(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             if (OLED_status()) {
 
@@ -297,6 +308,7 @@ static void _update_esp32_info(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             if (OLED_status()) {
 
@@ -330,6 +342,7 @@ static void _init_connection(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             if (OLED_status()) {
                 memset(module->oled_buf, 0, 20);
@@ -348,6 +361,7 @@ static void _update_connection(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             if (OLED_status()) {
                 OLED_clearLine(2);
@@ -384,6 +398,7 @@ static void _update_system_performance(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             if (OLED_status()) {
 
@@ -405,6 +420,7 @@ static void show_ap_information(const char * error, GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+        case DEVICE_HEX:
         case DEVICE_SUPRA:
             if (OLED_status()) {
                 _clear_display(GLOBAL_STATE);

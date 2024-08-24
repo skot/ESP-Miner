@@ -90,21 +90,43 @@
                 <p-chart [data]="chartData" [options]="chartOptions"></p-chart>
             </div>
         </div>
-        <div class="col-12 lg:col-12 xl:col-6">
+        <ng-template #supraUltraPower>
+            <div class="grid text-center">
+                <div class="col-4">
+                    <p-knob [min]="3" [max]="20" [readonly]="true" [(ngModel)]="info.power"
+                        valueTemplate="{value}W"></p-knob>
+                    Power
+                </div>
+
+                <div class="col-4">
+                    <p-knob [min]="4.5" [max]="5.5" [readonly]="true" [(ngModel)]="info.voltage"
+                        valueTemplate="{value}V"></p-knob>
+                    Input Voltage
+                    <span class="danger" *ngIf="info.voltage < 4.8">&nbsp; Danger: Low voltage</span>
+                </div>
+
+                <div class="col-4">
+                    <p-knob [min]="0.9" [max]="1.8" [readonly]="true" [(ngModel)]="info.coreVoltage"
+                        valueTemplate="{value}V"></p-knob>
+                    ASIC Voltage Requested
+                </div>
+            </div>
+        </ng-template>
+        <div class="col-12 lg:col-12 xl:col-4">
             <div class="card">
                 <h5>Power</h5>
-                <div class="grid text-center">
+                <div class="grid text-center" *ngIf="info.deviceModelStr=='hex'; else supraUltraPower">
                     <div class="col-4">
-                        <p-knob [min]="3" [max]="20" [readonly]="true" [(ngModel)]="info.power"
+                        <p-knob [min]="10" [max]="120" [readonly]="true" [(ngModel)]="info.power"
                             valueTemplate="{value}W"></p-knob>
                         Power
                     </div>
 
                     <div class="col-4">
-                        <p-knob [min]="4.5" [max]="5.5" [readonly]="true" [(ngModel)]="info.voltage"
+                        <p-knob [min]="11" [max]="14" [readonly]="true" [(ngModel)]="info.voltage"
                             valueTemplate="{value}V"></p-knob>
                         Input Voltage
-                        <span class="danger" *ngIf="info.voltage < 4.8">&nbsp; Danger: Low voltage</span>
+                        <span class="danger" *ngIf="info.voltage < 11.5">&nbsp; Danger: Low voltage</span>
                     </div>
 
                     <div class="col-4">
@@ -117,11 +139,11 @@
             </div>
         </div>
 
-        <div class="col-12 lg:col-6 xl:col-3">
+        <div class="col-12 lg:col-6 xl:col-5">
             <div class="card">
                 <h5>Heat</h5>
                 <div class="grid text-center">
-                    <div class="col-6">
+                    <div class="col-3">
                         <p-knob [min]="20" [max]="75" [readonly]="true" [(ngModel)]="info.temp"
                             valueTemplate="{value}C"></p-knob>
                         ASIC Temperature
@@ -130,7 +152,7 @@
                             Danger:
                             High Temperature</span>
                     </div>
-                    <div class="col-6" *ngIf="info.vrTemp > 0">
+                    <div class="col-3" *ngIf="info.vrTemp > 0">
                         <p-knob  [min]="20" [max]="145" [readonly]="true" [(ngModel)]="info.vrTemp"
                             valueTemplate="{value}C"></p-knob>
                         Voltage Regulator Temperature
@@ -139,12 +161,12 @@
                             Danger:
                             High Temperature</span>
                     </div>
-                    <div class="col-6">
+                    <div class="col-3">
                         <p-knob [min]="0" [max]="100" [readonly]="true" [(ngModel)]="info.fanspeed"
                             valueTemplate="{value}%"></p-knob>
                         Fan %
                     </div>
-                    <div class="col-6">
+                    <div class="col-3">
                         <p-knob [min]="0" [max]="20000" [readonly]="true" [(ngModel)]="info.fanrpm"
                             valueTemplate="{value}"></p-knob>
                         Fan RPM
