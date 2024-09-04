@@ -58,7 +58,8 @@ void app_main(void)
     xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
 
     if (GLOBAL_STATE.ASIC_functions.init_fn != NULL) {
-        wifi_softap_off();
+
+        Network_AP_off();
 
         queue_init(&GLOBAL_STATE.stratum_queue);
         queue_init(&GLOBAL_STATE.ASIC_jobs_queue);
@@ -75,8 +76,7 @@ void app_main(void)
     }
 }
 
-void MINER_set_wifi_status(wifi_status_t status, uint16_t retry_count)
-{
+void MINER_set_wifi_status(wifi_status_t status, uint16_t retry_count) {
     if (status == WIFI_RETRYING) {
         snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Retrying: %d", retry_count);
         return;
@@ -85,3 +85,5 @@ void MINER_set_wifi_status(wifi_status_t status, uint16_t retry_count)
         return;
     }
 }
+
+

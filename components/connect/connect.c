@@ -65,6 +65,7 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
         s_retry_num++;
         ESP_LOGI(TAG, "Retrying WiFi connection...");
         MINER_set_wifi_status(WIFI_RETRYING, s_retry_num);
+        //Network_set_wifi_status(GlobalState * GLOBAL_STATE, wifi_status_t status, uint16_t retry_count)
 
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t * event = (ip_event_got_ip_t *) event_data;
@@ -74,7 +75,7 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
     }
 }
 
-void generate_ssid(char * ssid)
+void Connect_generate_ssid(char * ssid)
 {
     uint8_t mac[6];
     esp_wifi_get_mac(ESP_IF_WIFI_AP, mac);
@@ -90,7 +91,7 @@ esp_netif_t * wifi_init_softap(void)
     char ssid_with_mac[13]; // "Bitaxe" + 4 bytes from MAC address
 
     // Generate the SSID
-    generate_ssid(ssid_with_mac);
+    Connect_generate_ssid(ssid_with_mac);
 
     wifi_config_t wifi_ap_config;
     memset(&wifi_ap_config, 0, sizeof(wifi_ap_config)); // Clear the structure

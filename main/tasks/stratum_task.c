@@ -75,7 +75,7 @@ void stratum_task(void * pvParameters)
     int addr_family = 0;
     int ip_protocol = 0;
 	int retry_attempts = 0;
-    int delay_ms = BASE_DELAY_MS;
+    //int delay_ms = BASE_DELAY_MS;
 
 
     char *stratum_url = GLOBAL_STATE->SYSTEM_MODULE.pool_url;
