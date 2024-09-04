@@ -536,6 +536,14 @@ static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
 void log_to_websocket(const char * format, va_list args)
 {
     pthread_mutex_lock(&log_mutex);
+    // Check if 25 seconds have passed since system boot
+    int64_t uptime = esp_timer_get_time() / 1000000; // Convert microseconds to seconds
+    if (uptime < 25) {
+        // If less than 25 seconds have passed, only print to console
+        vprintf(format, args);
+        pthread_mutex_unlock(&log_mutex);
+        return;
+    }
 
     va_list args_copy;
     va_copy(args_copy, args);
