@@ -8,15 +8,14 @@
 #include "asic_result_task.h"
 #include "asic_task.h"
 #include "create_jobs_task.h"
-#include "esp_netif.h"
 #include "system.h"
-#include "http_server.h"
 #include "nvs_config.h"
 #include "nvs_device.h"
 #include "serial.h"
 #include "stratum_task.h"
 #include "user_input_task.h"
 #include "self_test.h"
+#include "network.h"
 
 static GlobalState GLOBAL_STATE = {.extranonce_str = NULL, .extranonce_2_len = 0, .abandon_work = 0, .version_mask = 0};
 
@@ -50,45 +49,8 @@ void app_main(void)
     xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void *) &GLOBAL_STATE, 3, NULL);
     xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
 
-    // pull the wifi credentials and hostname out of NVS
-    char * wifi_ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, WIFI_SSID);
-    char * wifi_pass = nvs_config_get_string(NVS_CONFIG_WIFI_PASS, WIFI_PASS);
-    char * hostname  = nvs_config_get_string(NVS_CONFIG_HOSTNAME, HOSTNAME);
-
-    // copy the wifi ssid to the global state
-    strncpy(GLOBAL_STATE.SYSTEM_MODULE.ssid, wifi_ssid, sizeof(GLOBAL_STATE.SYSTEM_MODULE.ssid));
-    GLOBAL_STATE.SYSTEM_MODULE.ssid[sizeof(GLOBAL_STATE.SYSTEM_MODULE.ssid)-1] = 0;
-
-    // init and connect to wifi
-    wifi_init(wifi_ssid, wifi_pass, hostname);
-    start_rest_server((void *) &GLOBAL_STATE);
-    EventBits_t result_bits = wifi_connect();
-
-    if (result_bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "Connected to SSID: %s", wifi_ssid);
-        strncpy(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, "Connected!", 20);
-    } else if (result_bits & WIFI_FAIL_BIT) {
-        ESP_LOGE(TAG, "Failed to connect to SSID: %s", wifi_ssid);
-
-        strncpy(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, "Failed to connect", 20);
-        // User might be trying to configure with AP, just chill here
-        ESP_LOGI(TAG, "Finished, waiting for user input.");
-        while (1) {
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-        }
-    } else {
-        ESP_LOGE(TAG, "UNEXPECTED EVENT");
-        strncpy(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, "unexpected error", 20);
-        // User might be trying to configure with AP, just chill here
-        ESP_LOGI(TAG, "Finished, waiting for user input.");
-        while (1) {
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-        }
-    }
-
-    free(wifi_ssid);
-    free(wifi_pass);
-    free(hostname);
+    //get the WiFi connected
+    Network_connect(&GLOBAL_STATE);
 
     // set the startup_done flag
     GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;

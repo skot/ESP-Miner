@@ -437,7 +437,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
         const char * sys_info = cJSON_Print(root);
     httpd_resp_sendstr(req, sys_info);
-    free(sys_info);
+    free((void *)sys_info);
     cJSON_Delete(root);
     return ESP_OK;
 }
@@ -601,7 +601,7 @@ esp_err_t echo_handler(httpd_req_t * req)
     if (req->method == HTTP_GET) {
         ESP_LOGI(TAG, "Handshake done, the new connection was opened");
         fd = httpd_req_to_sockfd(req);
-        esp_log_set_vprintf(log_to_websocket);
+        esp_log_set_vprintf((vprintf_like_t)log_to_websocket);
         return ESP_OK;
     }
 

@@ -9,6 +9,7 @@ SRCS
     "main.c"
     "nvs_config.c"
     "nvs_device.c"
+    "network.c"
     "oled.c"
     "system.c"
     "TMP1075.c"

@@ -1,0 +1,55 @@
+#include "esp_log.h"
+#include "esp_netif.h"
+
+#include "nvs_flash.h"
+#include "nvs_config.h"
+#include "nvs_device.h"
+
+#include "http_server.h"
+#include "connect.h"
+#include "network.h"
+
+static const char * TAG = "network";
+
+bool Network_connect(GlobalState * GLOBAL_STATE) {
+
+    char * wifi_ssid;
+    char * wifi_pass;
+    char * hostname;
+
+    // pull the wifi credentials and hostname out of NVS
+    NVSDevice_get_wifi_creds(GLOBAL_STATE, &wifi_ssid, &wifi_pass, &hostname);
+
+    // init and connect to wifi
+    wifi_init(wifi_ssid, wifi_pass, hostname);
+    start_rest_server((void *) GLOBAL_STATE);
+    EventBits_t result_bits = wifi_connect();
+
+    if (result_bits & WIFI_CONNECTED_BIT) {
+        ESP_LOGI(TAG, "Connected to SSID: %s", wifi_ssid);
+        strncpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Connected!", 20);
+    } else if (result_bits & WIFI_FAIL_BIT) {
+        ESP_LOGE(TAG, "Failed to connect to SSID: %s", wifi_ssid);
+
+        strncpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Failed to connect", 20);
+        // User might be trying to configure with AP, just chill here
+        ESP_LOGI(TAG, "Finished, waiting for user input.");
+        while (1) {
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+        }
+    } else {
+        ESP_LOGE(TAG, "UNEXPECTED EVENT");
+        strncpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "unexpected error", 20);
+        // User might be trying to configure with AP, just chill here
+        ESP_LOGI(TAG, "Finished, waiting for user input.");
+        while (1) {
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+        }
+    }
+
+    free(wifi_ssid);
+    free(wifi_pass);
+    free(hostname);
+
+    return true;
+}
