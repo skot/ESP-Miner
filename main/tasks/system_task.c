@@ -24,7 +24,7 @@ void SYSTEM_task(void * pvParameters) {
 
     /* Attempt to create the event group. */
     systemEventGroup = xEventGroupCreate();
-    EventBits_t uxBits;
+    EventBits_t eventBits;
 
     if (systemEventGroup == NULL) {
         ESP_LOGE(TAG, "Event group creation failed");
@@ -59,7 +59,7 @@ void SYSTEM_task(void * pvParameters) {
 
         /* Wait a maximum of 100ms for either bit 0 or bit 4 to be set within
           the event group. Clear the bits before exiting. */
-        uxBits = xEventGroupWaitBits(
+        eventBits = xEventGroupWaitBits(
                 systemEventGroup,   /* The event group being tested. */
                 eBIT_0 | eBIT_4, /* The bits within the event group to wait for. */
                 pdTRUE,        /* BIT_0 & BIT_4 should be cleared before returning. */
@@ -74,7 +74,7 @@ void SYSTEM_task(void * pvParameters) {
             continue;  // Skip the normal screen cycle
         }
 
-        if (uxBits & eBIT_0) {
+        if (eventBits & eBIT_0) {
             // Handle button press
             ESP_LOGI(TAG, "Button pressed, switching to next screen");
             // Handle button press logic here
@@ -114,7 +114,7 @@ void SYSTEM_task(void * pvParameters) {
             // }
         }
 
-        uxBits = 0; // Reset uxBits for the next iteration
+        eventBits = 0; // Reset uxBits for the next iteration
     }
 }
 
