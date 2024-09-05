@@ -1,17 +1,15 @@
 
 #include "esp_event.h"
 #include "esp_log.h"
-#include "nvs_flash.h"
 
 #include "main.h"
 
 #include "asic_result_task.h"
 #include "asic_task.h"
 #include "create_jobs_task.h"
+#include "system_task.h"
 #include "system.h"
-#include "nvs_config.h"
 #include "nvs_device.h"
-#include "serial.h"
 #include "stratum_task.h"
 #include "user_input_task.h"
 #include "self_test.h"
@@ -55,7 +53,7 @@ void app_main(void)
     // set the startup_done flag
     GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
 
-    xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
+    //xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
 
     if (GLOBAL_STATE.ASIC_functions.init_fn != NULL) {
 
