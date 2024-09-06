@@ -136,7 +136,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     power_management->current = INA260_read_current();
                     power_management->power = INA260_read_power() / 1000;
 				}
-            
+                
                 break;
             case DEVICE_GAMMA:
                     power_management->voltage = TPS546_get_vin() * 1000;
@@ -231,7 +231,9 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, 100);
                     nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, 0);
                     nvs_config_set_u16(NVS_CONFIG_OVERHEAT_MODE, 1);
-                    exit(EXIT_FAILURE);
+                    //exit(EXIT_FAILURE);
+
+                    esp_restart();
                 }
                 break;
             default:

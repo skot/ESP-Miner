@@ -51,12 +51,6 @@ void SYSTEM_task(void * pvParameters) {
         vTaskDelay(5000 / portTICK_PERIOD_MS);
     }
 
-    // show the connection screen
-    while (!module->startup_done) {
-        System_update_connection(GLOBAL_STATE);
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
-
     current_screen = 0;
 
     while (1) {
