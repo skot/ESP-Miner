@@ -20,6 +20,8 @@ static const char * TAG = "SystemTask";
 static void IRAM_ATTR gpio_isr_handler(void* arg);
 static void init_gpio(void);
 
+static uint8_t current_screen;
+
 void SYSTEM_task(void * pvParameters) {
 
     /* Attempt to create the event group. */
@@ -55,6 +57,8 @@ void SYSTEM_task(void * pvParameters) {
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
 
+    current_screen = 0;
+
     while (1) {
 
         /* Wait a maximum of 100ms for either bit 0 or bit 4 to be set within
@@ -74,47 +78,31 @@ void SYSTEM_task(void * pvParameters) {
             continue;  // Skip the normal screen cycle
         }
 
-        if (eventBits & eBIT_0) {
-            // Handle button press
-            ESP_LOGI(TAG, "Button pressed, switching to next screen");
-            // Handle button press logic here
-        } else {
-            ESP_LOGI(TAG, "No button press detected, cycling through screens");
-        }
+        // if (eventBits & eBIT_0) {
+        //     // Handle button press
+        //     ESP_LOGI(TAG, "Button pressed, switching to next screen");
+        //     // Handle button press logic here
+        // } else {
+        //     ESP_LOGI(TAG, "No button press detected, cycling through screens");
+        // }
 
         // Automatically cycle through screens
-        for (int screen = 0; screen < 3; screen++) {
-            System_clear_display(GLOBAL_STATE);
-            module->screen_page = screen;
+        System_clear_display(GLOBAL_STATE);
 
-            switch (module->screen_page) {
-                case 0:
-                    System_update_system_performance(GLOBAL_STATE);
-                    break;
-                case 1:
-                    System_update_system_info(GLOBAL_STATE);
-                    break;
-                case 2:
-                    System_update_esp32_info(GLOBAL_STATE);
-                    break;
-            }
-
-            // // Wait for 10 seconds or until a button press
-            // for (int i = 0; i < 10; i++) {
-            //     if (xQueueReceive(user_input_queue, &input_event, pdMS_TO_TICKS(1000))) {
-            //         if (strcmp(input_event, "SHORT") == 0) {
-            //             ESP_LOGI(TAG, "Short button press detected, switching to next screen");
-            //             screen = (screen + 1) % 3; // Move to next screen
-            //             break;
-            //         } else if (strcmp(input_event, "LONG") == 0) {
-            //             ESP_LOGI(TAG, "Long button press detected, toggling WiFi SoftAP");
-            //             toggle_wifi_softap(); // Toggle AP 
-            //         }
-            //     }
-            // }
+        switch (current_screen) {
+            case 0:
+                System_update_system_performance(GLOBAL_STATE);
+                break;
+            case 1:
+                System_update_system_info(GLOBAL_STATE);
+                break;
+            case 2:
+                System_update_esp32_info(GLOBAL_STATE);
+                break;
         }
 
         eventBits = 0; // Reset uxBits for the next iteration
+        current_screen = (current_screen + 1) % 3;
     }
 }
 
