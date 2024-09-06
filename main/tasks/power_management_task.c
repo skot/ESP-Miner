@@ -118,8 +118,6 @@ void POWER_MANAGEMENT_task(void * pvParameters)
         default:
     }
 
-    vTaskDelay(4000 / portTICK_PERIOD_MS);
-
     while (1) {
 
         switch (GLOBAL_STATE->device_model) {

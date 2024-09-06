@@ -12,17 +12,16 @@ static const char * TAG = "nvs_device";
 static const double NONCE_SPACE = 4294967296.0; //  2^32
 
 
-bool NVSDevice_init(void) {
+esp_err_t NVSDevice_init(void) {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES) {
         ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
     }
-    ESP_ERROR_CHECK(err);
-    return true;
+    return err;
 }
 
-bool NVSDevice_get_wifi_creds(GlobalState * GLOBAL_STATE, char ** wifi_ssid, char ** wifi_pass, char ** hostname) {
+esp_err_t NVSDevice_get_wifi_creds(GlobalState * GLOBAL_STATE, char ** wifi_ssid, char ** wifi_pass, char ** hostname) {
     // pull the wifi credentials and hostname out of NVS
     *wifi_ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, WIFI_SSID);
     *wifi_pass = nvs_config_get_string(NVS_CONFIG_WIFI_PASS, WIFI_PASS);
@@ -32,10 +31,10 @@ bool NVSDevice_get_wifi_creds(GlobalState * GLOBAL_STATE, char ** wifi_ssid, cha
     strncpy(GLOBAL_STATE->SYSTEM_MODULE.ssid, *wifi_ssid, sizeof(GLOBAL_STATE->SYSTEM_MODULE.ssid));
     GLOBAL_STATE->SYSTEM_MODULE.ssid[sizeof(GLOBAL_STATE->SYSTEM_MODULE.ssid)-1] = 0;
 
-    return true;
+    return ESP_OK;
 }
 
-bool NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
+esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
 
     GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
     ESP_LOGI(TAG, "NVS_CONFIG_ASIC_FREQ %f", (float)GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value);
@@ -69,7 +68,7 @@ bool NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
         GLOBAL_STATE->asic_count = -1;
         GLOBAL_STATE->voltage_domain = 1;
 
-        return false;
+        return ESP_FAIL;
     }
 
     GLOBAL_STATE->board_version = atoi(nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "000"));
@@ -137,8 +136,8 @@ bool NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .send_work_fn = NULL};
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
         // maybe should return here to not execute anything with a faulty device parameter !
-        return false;
+        return ESP_FAIL;
     }
 
-    return true;
+    return ESP_OK;
 }

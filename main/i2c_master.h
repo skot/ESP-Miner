@@ -13,4 +13,12 @@ esp_err_t i2c_master_register_write_byte(uint8_t device_address, uint8_t reg_add
 esp_err_t i2c_master_register_write_bytes(uint8_t device_address, uint8_t * data, uint16_t len);
 esp_err_t i2c_master_register_write_word(uint8_t device_address, uint8_t reg_addr, uint16_t data);
 
+esp_err_t smb_read_byte(uint8_t, uint8_t command, uint8_t *data);
+esp_err_t smb_write_byte(uint8_t, uint8_t command, uint8_t data);
+esp_err_t smb_read_word(uint8_t, uint8_t command, uint16_t *result);
+esp_err_t smb_write_word(uint8_t, uint8_t command, uint16_t data);
+esp_err_t smb_read_block(uint8_t, uint8_t command, uint8_t *data, uint8_t len);
+esp_err_t smb_write_block(uint8_t, uint8_t command, uint8_t *data, uint8_t len);
+
+
 #endif /* I2C_MASTER_H_ */

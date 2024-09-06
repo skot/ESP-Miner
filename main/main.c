@@ -1,9 +1,10 @@
 
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_err.h"
 
 #include "main.h"
-
+#include "i2c_master.h"
 #include "asic_result_task.h"
 #include "asic_task.h"
 #include "create_jobs_task.h"
@@ -17,7 +18,7 @@
 
 static GlobalState GLOBAL_STATE = {.extranonce_str = NULL, .extranonce_2_len = 0, .abandon_work = 0, .version_mask = 0};
 
-static const char * TAG = "bitaxe";
+static const char * TAG = "main";
 
 void app_main(void)
 {
@@ -27,14 +28,20 @@ void app_main(void)
         //load the Bitaxe splashscreen on the display
 
     //initialize the ESP32 NVS
-    if (!NVSDevice_init()){
+    if (NVSDevice_init() != ESP_OK){
         ESP_LOGE(TAG, "Failed to init NVS");
         return;
     }
 
     //parse the NVS config into GLOBAL_STATE
-    if (!NVSDevice_parse_config(&GLOBAL_STATE)) {
+    if (NVSDevice_parse_config(&GLOBAL_STATE) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to parse NVS config");
+        return;
+    }
+
+    //init I2C
+    if (i2c_master_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to init I2C");
         return;
     }
 
@@ -48,7 +55,10 @@ void app_main(void)
     xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
 
     //get the WiFi connected
-    Network_connect(&GLOBAL_STATE);
+    if (Network_connect(&GLOBAL_STATE) != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to connect to WiFi");
+        return;
+    }
 
     // set the startup_done flag
     GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;

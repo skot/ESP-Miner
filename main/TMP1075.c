@@ -4,7 +4,7 @@
 
 #include "TMP1075.h"
 
-static const char *TAG = "TMP1075.c";
+//static const char *TAG = "TMP1075.c";
 
 bool TMP1075_installed(int);
 uint8_t TMP1075_read_temperature(int);

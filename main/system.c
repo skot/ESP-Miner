@@ -92,9 +92,9 @@ void System_init_system(GlobalState * GLOBAL_STATE) {
     // set the wifi_status to blank
     memset(module->wifi_status, 0, 20);
 
-    // Init I2C
-    ESP_ERROR_CHECK(i2c_master_init());
-    ESP_LOGI(TAG, "I2C initialized successfully");
+    // // Init I2C
+    // ESP_ERROR_CHECK(i2c_master_init());
+    // ESP_LOGI(TAG, "I2C initialized successfully");
 
     // Initialize the core voltage regulator
     VCORE_init(GLOBAL_STATE);

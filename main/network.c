@@ -11,7 +11,7 @@
 
 static const char * TAG = "network";
 
-bool Network_connect(GlobalState * GLOBAL_STATE) {
+esp_err_t Network_connect(GlobalState * GLOBAL_STATE) {
 
     char * wifi_ssid;
     char * wifi_pass;
@@ -51,7 +51,7 @@ bool Network_connect(GlobalState * GLOBAL_STATE) {
     free(wifi_pass);
     free(hostname);
 
-    return true;
+    return ESP_OK;
 }
 
 void Network_AP_off(void) {
