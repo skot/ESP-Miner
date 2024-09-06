@@ -1,3 +1,6 @@
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
 #include "i2c_master.h"
 
 #define I2C_MASTER_SCL_IO 48        /*!< GPIO number used for I2C master clock */
@@ -5,6 +8,9 @@
 #define I2C_MASTER_FREQ_HZ 400000   /*!< I2C master clock frequency */
 #define I2C_MASTER_TX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
 #define I2C_MASTER_RX_BUF_DISABLE 0 /*!< I2C master doesn't need buffer */
+
+//setup I2C semaphore to protect I2C access
+SemaphoreHandle_t i2c_sem = NULL;
 
 /**
  * @brief i2c master initialization
@@ -24,6 +30,9 @@ esp_err_t i2c_master_init(void)
 
     i2c_param_config(i2c_master_port, &conf);
 
+    //init I2C semaphore
+    i2c_sem = xSemaphoreCreateMutex();
+
     return i2c_driver_install(i2c_master_port, conf.mode, I2C_MASTER_RX_BUF_DISABLE, I2C_MASTER_TX_BUF_DISABLE, 0);
 }
 
@@ -32,6 +41,9 @@ esp_err_t i2c_master_init(void)
  */
 esp_err_t i2c_master_delete(void)
 {
+    //delete I2C semaphore
+    vSemaphoreDelete(i2c_sem);
+
     return i2c_driver_delete(I2C_MASTER_NUM);
 }
 
@@ -40,8 +52,17 @@ esp_err_t i2c_master_delete(void)
  */
 esp_err_t i2c_master_register_read(uint8_t device_address, uint8_t reg_addr, uint8_t * data, size_t len)
 {
-    return i2c_master_write_read_device(I2C_MASTER_NUM, device_address, &reg_addr, 1, data, len,
-                                        I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+    esp_err_t return_value;
+    //wait for I2C access
+    if (xSemaphoreTake(i2c_sem, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS) != pdTRUE) {
+        return ESP_FAIL;
+    }
+    return_value = i2c_master_write_read_device(I2C_MASTER_NUM, device_address, &reg_addr, 1, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+
+    //release I2C access
+    xSemaphoreGive(i2c_sem);
+
+    return return_value;
 }
 
 /**
@@ -49,13 +70,59 @@ esp_err_t i2c_master_register_read(uint8_t device_address, uint8_t reg_addr, uin
  */
 esp_err_t i2c_master_register_write_byte(uint8_t device_address, uint8_t reg_addr, uint8_t data)
 {
-    int ret;
     uint8_t write_buf[2] = {reg_addr, data};
 
-    ret = i2c_master_write_to_device(I2C_MASTER_NUM, device_address, write_buf, sizeof(write_buf),
-                                     I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+    esp_err_t return_value;
+    //wait for I2C access
+    if (xSemaphoreTake(i2c_sem, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS) != pdTRUE) {
+        return ESP_FAIL;
+    }
 
-    return ret;
+    return_value = i2c_master_write_to_device(I2C_MASTER_NUM, device_address, write_buf, sizeof(write_buf), I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+
+    //release I2C access
+    xSemaphoreGive(i2c_sem);
+
+    return return_value;
+}
+
+/**
+ * @brief Write multiple bytes to a I2C register
+ */
+esp_err_t i2c_master_register_write_bytes(uint8_t device_address, uint8_t reg_addr, uint8_t * data, uint16_t len)
+{
+
+    esp_err_t return_value;
+
+    //allocate a uint8_t array to store the data
+    uint8_t *write_buf = (uint8_t *)malloc(len+1);
+
+    //check if the allocation was successful
+    if (write_buf == NULL) {
+        return ESP_FAIL;
+    }
+
+    write_buf[0] = reg_addr; //set the first byte to the register address
+
+    //fill the data buffer with the data
+    for (int i = 0; i < len; i++) {
+        write_buf[i+1] = data;
+    }
+
+    //wait for I2C access
+    if (xSemaphoreTake(i2c_sem, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS) != pdTRUE) {
+        return ESP_FAIL;
+    }
+
+    return_value = i2c_master_write_to_device(I2C_MASTER_NUM, device_address, write_buf, sizeof(write_buf), I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+
+    //free the allocated memory
+    free(write_buf);
+
+    //release I2C access
+    xSemaphoreGive(i2c_sem);
+
+    return return_value;
 }
 
 /**
@@ -63,11 +130,18 @@ esp_err_t i2c_master_register_write_byte(uint8_t device_address, uint8_t reg_add
  */
 esp_err_t i2c_master_register_write_word(uint8_t device_address, uint8_t reg_addr, uint16_t data)
 {
-    int ret;
     uint8_t write_buf[3] = {reg_addr, (data >> 8) & 0xFF, data & 0xFF};
+    esp_err_t return_value;
+    //wait for I2C access
+    if (xSemaphoreTake(i2c_sem, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS) != pdTRUE) {
+        return ESP_FAIL;
+    }
 
-    ret = i2c_master_write_to_device(I2C_MASTER_NUM, device_address, write_buf, sizeof(write_buf),
+    return_value = i2c_master_write_to_device(I2C_MASTER_NUM, device_address, write_buf, sizeof(write_buf),
                                      I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 
-    return ret;
+    //release I2C access
+    xSemaphoreGive(i2c_sem);
+
+    return return_value;
 }
