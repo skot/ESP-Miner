@@ -25,6 +25,8 @@
 
 #include "oled.h"
 
+#define DEVICE_ADDRESS 0x3C
+
 extern unsigned char ucSmallFont[];
 static int iScreenOffset;            // current write offset of screen data
 static unsigned char ucScreen[1024]; // local copy of the image buffer
@@ -283,12 +285,12 @@ static esp_err_t write(uint8_t * data, uint8_t len)
 {
     int ret;
 
-    //ret = i2c_master_write_to_device(I2C_MASTER_NUM, 0x3C, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
-    ret = i2c_master_register_write_bytes(I2C_MASTER_NUM, I2C_MASTER_NUM, data, len);
+    //ret = i2c_master_write_to_device(I2C_MASTER_NUM, DEVICE_ADDRESS, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
+    ret = i2c_master_register_write_bytes(DEVICE_ADDRESS, data, len);
 
     if (ret != ESP_OK) {
         ESP_LOGE("OLED", "Failed to write to device: %d", ret);
     }
-    
+
     return ret;
 }

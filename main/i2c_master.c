@@ -1,5 +1,9 @@
+#include <string.h>
+
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "esp_err.h"
+#include "esp_log.h"
 
 #include "i2c_master.h"
 
@@ -89,35 +93,18 @@ esp_err_t i2c_master_register_write_byte(uint8_t device_address, uint8_t reg_add
 /**
  * @brief Write multiple bytes to a I2C register
  */
-esp_err_t i2c_master_register_write_bytes(uint8_t device_address, uint8_t reg_addr, uint8_t * data, uint16_t len)
+esp_err_t i2c_master_register_write_bytes(uint8_t device_address, uint8_t * data, uint16_t len)
 {
 
     esp_err_t return_value;
 
-    //allocate a uint8_t array to store the data
-    uint8_t *write_buf = (uint8_t *)malloc(len+1);
-
-    //check if the allocation was successful
-    if (write_buf == NULL) {
-        return ESP_FAIL;
-    }
-
-    write_buf[0] = reg_addr; //set the first byte to the register address
-
-    //fill the data buffer with the data
-    for (int i = 0; i < len; i++) {
-        write_buf[i+1] = data;
-    }
-
     //wait for I2C access
     if (xSemaphoreTake(i2c_sem, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS) != pdTRUE) {
+        ESP_LOGE("I2C", "Failed to take I2C semaphore");
         return ESP_FAIL;
     }
 
-    return_value = i2c_master_write_to_device(I2C_MASTER_NUM, device_address, write_buf, sizeof(write_buf), I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
-
-    //free the allocated memory
-    free(write_buf);
+    return_value = i2c_master_write_to_device(I2C_MASTER_NUM, device_address, data, len, I2C_MASTER_TIMEOUT_MS / portTICK_PERIOD_MS);
 
     //release I2C access
     xSemaphoreGive(i2c_sem);
