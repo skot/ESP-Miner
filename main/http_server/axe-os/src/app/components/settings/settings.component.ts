@@ -3,7 +3,7 @@ import { Component } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
 import { FileUploadHandlerEvent } from 'primeng/fileupload';
-import { map, Observable, shareReplay, startWith, switchMap } from 'rxjs';
+import { map, Observable, shareReplay, startWith, switchMap, of } from 'rxjs';
 import { GithubUpdateService } from 'src/app/services/github-update.service';
 import { LoadingService } from 'src/app/services/loading.service';
 import { SystemService } from 'src/app/services/system.service';
@@ -45,12 +45,16 @@ export class SettingsComponent {
     window.addEventListener('resize', this.checkDevTools);
     this.checkDevTools();
     this.info$ = this.systemService.getInfo().pipe(shareReplay({refCount: true, bufferSize: 1}))
-    
-    this.latestRelease$ = this.info$.pipe(
-      switchMap(info => {
-        return this.githubUpdateService.getReleases(info.ASICModel).pipe(
-          map(releases => releases[0])
-        );
+
+    this.latestRelease$ = of(null).pipe(
+      switchMap(() => {
+        if (this.ASICModel) {
+          return this.githubUpdateService.getReleases(this.ASICModel).pipe(
+            map(releases => releases[0])
+          );
+        } else {
+          return of(null);
+        }
       })
     );
 
