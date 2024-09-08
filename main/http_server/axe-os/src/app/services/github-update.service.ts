@@ -30,7 +30,7 @@ export class GithubUpdateService {
   public getReleases(currentASICModel: eASICModel): Observable<GithubRelease[]> {
     console.log('Fetching releases for ASIC model:', currentASICModel);
     return this.httpClient.get<GithubRelease[]>(
-      'https://api.github.com/repos/WantClue/ESP-Miner-WantClue/releases'
+      'https://api.github.com/repos/Skot/ESP-Miner/releases'
     ).pipe(
       tap(releases => console.log('Fetched releases:', releases)),
       map(releases => releases.map(release => {
