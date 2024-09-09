@@ -72,13 +72,13 @@ void SYSTEM_task(void * pvParameters) {
             continue;  // Skip the normal screen cycle
         }
 
-        // if (eventBits & eBIT_0) {
-        //     // Handle button press
-        //     ESP_LOGI(TAG, "Button pressed, switching to next screen");
-        //     // Handle button press logic here
-        // } else {
-        //     ESP_LOGI(TAG, "No button press detected, cycling through screens");
-        // }
+        if (eventBits & eBIT_0) {
+            // Handle button press
+            ESP_LOGI(TAG, "Button pressed, switching to next screen");
+            // Handle button press logic here
+        } else {
+            ESP_LOGI(TAG, "No button press detected, cycling through screens");
+        }
 
         // Automatically cycle through screens
         System_clear_display(GLOBAL_STATE);

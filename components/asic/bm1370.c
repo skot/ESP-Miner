@@ -130,7 +130,7 @@ void BM1370_send_hash_frequency(int id, float target_freq, float max_diff) {
     uint8_t freqbuf[6] = {0x00, 0x08, 0x40, 0xA0, 0x02, 0x41};
     uint8_t postdiv_min = 255;
     uint8_t postdiv2_min = 255;
-    float best_freq = 0;
+    //float best_freq = 0;
     uint8_t best_refdiv = 0, best_fbdiv = 0, best_postdiv1 = 0, best_postdiv2 = 0;
 
     for (uint8_t refdiv = 2; refdiv > 0; refdiv--) {
@@ -147,7 +147,7 @@ void BM1370_send_hash_frequency(int id, float target_freq, float max_diff) {
                     
                     postdiv2_min = postdiv2;
                     postdiv_min = postdiv1 * postdiv2;
-                    best_freq = newf;
+                    //best_freq = newf;
                     best_refdiv = refdiv;
                     best_fbdiv = fb_divider;
                     best_postdiv1 = postdiv1;
@@ -295,8 +295,6 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
 
     do_frequency_ramp_up(frequency);
 
-    //BM1370_send_hash_frequency(frequency);
-
     //register 10 is still a bit of a mystery. discussion: https://github.com/skot/ESP-Miner/pull/167
 
     // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x11, 0x5A}; //S19k Pro Default
@@ -325,13 +323,13 @@ static void _reset(void)
     vTaskDelay(100 / portTICK_PERIOD_MS);
 }
 
-static void _send_read_address(void)
-{
+// static void _send_read_address(void)
+// {
 
-    unsigned char read_address[2] = {0x00, 0x00};
-    // send serial data
-    _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_READ), read_address, 2, false);
-}
+//     unsigned char read_address[2] = {0x00, 0x00};
+//     // send serial data
+//     _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_READ), read_address, 2, false);
+// }
 
 uint8_t BM1370_init(uint64_t frequency, uint16_t asic_count)
 {

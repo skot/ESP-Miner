@@ -8,7 +8,7 @@
 #define CRC5_MASK 0x1F
 #define BM1368_INITIAL_DIFFICULTY 256
 
-#define BM1368_SERIALTX_DEBUG false
+#define BM1368_SERIALTX_DEBUG true
 #define BM1368_SERIALRX_DEBUG false
 #define BM1368_DEBUG_WORK false //causes insane amount of debug output
 #define BM1368_DEBUG_JOBS false //causes insane amount of debug output
@@ -40,7 +40,7 @@ void BM1368_send_work(void * GLOBAL_STATE, bm_job * next_bm_job);
 void BM1368_set_job_difficulty_mask(int);
 int BM1368_set_max_baud(void);
 int BM1368_set_default_baud(void);
-void BM1368_send_hash_frequency(float frequency);
+void BM1368_send_hash_frequency(int, float, float);
 task_result * BM1368_proccess_work(void * GLOBAL_STATE);
 
 #endif /* BM1368_H_ */
