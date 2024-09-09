@@ -22,7 +22,6 @@
         "create_jobs_task.h": "c",
         "nvs_config.h": "c",
         "global_state.h": "c",
-        "user_input_task.h": "c",
         "esp_event.h": "c",
         "nvs_flash.h": "c",
         "network.h": "c",
@@ -46,7 +45,12 @@
         "tuple": "c",
         "type_traits": "c",
         "utility": "c",
-        "i2c_master.h": "c"
+        "i2c_master.h": "c",
+        "connect.h": "c",
+        "oled.h": "c",
+        "system_task.h": "c",
+        "esp_log.h": "c",
+        "display_task.h": "c"
     },
     "editor.formatOnSave": false,
     "cSpell.words": [

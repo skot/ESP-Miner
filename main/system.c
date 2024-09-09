@@ -92,10 +92,6 @@ void System_init_system(GlobalState * GLOBAL_STATE) {
     // set the wifi_status to blank
     memset(module->wifi_status, 0, 20);
 
-    // // Init I2C
-    // ESP_ERROR_CHECK(i2c_master_init());
-    // ESP_LOGI(TAG, "I2C initialized successfully");
-
     // Initialize the core voltage regulator
     VCORE_init(GLOBAL_STATE);
     VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
@@ -116,23 +112,6 @@ void System_init_system(GlobalState * GLOBAL_STATE) {
     esp_err_t ret = ensure_overheat_mode_config();
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to ensure overheat_mode config");
-    }
-
-    switch (GLOBAL_STATE->device_model) {
-        case DEVICE_MAX:
-        case DEVICE_ULTRA:
-        case DEVICE_SUPRA:
-        case DEVICE_GAMMA:
-            // oled
-            if (!OLED_init()) {
-                ESP_LOGI(TAG, "OLED init failed!");
-            } else {
-                ESP_LOGI(TAG, "OLED init success!");
-                // clear the oled screen
-                OLED_fill(0);
-            }
-            break;
-        default:
     }
 
     netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
@@ -319,25 +298,6 @@ void System_update_esp32_info(GlobalState * GLOBAL_STATE)
                 OLED_writeString(0, 2, module->oled_buf);
 
                 OLED_writeString(0, 3, esp_app_get_description()->version);
-            }
-            break;
-        default:
-    }
-}
-
-void System_init_connection(GlobalState * GLOBAL_STATE)
-{
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
-
-    switch (GLOBAL_STATE->device_model) {
-        case DEVICE_MAX:
-        case DEVICE_ULTRA:
-        case DEVICE_SUPRA:
-        case DEVICE_GAMMA:
-            if (OLED_status()) {
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, "Connecting to SSID:");
-                OLED_writeString(0, 0, module->oled_buf);
             }
             break;
         default:

@@ -12,9 +12,9 @@
 #include "system.h"
 #include "nvs_device.h"
 #include "stratum_task.h"
-#include "user_input_task.h"
 #include "self_test.h"
 #include "network.h"
+#include "display_task.h"
 
 static GlobalState GLOBAL_STATE = {.extranonce_str = NULL, .extranonce_2_len = 0, .abandon_work = 0, .version_mask = 0};
 
@@ -24,8 +24,14 @@ void app_main(void)
 {
     ESP_LOGI(TAG, "Welcome to the bitaxe - hack the planet!");
 
+    //init I2C
+    if (i2c_master_init() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to init I2C");
+        return;
+    }
+
     //initialize the Bitaxe Display
-        //load the Bitaxe splashscreen on the display
+    xTaskCreate(DISPLAY_task, "DISPLAY_task", 4096, (void *) &GLOBAL_STATE, 3, NULL);
 
     //initialize the ESP32 NVS
     if (NVSDevice_init() != ESP_OK){
@@ -36,12 +42,8 @@ void app_main(void)
     //parse the NVS config into GLOBAL_STATE
     if (NVSDevice_parse_config(&GLOBAL_STATE) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to parse NVS config");
-        return;
-    }
-
-    //init I2C
-    if (i2c_master_init() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to init I2C");
+        //show the error on the display
+        Display_bad_NVS();
         return;
     }
 
@@ -60,10 +62,8 @@ void app_main(void)
         return;
     }
 
-    // set the startup_done flag
-    GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
-
-    //xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
+    // // set the startup_done flag
+    // GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
 
     if (GLOBAL_STATE.ASIC_functions.init_fn != NULL) {
 
@@ -76,6 +76,8 @@ void app_main(void)
         (*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE.asic_count);
         SERIAL_set_baud((*GLOBAL_STATE.ASIC_functions.set_max_baud_fn)());
         SERIAL_clear_buffer();
+
+        Display_mining_state();
 
         xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
         xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);
