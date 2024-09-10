@@ -258,6 +258,35 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         cJSON * params = cJSON_GetObjectItem(json, "params");
         uint32_t version_mask = strtoul(cJSON_GetArrayItem(params, 0)->valuestring, NULL, 16);
         message->version_mask = version_mask;
+    } else if (message->method == CLIENT_RECONNECT) {
+        cJSON * params = cJSON_GetObjectItem(json, "params");
+        if (params != NULL && cJSON_IsArray(params)) {
+            cJSON * host = cJSON_GetArrayItem(params, 0);
+            cJSON * port = cJSON_GetArrayItem(params, 1);
+            cJSON * wait = cJSON_GetArrayItem(params, 2);
+
+            if (host && cJSON_IsString(host)) {
+                message->new_host = strdup(host->valuestring);
+            } else {
+                message->new_host = NULL;
+            }
+
+            if (port && cJSON_IsNumber(port)) {
+                message->new_port = (uint16_t)port->valueint;
+            } else {
+                message->new_port = 0;
+            }
+
+            if (wait && cJSON_IsNumber(wait)) {
+                message->wait_time = (uint16_t)wait->valueint;
+            } else {
+                message->wait_time = 0;
+            }
+
+            ESP_LOGI(TAG, "Received client.reconnect: host=%s, port=%u, wait=%u",
+                     message->new_host ? message->new_host : "NULL",
+                     message->new_port, message->wait_time);
+        }
     }
     done:
     cJSON_Delete(json);

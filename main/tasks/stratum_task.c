@@ -210,10 +210,33 @@ void stratum_task(void * pvParameters)
                     GLOBAL_STATE->extranonce_str = stratum_api_v1_message.extranonce_str;
                     GLOBAL_STATE->extranonce_2_len = stratum_api_v1_message.extranonce_2_len;
                 } else if (stratum_api_v1_message.method == CLIENT_RECONNECT) {
-                    ESP_LOGE(TAG, "Pool requested client reconnect...");
+                    ESP_LOGI(TAG, "Pool requested client reconnect to %s:%d (wait: %d seconds)",
+                        stratum_api_v1_message.new_host ? stratum_api_v1_message.new_host : "same host",
+                        stratum_api_v1_message.new_port ? stratum_api_v1_message.new_port : port,
+                        stratum_api_v1_message.wait_time);
+
+                    if (stratum_api_v1_message.new_host) {
+                        free(stratum_url);
+                        stratum_url = strdup(stratum_api_v1_message.new_host);
+                    }
+                    
+                    if (stratum_api_v1_message.new_port > 0) {
+                        port = stratum_api_v1_message.new_port;
+                    }
+
                     shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
                     close(GLOBAL_STATE->sock);
-                    vTaskDelay(1000 / portTICK_PERIOD_MS); // Delay before attempting to reconnect
+
+                    if (stratum_api_v1_message.wait_time > 0) {
+                        vTaskDelay(stratum_api_v1_message.wait_time * 1000 / portTICK_PERIOD_MS);
+                    } else {
+                        vTaskDelay(1000 / portTICK_PERIOD_MS); // Delay before attempting to reconnect
+                    }
+
+                    // reset DNS lookup flags 
+                    bDNSFound = false;
+                    bDNSInvalid = false;
+
                     break;
                 } else if (stratum_api_v1_message.method == STRATUM_RESULT) {
                     if (stratum_api_v1_message.response_success) {

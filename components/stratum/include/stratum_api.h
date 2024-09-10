@@ -59,6 +59,11 @@ typedef struct
     uint32_t version_mask;
     // result
     bool response_success;
+
+    // client.reconnect
+    char *new_host;
+    uint16_t new_port;
+    uint16_t wait_time;
 } StratumApiV1Message;
 
 void STRATUM_V1_reset_uid();
