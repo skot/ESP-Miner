@@ -7,12 +7,11 @@
 
 #include "display_task.h"
 #include "http_server.h"
-#include "connect.h"
 #include "network.h"
 
-static const char * TAG = "network";
+//static const char * TAG = "network";
 
-esp_err_t Network_connect(GlobalState * GLOBAL_STATE) {
+EventBits_t Network_connect(GlobalState * GLOBAL_STATE) {
 
     char * wifi_ssid;
     char * wifi_pass;
@@ -26,35 +25,37 @@ esp_err_t Network_connect(GlobalState * GLOBAL_STATE) {
     // init and connect to wifi
     wifi_init(wifi_ssid, wifi_pass, hostname);
     start_rest_server((void *) GLOBAL_STATE);
-    EventBits_t result_bits = wifi_connect();
-
-    if (result_bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "Connected to SSID: %s", wifi_ssid);
-        strncpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Connected!", 20);
-    } else if (result_bits & WIFI_FAIL_BIT) {
-        ESP_LOGE(TAG, "Failed to connect to SSID: %s", wifi_ssid);
-
-        strncpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Failed to connect", 20);
-        // User might be trying to configure with AP, just chill here
-        ESP_LOGI(TAG, "Finished, waiting for user input.");
-        while (1) {
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-        }
-    } else {
-        ESP_LOGE(TAG, "UNEXPECTED EVENT");
-        strncpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "unexpected error", 20);
-        // User might be trying to configure with AP, just chill here
-        ESP_LOGI(TAG, "Finished, waiting for user input.");
-        while (1) {
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-        }
-    }
 
     free(wifi_ssid);
     free(wifi_pass);
     free(hostname);
 
-    return ESP_OK;
+    //EventBits_t result_bits = wifi_connect(); //wait here forever for wifi to connect
+
+    return wifi_connect(); //wait here forever for wifi to connect
+
+    // if (result_bits & WIFI_CONNECTED_BIT) {
+    //     ESP_LOGI(TAG, "Connected to SSID: %s", wifi_ssid);
+    //     strncpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Connected!", 20);
+    // } else if (result_bits & WIFI_FAIL_BIT) {
+    //     ESP_LOGE(TAG, "Failed to connect to SSID: %s", wifi_ssid);
+
+    //     strncpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Failed to connect", 20);
+    //     // User might be trying to configure with AP, just chill here
+    //     ESP_LOGI(TAG, "Finished, waiting for user input.");
+    //     while (1) {
+    //         vTaskDelay(1000 / portTICK_PERIOD_MS);
+    //     }
+    // } else {
+    //     ESP_LOGE(TAG, "UNEXPECTED EVENT");
+    //     strncpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "unexpected error", 20);
+    //     // User might be trying to configure with AP, just chill here
+    //     ESP_LOGI(TAG, "Finished, waiting for user input.");
+    //     while (1) {
+    //         vTaskDelay(1000 / portTICK_PERIOD_MS);
+    //     }
+    // }
+    //return ESP_OK;
 }
 
 void Network_AP_off(void) {

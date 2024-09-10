@@ -15,8 +15,7 @@ void SYSTEM_task(void * pvParameters) {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
-    System_init_system(GLOBAL_STATE);
-    System_init_connection(GLOBAL_STATE);
+
 
     ESP_LOGI(TAG, "SYSTEM_task started");
 

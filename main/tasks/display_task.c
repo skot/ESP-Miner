@@ -31,7 +31,6 @@ EventGroupHandle_t displayEventGroup;
 
 //static variables
 static const char * TAG = "DisplayTask";
-static uint8_t current_screen;
 
 //static function prototypes
 static void IRAM_ATTR gpio_isr_handler(void* arg);
@@ -59,7 +58,7 @@ void DISPLAY_task(void * pvParameters) {
 
     init_gpio(); // Initialize GPIO for button input
 
-    current_screen = 0;
+    module->screen_page = 0;
 
     ESP_LOGI(TAG, "DISPLAY_task started");
 
@@ -69,17 +68,27 @@ void DISPLAY_task(void * pvParameters) {
           the event group. Clear the bits before exiting. */
         eventBits = xEventGroupWaitBits(
                 displayEventGroup,   /* The event group being tested. */
-                eBIT_0 | eBIT_4, /* The bits within the event group to wait for. */
+                BUTTON_BIT | OVERHEAT_BIT, /* The bits within the event group to wait for. */
                 pdTRUE,        /* BIT_0 & BIT_4 should be cleared before returning. */
                 pdFALSE,       /* Don't wait for both bits, either bit will do. */
                 (10000 / portTICK_PERIOD_MS) ); /* Wait a maximum of 10s for either bit to be set. */
+
+        //debounce button
+        if (eventBits & BUTTON_BIT) {
+            vTaskDelay(100 / portTICK_PERIOD_MS);
+        }
+
+        //catch overheat event
+        if (eventBits & OVERHEAT_BIT) {
+            displayStateMachine.state = DISPLAY_STATE_ERROR;
+        }
 
         //clear display
         System_clear_display(GLOBAL_STATE);
 
         switch (displayStateMachine.state) {
             case DISPLAY_STATE_SPLASH:
-                splash_screen(&GLOBAL_STATE);
+                splash_screen(GLOBAL_STATE);
                 displayStateMachine.state = DISPLAY_STATE_INIT;
                 break;
 
@@ -89,15 +98,15 @@ void DISPLAY_task(void * pvParameters) {
 
             case DISPLAY_STATE_MINING:
 
-                if (eventBits & eBIT_0) {
+                if (eventBits & BUTTON_BIT) {
                 // Handle button press
-                ESP_LOGI(TAG, "Button pressed, switching to next screen");
+                ESP_LOGI(TAG, "Button pressed, next screen: %d", module->screen_page);
                 // Handle button press logic here
                 } else {
                     ESP_LOGI(TAG, "No button press detected, cycling through screens");
                 }
 
-                switch (current_screen) {
+                switch (module->screen_page) {
                     case 0:
                         System_update_system_performance(GLOBAL_STATE);
                         break;
@@ -108,11 +117,12 @@ void DISPLAY_task(void * pvParameters) {
                         System_update_esp32_info(GLOBAL_STATE);
                         break;
                 }
-                current_screen = (current_screen + 1) % 3;
+                module->screen_page = (module->screen_page + 1) % 3;
 
                 break;
             case DISPLAY_STATE_ERROR:
-                // Handle off state
+                System_show_overheat_screen(GLOBAL_STATE);
+                SYSTEM_update_overheat_mode(GLOBAL_STATE);  // Check for changes
                 break;
             default:
                 // Handle unknown state
@@ -169,6 +179,7 @@ static void splash_screen(GlobalState * GLOBAL_STATE) {
     char display_data[20];
 
     snprintf(display_data, 20, "bitaxe%s %d", GLOBAL_STATE->device_model_str, GLOBAL_STATE->board_version);
+    ESP_LOGI(TAG, "Displaying splash screen: %s", display_data);
 
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
@@ -197,9 +208,9 @@ void System_init_connection(GlobalState * GLOBAL_STATE)
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
             if (OLED_status()) {
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, "Connecting to SSID:");
-                OLED_writeString(0, 0, module->oled_buf);
+                OLED_clear();
+                OLED_writeString(0, 0, "Connecting to WiFi:");
+                OLED_writeString(0, 1, module->ssid);
             }
             break;
         default:
@@ -232,7 +243,7 @@ static void IRAM_ATTR gpio_isr_handler(void* arg) {
     // Set bit 0 and bit 4 in xEventGroup.
     xResult = xEventGroupSetBitsFromISR(
                                 displayEventGroup,   // The event group being updated.
-                                eBIT_0,             // The bits being set.
+                                BUTTON_BIT,             // The bits being set.
                                 &xHigherPriorityTaskWoken);
 
     // Was the message posted successfully?
