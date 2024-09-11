@@ -16,7 +16,7 @@ void System_init_connection(GlobalState * GLOBAL_STATE);
 void System_show_ap_information(const char * error, GlobalState * GLOBAL_STATE);
 void System_update_connection(GlobalState * GLOBAL_STATE);
 void System_show_overheat_screen(GlobalState * GLOBAL_STATE);
-void System_update_system_performance(GlobalState * GLOBAL_STATE);
+void System_update_system_performance(GlobalState * GLOBAL_STATE, bool);
 void System_update_system_info(GlobalState * GLOBAL_STATE);
 void System_update_esp32_info(GlobalState * GLOBAL_STATE);
 

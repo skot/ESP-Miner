@@ -11,17 +11,9 @@
 #include "system.h"
 #include "display_task.h"
 
-// Enum for display states
-typedef enum {
-    DISPLAY_STATE_SPLASH,
-    DISPLAY_STATE_INIT,
-    DISPLAY_STATE_MINING,
-    DISPLAY_STATE_ERROR,
-} DisplayState;
-
 // Struct for display state machine
 typedef struct {
-    DisplayState state;
+    display_state_t state;
 } DisplayStateMachine;
 
 static DisplayStateMachine displayStateMachine;
@@ -36,20 +28,24 @@ static const char * TAG = "DisplayTask";
 static void IRAM_ATTR gpio_isr_handler(void* arg);
 static void init_gpio(void);
 static void splash_screen(GlobalState *);
+static void screen_pool_connect(GlobalState *);
+
+static void normal_mode(GlobalState *);
+static void main_screen(GlobalState *, uint8_t);
 
 void DISPLAY_task(void * pvParameters) {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    //SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     /* Attempt to create the event group. */
     displayEventGroup = xEventGroupCreate();
-    EventBits_t eventBits;
+    EventBits_t eventBits = 0;
     if (displayEventGroup == NULL) {
         ESP_LOGE(TAG, "Display Event group creation failed");
     }
 
     // Initialize the display state machine
-    displayStateMachine.state = DISPLAY_STATE_INIT;
+    displayStateMachine.state = DISPLAY_STATE_SPLASH;
 
     if (Display_init() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to init Display");
@@ -58,25 +54,11 @@ void DISPLAY_task(void * pvParameters) {
 
     init_gpio(); // Initialize GPIO for button input
 
-    module->screen_page = 0;
-
     ESP_LOGI(TAG, "DISPLAY_task started");
 
     // Main task loop
     while (1) {
-        /* Wait a maximum of 10s for either bit 0 or bit 4 to be set within
-          the event group. Clear the bits before exiting. */
-        eventBits = xEventGroupWaitBits(
-                displayEventGroup,   /* The event group being tested. */
-                BUTTON_BIT | OVERHEAT_BIT, /* The bits within the event group to wait for. */
-                pdTRUE,        /* BIT_0 & BIT_4 should be cleared before returning. */
-                pdFALSE,       /* Don't wait for both bits, either bit will do. */
-                (10000 / portTICK_PERIOD_MS) ); /* Wait a maximum of 10s for either bit to be set. */
-
-        //debounce button
-        if (eventBits & BUTTON_BIT) {
-            vTaskDelay(100 / portTICK_PERIOD_MS);
-        }
+        ESP_LOGI(TAG, "Display state: %d", displayStateMachine.state);
 
         //catch overheat event
         if (eventBits & OVERHEAT_BIT) {
@@ -89,37 +71,20 @@ void DISPLAY_task(void * pvParameters) {
         switch (displayStateMachine.state) {
             case DISPLAY_STATE_SPLASH:
                 splash_screen(GLOBAL_STATE);
-                displayStateMachine.state = DISPLAY_STATE_INIT;
                 break;
 
-            case DISPLAY_STATE_INIT:
+            case DISPLAY_STATE_NET_CONNECT:
                 System_init_connection(GLOBAL_STATE);
                 break;
 
-            case DISPLAY_STATE_MINING:
-
-                if (eventBits & BUTTON_BIT) {
-                // Handle button press
-                ESP_LOGI(TAG, "Button pressed, next screen: %d", module->screen_page);
-                // Handle button press logic here
-                } else {
-                    ESP_LOGI(TAG, "No button press detected, cycling through screens");
-                }
-
-                switch (module->screen_page) {
-                    case 0:
-                        System_update_system_performance(GLOBAL_STATE);
-                        break;
-                    case 1:
-                        System_update_system_info(GLOBAL_STATE);
-                        break;
-                    case 2:
-                        System_update_esp32_info(GLOBAL_STATE);
-                        break;
-                }
-                module->screen_page = (module->screen_page + 1) % 3;
-
+            case DISPLAY_STATE_POOL_CONNECT:
+                screen_pool_connect(GLOBAL_STATE);
                 break;
+
+            case DISPLAY_STATE_MINING_INIT:
+                normal_mode(GLOBAL_STATE);
+                break;
+
             case DISPLAY_STATE_ERROR:
                 System_show_overheat_screen(GLOBAL_STATE);
                 SYSTEM_update_overheat_mode(GLOBAL_STATE);  // Check for changes
@@ -129,24 +94,73 @@ void DISPLAY_task(void * pvParameters) {
                 break;
         }
 
-        eventBits = 0; // Reset uxBits for the next iteration
+        eventBits = 0; // Reset eventBits for the next iteration
+
+        //wait here for an event or timeout
+        eventBits = xEventGroupWaitBits(displayEventGroup,
+            OVERHEAT_BIT | UPDATE, //events to wait for
+            pdTRUE, pdFALSE,
+            portMAX_DELAY); //timeout length - forever
     }
 
 }
 
-void Display_init_state(void) {
-    displayStateMachine.state = DISPLAY_STATE_INIT;
+// normal mode display loop
+//
+static void normal_mode(GlobalState * GLOBAL_STATE) {
+    //SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    EventBits_t eventBits = 0;
+
+    while (1) {
+        if (eventBits & EXIT) {
+            displayStateMachine.state = DISPLAY_STATE_ERROR;
+            return;
+        }
+        if (eventBits & BUTTON_BIT) {
+            // Handle button press
+            //ESP_LOGI(TAG, "Button pressed, next screen: %d", page);
+            //debounce button
+            vTaskDelay(200 / portTICK_PERIOD_MS);
+        }
+
+        if (eventBits == 0) {
+            // No events, update display
+            main_screen(GLOBAL_STATE, (UPDATE_HASHRATE | UPDATE_SHARES | UPDATE_BD));
+        } else {
+            main_screen(GLOBAL_STATE, eventBits);
+        }
+
+        //wait here for an event or timeout
+        eventBits = 0; // Reset uxBits for the next iteration
+        eventBits = xEventGroupWaitBits(displayEventGroup, BUTTON_BIT | UPDATE_HASHRATE | UPDATE_SHARES | UPDATE_BD | EXIT, pdTRUE, pdFALSE, (10000 / portTICK_PERIOD_MS));
+    }
+}
+
+void Display_normal_update(uint8_t update_type) {
+    xEventGroupSetBits(displayEventGroup, update_type);
+}
+
+void Display_net_connect_state(void) {
+    displayStateMachine.state = DISPLAY_STATE_NET_CONNECT;
 
     //set event bits to trigger display update
-    xEventGroupSetBits(displayEventGroup, eBIT_4);
+    xEventGroupSetBits(displayEventGroup, UPDATE);
 
 }
 
-void Display_mining_state(void) {
-    displayStateMachine.state = DISPLAY_STATE_MINING;
+void Display_pool_connect_state(void) {
+    displayStateMachine.state = DISPLAY_STATE_POOL_CONNECT;
 
     //set event bits to trigger display update
-    xEventGroupSetBits(displayEventGroup, eBIT_4);
+    xEventGroupSetBits(displayEventGroup, UPDATE);
+
+}
+
+void Display_mining_init_state(void) {
+    displayStateMachine.state = DISPLAY_STATE_MINING_INIT;
+
+    //set event bits to trigger display update
+    xEventGroupSetBits(displayEventGroup, UPDATE);
 
 }
 
@@ -164,6 +178,47 @@ esp_err_t Display_init(void) {
     }
 }
 
+static void main_screen(GlobalState * GLOBAL_STATE, uint8_t type) {
+    SystemModule * system = &GLOBAL_STATE->SYSTEM_MODULE;
+    PowerManagementModule * pm = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+
+    char oled_buf[20];
+
+    switch (GLOBAL_STATE->device_model) {
+        case DEVICE_MAX:
+        case DEVICE_ULTRA:
+        case DEVICE_SUPRA:
+        case DEVICE_GAMMA:
+
+            OLED_clearLine(2);
+
+            //hashrate
+            if (type | UPDATE_HASHRATE) {
+                float efficiency = pm->power / (system->current_hashrate / 1000.0);
+                memset(oled_buf, ' ', 20);
+                snprintf(oled_buf, 20, "%.0f GH/s - %.0f J/TH  ", system->current_hashrate, efficiency);
+                OLED_writeString(0, 0, oled_buf);
+            }
+
+            //BD
+            if (type | UPDATE_BD) {
+                memset(oled_buf, ' ', 20);
+                snprintf(oled_buf, 20, system->FOUND_BLOCK ? "!!! BLOCK FOUND !!!" : "BEST: %s", system->best_diff_string);
+                OLED_writeString(0, 1, oled_buf);
+            }
+
+            //shares
+            if (type | UPDATE_SHARES) {
+                memset(oled_buf, ' ', 20);
+                snprintf(oled_buf, 20, "SHARES: %llu/%llu", system->shares_accepted, system->shares_rejected);
+                OLED_writeString(0, 3, oled_buf);
+            }
+
+            break;
+        default:
+    }
+}
+
 void Display_bad_NVS(void) {
     if (!OLED_init()) {
         OLED_clear();
@@ -173,7 +228,7 @@ void Display_bad_NVS(void) {
 }
 
 static void splash_screen(GlobalState * GLOBAL_STATE) {
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    //SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     //create buffer for display data
     char display_data[20];
@@ -217,6 +272,25 @@ void System_init_connection(GlobalState * GLOBAL_STATE)
     }
 }
 
+static void screen_pool_connect(GlobalState * GLOBAL_STATE)
+{
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+
+    switch (GLOBAL_STATE->device_model) {
+        case DEVICE_MAX:
+        case DEVICE_ULTRA:
+        case DEVICE_SUPRA:
+        case DEVICE_GAMMA:
+            if (OLED_status()) {
+                OLED_clear();
+                OLED_writeString(0, 0, "Connecting to Pool:");
+                OLED_writeString(0, 1, module->pool_url);
+            }
+            break;
+        default:
+    }
+}
+
 //setup the GPIO for the button with interrupt
 static void init_gpio(void) {
     gpio_config_t io_conf = {};
@@ -231,7 +305,7 @@ static void init_gpio(void) {
     gpio_isr_handler_add(BUTTON_BOOT, gpio_isr_handler, (void*) BUTTON_BOOT);
 }
 
-static void IRAM_ATTR gpio_isr_handler(void* arg) {
+static void gpio_isr_handler(void* arg) {
     // uint32_t gpio_num = (uint32_t) arg;
     // xQueueSendFromISR(gpio_evt_queue, &gpio_num, NULL);
 

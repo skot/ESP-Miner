@@ -1,24 +1,3 @@
-#include "system.h"
-
-#include "esp_log.h"
-
-#include "i2c_master.h"
-#include "EMC2101.h"
-#include "INA260.h"
-#include "TMP1075.h"
-#include "adc.h"
-#include "connect.h"
-#include "nvs_config.h"
-#include "oled.h"
-#include "vcore.h"
-
-#include "driver/gpio.h"
-#include "esp_app_desc.h"
-#include "esp_netif.h"
-#include "esp_timer.h"
-#include "esp_wifi.h"
-#include "lwip/inet.h"
-
 #include <inttypes.h>
 #include <math.h>
 #include <stdint.h>
@@ -33,12 +12,34 @@
 
 #include "freertos/event_groups.h"
 
+#include "driver/gpio.h"
+#include "esp_app_desc.h"
+#include "esp_netif.h"
+#include "esp_timer.h"
+#include "esp_wifi.h"
+#include "lwip/inet.h"
+
+#include "esp_log.h"
+
+#include "i2c_master.h"
+#include "EMC2101.h"
+#include "INA260.h"
+#include "TMP1075.h"
+#include "adc.h"
+#include "connect.h"
+#include "nvs_config.h"
+#include "oled.h"
+#include "vcore.h"
+#include "display_task.h"
+
+
+#include "system.h"
+
 static const char * TAG = "SystemModule";
 
 static void _suffix_string(uint64_t, char *, size_t, int);
 
-static esp_netif_t * netif;
-static esp_netif_ip_info_t ip_info;
+esp_netif_t * netif;
 
 static esp_err_t ensure_overheat_mode_config() {
     uint16_t overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, UINT16_MAX);
@@ -62,7 +63,6 @@ void System_init_system(GlobalState * GLOBAL_STATE) {
     module->historical_hashrate_rolling_index = 0;
     module->historical_hashrate_init = 0;
     module->current_hashrate = 0;
-    module->screen_page = 0;
     module->shares_accepted = 0;
     module->shares_rejected = 0;
     module->best_nonce_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF, 0);
@@ -136,10 +136,7 @@ void System_show_overheat_screen(GlobalState * GLOBAL_STATE)
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
             if (OLED_status()) {
-                OLED_clearLine(0);
-                OLED_clearLine(1);
-                OLED_clearLine(2);
-                OLED_clearLine(3);
+                OLED_clear();
                 OLED_writeString(0, 0, "DEVICE OVERHEATED");
                 OLED_writeString(0, 1, "Please check");
                 OLED_writeString(0, 2, "webUI for more");
@@ -155,20 +152,14 @@ static void _update_hashrate(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
-    if (module->screen_page != 0) {
-        return;
-    }
-
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
             float efficiency = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power / (module->current_hashrate / 1000.0);
-            OLED_clearLine(0);
-            memset(module->oled_buf, 0, 20);
-            snprintf(module->oled_buf, 20, "Gh%s: %.1f J/Th: %.1f", module->historical_hashrate_init < HISTORY_LENGTH ? "*" : "",
-                    module->current_hashrate, efficiency);
+            memset(module->oled_buf, ' ', 20);
+            snprintf(module->oled_buf, 20, "%.0f GH/s [%.0f J/TH]", module->current_hashrate, efficiency);
             OLED_writeString(0, 0, module->oled_buf);
             break;
         default:
@@ -179,16 +170,12 @@ static void _update_shares(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
-    if (module->screen_page != 0) {
-        return;
-    }
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            OLED_clearLine(1);
-            memset(module->oled_buf, 0, 20);
+            memset(module->oled_buf, ' ', 20);
             snprintf(module->oled_buf, 20, "A/R: %llu/%llu", module->shares_accepted, module->shares_rejected);
             OLED_writeString(0, 1, module->oled_buf);
             break;
@@ -200,17 +187,12 @@ static void _update_best_diff(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
-    if (module->screen_page != 0) {
-        return;
-    }
-
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            OLED_clearLine(3);
-            memset(module->oled_buf, 0, 20);
+            memset(module->oled_buf, ' ', 20);
             snprintf(module->oled_buf, 20, module->FOUND_BLOCK ? "!!! BLOCK FOUND !!!" : "BD: %s", module->best_diff_string);
             OLED_writeString(0, 3, module->oled_buf);
             break;
@@ -225,10 +207,7 @@ void System_clear_display(GlobalState * GLOBAL_STATE)
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            OLED_clearLine(0);
-            OLED_clearLine(1);
-            OLED_clearLine(2);
-            OLED_clearLine(3);
+            OLED_clear();
             break;
         default:
     }
@@ -246,21 +225,23 @@ void System_update_system_info(GlobalState * GLOBAL_STATE)
         case DEVICE_GAMMA:
             if (OLED_status()) {
 
-                memset(module->oled_buf, 0, 20);
+                memset(module->oled_buf, ' ', 20);
                 snprintf(module->oled_buf, 20, " Fan: %d RPM", power_management->fan_rpm);
                 OLED_writeString(0, 0, module->oled_buf);
 
-                memset(module->oled_buf, 0, 20);
+                memset(module->oled_buf, ' ', 20);
                 snprintf(module->oled_buf, 20, "Temp: %.1f C", power_management->chip_temp_avg);
                 OLED_writeString(0, 1, module->oled_buf);
 
-                memset(module->oled_buf, 0, 20);
+                memset(module->oled_buf, ' ', 20);
                 snprintf(module->oled_buf, 20, " Pwr: %.3f W", power_management->power);
                 OLED_writeString(0, 2, module->oled_buf);
 
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, " %i mV: %i mA", (int) power_management->voltage, (int) power_management->current);
-                OLED_writeString(0, 3, module->oled_buf);
+                OLED_clearLine(3);
+
+                // memset(module->oled_buf, ' ', 20);
+                // snprintf(module->oled_buf, 20, " %i mV: %i mA", (int) power_management->voltage, (int) power_management->current);
+                // OLED_writeString(0, 3, module->oled_buf);
             }
             break;
         default:
@@ -270,9 +251,10 @@ void System_update_system_info(GlobalState * GLOBAL_STATE)
 void System_update_esp32_info(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    esp_netif_ip_info_t ip_info;
     uint32_t free_heap_size = esp_get_free_heap_size();
 
-    uint16_t vcore = VCORE_get_voltage_mv(GLOBAL_STATE);
+    //uint16_t vcore = VCORE_get_voltage_mv(GLOBAL_STATE);
 
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
@@ -281,22 +263,27 @@ void System_update_esp32_info(GlobalState * GLOBAL_STATE)
         case DEVICE_GAMMA:
             if (OLED_status()) {
 
-                memset(module->oled_buf, 0, 20);
+                memset(module->oled_buf, ' ', 20);
                 snprintf(module->oled_buf, 20, "FH: %lu bytes", free_heap_size);
                 OLED_writeString(0, 0, module->oled_buf);
 
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, "vCore: %u mV", vcore);
-                OLED_writeString(0, 1, module->oled_buf);
+                OLED_clearLine(1);
+                // memset(module->oled_buf, ' ', 20);
+                // snprintf(module->oled_buf, 20, "vCore: %u mV", vcore);
+                // OLED_writeString(0, 1, module->oled_buf);
 
-                esp_netif_get_ip_info(netif, &ip_info);
+                if (esp_netif_get_ip_info(netif, &ip_info) != ESP_OK) {
+                    ESP_LOGE(TAG, "Failed to get IP info");
+                    return;
+                }
                 char ip_address_str[IP4ADDR_STRLEN_MAX];
                 esp_ip4addr_ntoa(&ip_info.ip, ip_address_str, IP4ADDR_STRLEN_MAX);
 
-                memset(module->oled_buf, 0, 20);
+                memset(module->oled_buf, ' ', 20);
                 snprintf(module->oled_buf, 20, "IP: %s", ip_address_str);
                 OLED_writeString(0, 2, module->oled_buf);
 
+                OLED_clearLine(3);
                 OLED_writeString(0, 3, esp_app_get_description()->version);
             }
             break;
@@ -319,13 +306,13 @@ void System_update_connection(GlobalState * GLOBAL_STATE)
                 module->oled_buf[sizeof(module->oled_buf) - 1] = 0;
                 OLED_writeString(0, 1, module->oled_buf);
                 
-                memset(module->oled_buf, 0, 20);
+                memset(module->oled_buf, ' ', 20);
                 snprintf(module->oled_buf, 20, "Configuration SSID:");
                 OLED_writeString(0, 2, module->oled_buf);
 
                 char ap_ssid[13];
                 Connect_generate_ssid(ap_ssid);
-                memset(module->oled_buf, 0, 20);
+                memset(module->oled_buf, ' ', 20);
                 snprintf(module->oled_buf, 20, ap_ssid);
                 OLED_writeString(0, 3, module->oled_buf);
             }
@@ -334,16 +321,16 @@ void System_update_connection(GlobalState * GLOBAL_STATE)
     }
 }
 
-void System_update_system_performance(GlobalState * GLOBAL_STATE)
+void System_update_system_performance(GlobalState * GLOBAL_STATE, bool hashrate_only)
 {
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    // SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
     // Calculate the uptime in seconds
-    double uptime_in_seconds = (esp_timer_get_time() - module->start_time) / 1000000;
-    int uptime_in_days = uptime_in_seconds / (3600 * 24);
-    int remaining_seconds = (int) uptime_in_seconds % (3600 * 24);
-    int uptime_in_hours = remaining_seconds / 3600;
-    remaining_seconds %= 3600;
-    int uptime_in_minutes = remaining_seconds / 60;
+    // double uptime_in_seconds = (esp_timer_get_time() - module->start_time) / 1000000;
+    // int uptime_in_days = uptime_in_seconds / (3600 * 24);
+    // int remaining_seconds = (int) uptime_in_seconds % (3600 * 24);
+    // int uptime_in_hours = remaining_seconds / 3600;
+    // remaining_seconds %= 3600;
+    // int uptime_in_minutes = remaining_seconds / 60;
 
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
@@ -353,12 +340,15 @@ void System_update_system_performance(GlobalState * GLOBAL_STATE)
             if (OLED_status()) {
 
                 _update_hashrate(GLOBAL_STATE);
-                _update_shares(GLOBAL_STATE);
-                _update_best_diff(GLOBAL_STATE);
+                if (!hashrate_only) {
+                    _update_shares(GLOBAL_STATE);
+                    _update_best_diff(GLOBAL_STATE);
+                }
 
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, "UT: %dd %ih %im", uptime_in_days, uptime_in_hours, uptime_in_minutes);
-                OLED_writeString(0, 2, module->oled_buf);
+
+                // memset(module->oled_buf, ' ', 20);
+                // snprintf(module->oled_buf, 20, "UT: %dd %ih %im", uptime_in_days, uptime_in_hours, uptime_in_minutes);
+                // OLED_writeString(0, 2, module->oled_buf);
             }
             break;
         default:
@@ -417,6 +407,9 @@ static void _check_for_best_diff(GlobalState * GLOBAL_STATE, double diff, uint8_
 
     // make the best_nonce_diff into a string
     _suffix_string((uint64_t) diff, module->best_diff_string, DIFF_STRING_SIZE, 0);
+
+    //new highscore, put this on the display!
+    Display_normal_update(UPDATE_BD);
 
     double network_diff = _calculate_network_difficulty(GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->target);
     if (diff > network_diff) {
@@ -489,7 +482,8 @@ void SYSTEM_notify_accepted_share(GlobalState * GLOBAL_STATE)
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     module->shares_accepted++;
-    _update_shares(GLOBAL_STATE);
+    //_update_shares(GLOBAL_STATE);
+    Display_normal_update(UPDATE_SHARES);
 }
 
 void SYSTEM_notify_rejected_share(GlobalState * GLOBAL_STATE)
@@ -497,7 +491,8 @@ void SYSTEM_notify_rejected_share(GlobalState * GLOBAL_STATE)
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     module->shares_rejected++;
-    _update_shares(GLOBAL_STATE);
+    //_update_shares(GLOBAL_STATE);
+    Display_normal_update(UPDATE_SHARES);
 }
 
 void SYSTEM_notify_mining_started(GlobalState * GLOBAL_STATE)
@@ -559,7 +554,8 @@ void SYSTEM_notify_found_nonce(GlobalState * GLOBAL_STATE, double found_diff, ui
         module->current_hashrate = ((module->current_hashrate * 9) + rolling_rate) / 10;
     }
 
-    _update_hashrate(GLOBAL_STATE);
+    //_update_hashrate(GLOBAL_STATE);
+    Display_normal_update(UPDATE_HASHRATE);
 
     // logArrayContents(historical_hashrate, HISTORY_LENGTH);
     // logArrayContents(historical_hashrate_time_stamps, HISTORY_LENGTH);

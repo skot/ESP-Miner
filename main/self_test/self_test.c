@@ -33,7 +33,7 @@ static void display_msg(char * msg, GlobalState * GLOBAL_STATE) {
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
             if (OLED_status()) {
-                memset(module->oled_buf, 0, 20);
+                memset(module->oled_buf, ' ', 20);
                 snprintf(module->oled_buf, 20, msg);
                 OLED_writeString(0, 2, module->oled_buf);
             }

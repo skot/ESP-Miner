@@ -22,7 +22,7 @@ typedef enum {
     MAIN_STATE_ASIC_INIT,
     MAIN_STATE_POOL_CONNECT,
     MAIN_STATE_MINING_INIT,
-    MAIN_STATE_IDLE,
+    MAIN_STATE_NORMAL,
 } MainState;
 
 // Struct for display state machine
@@ -42,9 +42,6 @@ static const char * TAG = "main";
 void app_main(void)
 {
     ESP_LOGI(TAG, "Welcome to the bitaxe - hack the planet!");
-
-    // Initialize the main state machine
-    mainStateMachine.state = MAIN_STATE_INIT;
 
     //init I2C
     if (i2c_master_init() != ESP_OK) {
@@ -81,7 +78,8 @@ void app_main(void)
 
     xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
 
-    Display_mining_state();
+    // Initialize the main state machine
+    mainStateMachine.state = MAIN_STATE_INIT;
 
     /* Attempt to create the event group. */
     mainEventGroup = xEventGroupCreate();
@@ -101,7 +99,7 @@ void app_main(void)
                 break;
 
             case MAIN_STATE_NET_CONNECT:
-
+                Display_net_connect_state();
                 result_bits = Network_connect(&GLOBAL_STATE);
 
                 if (result_bits & WIFI_CONNECTED_BIT) {
@@ -109,8 +107,6 @@ void app_main(void)
                     //strncpy(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, "Connected!", 20);
                     mainStateMachine.state = MAIN_STATE_ASIC_INIT;
                     Network_AP_off();
-                    eventBits = xEventGroupSetBits(mainEventGroup, eBIT_0);
-                    continue;
                 } else if (result_bits & WIFI_FAIL_BIT) {
                     ESP_LOGE(TAG, "Failed to connect to SSID: %s", GLOBAL_STATE.SYSTEM_MODULE.ssid);
                     //strncpy(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, "Failed to connect", 20);
@@ -118,7 +114,6 @@ void app_main(void)
                     ESP_LOGI(TAG, "Finished, waiting for user input.");
                     //wait 1 second
                     vTaskDelay(1000 / portTICK_PERIOD_MS);
-                    continue;
                 } else {
                     ESP_LOGE(TAG, "UNEXPECTED EVENT");
                     //strncpy(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, "unexpected error", 20);
@@ -126,7 +121,6 @@ void app_main(void)
                     ESP_LOGI(TAG, "Finished, waiting for user input.");
                     //wait 1 second
                     vTaskDelay(1000 / portTICK_PERIOD_MS);
-                    continue;
                 }
                 break;
 
@@ -146,18 +140,20 @@ void app_main(void)
                 break;
 
             case MAIN_STATE_POOL_CONNECT:
+                Display_pool_connect_state();
                 xTaskCreate(stratum_task, "stratum task", 8192, (void *) &GLOBAL_STATE, 5, NULL);
                 xTaskCreate(create_jobs_task, "create jobs task", 8192, (void *) &GLOBAL_STATE, 10, NULL);
                 mainStateMachine.state = MAIN_STATE_MINING_INIT;
                 break;
 
             case MAIN_STATE_MINING_INIT:
+                Display_mining_init_state();
                 xTaskCreate(ASIC_task, "asic task", 8192, (void *) &GLOBAL_STATE, 10, NULL);
                 xTaskCreate(ASIC_result_task, "asic result task", 8192, (void *) &GLOBAL_STATE, 15, NULL);
-                mainStateMachine.state = MAIN_STATE_IDLE;
+                mainStateMachine.state = MAIN_STATE_NORMAL;
                 break;
 
-            case MAIN_STATE_IDLE:
+            case MAIN_STATE_NORMAL:
                 //wait here for 5s or an event
                 eventBits = xEventGroupWaitBits(
                         mainEventGroup,   
@@ -165,6 +161,8 @@ void app_main(void)
                         pdTRUE,        // Clear event bits before returning
                         pdFALSE,       // only require one bit to be set
                         10000 / portTICK_PERIOD_MS); // timeout
+
+                //ESP_LOGI(TAG, "eventBits: %02X", (uint8_t)eventBits);
                 break;
 
             default:

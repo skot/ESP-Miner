@@ -17,8 +17,6 @@ EventBits_t Network_connect(GlobalState * GLOBAL_STATE) {
     char * wifi_pass;
     char * hostname;
 
-    Display_init_state();
-
     // pull the wifi credentials and hostname out of NVS
     NVSDevice_get_wifi_creds(GLOBAL_STATE, &wifi_ssid, &wifi_pass, &hostname);
 
