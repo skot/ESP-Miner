@@ -14,9 +14,9 @@
 // Struct for display state machine
 typedef struct {
     display_state_t state;
-} DisplayStateMachine;
+} display_state_machine_t;
 
-static DisplayStateMachine displayStateMachine;
+static display_state_machine_t displayStateMachine;
 
 // Declare a variable to hold the created event group.
 EventGroupHandle_t displayEventGroup;
@@ -27,11 +27,13 @@ static const char * TAG = "DisplayTask";
 //static function prototypes
 static void IRAM_ATTR gpio_isr_handler(void* arg);
 static void init_gpio(void);
-static void splash_screen(GlobalState *);
-static void screen_pool_connect(GlobalState *);
 
 static void normal_mode(GlobalState *);
-static void main_screen(GlobalState *, uint8_t);
+
+static void screen_splash(GlobalState *);
+static void screen_asic_init(GlobalState *);
+static void screen_pool_connect(GlobalState *);
+static void screen_main(GlobalState *, uint8_t);
 
 void DISPLAY_task(void * pvParameters) {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
@@ -70,18 +72,22 @@ void DISPLAY_task(void * pvParameters) {
 
         switch (displayStateMachine.state) {
             case DISPLAY_STATE_SPLASH:
-                splash_screen(GLOBAL_STATE);
+                screen_splash(GLOBAL_STATE);
                 break;
 
             case DISPLAY_STATE_NET_CONNECT:
                 System_init_connection(GLOBAL_STATE);
                 break;
 
+            case DISPLAY_STATE_ASIC_INIT:
+                screen_asic_init(GLOBAL_STATE);
+                break;
+
             case DISPLAY_STATE_POOL_CONNECT:
                 screen_pool_connect(GLOBAL_STATE);
                 break;
 
-            case DISPLAY_STATE_MINING_INIT:
+            case DISPLAY_STATE_NORMAL:
                 normal_mode(GLOBAL_STATE);
                 break;
 
@@ -125,9 +131,9 @@ static void normal_mode(GlobalState * GLOBAL_STATE) {
 
         if (eventBits == 0) {
             // No events, update display
-            main_screen(GLOBAL_STATE, (UPDATE_HASHRATE | UPDATE_SHARES | UPDATE_BD));
+            screen_main(GLOBAL_STATE, (UPDATE_HASHRATE | UPDATE_SHARES | UPDATE_BD));
         } else {
-            main_screen(GLOBAL_STATE, eventBits);
+            screen_main(GLOBAL_STATE, eventBits);
         }
 
         //wait here for an event or timeout
@@ -140,28 +146,11 @@ void Display_normal_update(uint8_t update_type) {
     xEventGroupSetBits(displayEventGroup, update_type);
 }
 
-void Display_net_connect_state(void) {
-    displayStateMachine.state = DISPLAY_STATE_NET_CONNECT;
+void Display_change_state(display_state_t state) {
+    displayStateMachine.state = state;
 
     //set event bits to trigger display update
     xEventGroupSetBits(displayEventGroup, UPDATE);
-
-}
-
-void Display_pool_connect_state(void) {
-    displayStateMachine.state = DISPLAY_STATE_POOL_CONNECT;
-
-    //set event bits to trigger display update
-    xEventGroupSetBits(displayEventGroup, UPDATE);
-
-}
-
-void Display_mining_init_state(void) {
-    displayStateMachine.state = DISPLAY_STATE_MINING_INIT;
-
-    //set event bits to trigger display update
-    xEventGroupSetBits(displayEventGroup, UPDATE);
-
 }
 
 esp_err_t Display_init(void) {
@@ -178,7 +167,7 @@ esp_err_t Display_init(void) {
     }
 }
 
-static void main_screen(GlobalState * GLOBAL_STATE, uint8_t type) {
+static void screen_main(GlobalState * GLOBAL_STATE, uint8_t type) {
     SystemModule * system = &GLOBAL_STATE->SYSTEM_MODULE;
     PowerManagementModule * pm = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
 
@@ -227,7 +216,7 @@ void Display_bad_NVS(void) {
     return;
 }
 
-static void splash_screen(GlobalState * GLOBAL_STATE) {
+static void screen_splash(GlobalState * GLOBAL_STATE) {
     //SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     //create buffer for display data
@@ -252,6 +241,32 @@ static void splash_screen(GlobalState * GLOBAL_STATE) {
     }
 }
 
+static void screen_asic_init(GlobalState * GLOBAL_STATE) {
+    //SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    char display_data[20];
+
+    switch (GLOBAL_STATE->device_model) {
+        case DEVICE_MAX:
+        case DEVICE_ULTRA:
+        case DEVICE_SUPRA:
+        case DEVICE_GAMMA:
+            if (OLED_status()) {
+                OLED_clear();
+
+                memset(display_data, ' ', 20);
+                snprintf(display_data, 20, "%d %s ASIC%s", GLOBAL_STATE->asic_count, GLOBAL_STATE->asic_model_str, (GLOBAL_STATE->asic_count > 1) ? "s" : "");
+                OLED_writeString(0, 0, display_data);
+
+                // need to figure out where the hash frequency is stored
+                // memset(display_data, ' ', 20);
+                // snprintf(display_data, 20, "FREQ: %d MHz", module->asic_freq);
+                // OLED_writeString(0, 1, display_data);
+
+            }
+            break;
+        default:
+    }
+}
 
 void System_init_connection(GlobalState * GLOBAL_STATE)
 {

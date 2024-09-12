@@ -17,19 +17,18 @@
 typedef enum {
     DISPLAY_STATE_SPLASH,
     DISPLAY_STATE_NET_CONNECT,
+    DISPLAY_STATE_ASIC_INIT,
     DISPLAY_STATE_POOL_CONNECT,
-    DISPLAY_STATE_MINING_INIT,
+    DISPLAY_STATE_NORMAL,
     DISPLAY_STATE_ERROR,
 } display_state_t;
 
 typedef enum {
-    INFO_DEFAULT,
-    INFO_ERROR,
-    INFO_SHARES,
     INFO_IP,
-    INFO_VERSION,
-    INFO_POWER,
-    INFO_UPTIME,
+    INFO_SHARES,
+    INFO_POOL,
+    INFO_TEMP,
+    INFO_STATUS,
 
     INFO_COUNT
 } info_line_t;
@@ -40,6 +39,4 @@ void Display_bad_NVS(void);
 
 void Display_normal_update(uint8_t);
 
-void Display_net_connect_state(void);
-void Display_pool_connect_state(void);
-void Display_mining_init_state(void);
+void Display_change_state(display_state_t);

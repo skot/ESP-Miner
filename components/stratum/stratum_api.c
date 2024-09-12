@@ -4,14 +4,16 @@
  *  1. Stratum Protocol - [link](https://reference.cash/mining/stratum-protocol)
  *****************************************************************************/
 
-#include "stratum_api.h"
-#include "cJSON.h"
+#include <stdio.h>
+#include <string.h>
+
 #include "esp_log.h"
 #include "esp_ota_ops.h"
 #include "lwip/sockets.h"
+
+#include "cJSON.h"
 #include "utils.h"
-#include <stdio.h>
-#include <string.h>
+#include "stratum_api.h"
 
 #define BUFFER_SIZE 1024
 static const char * TAG = "stratum_api";
@@ -33,19 +35,18 @@ void STRATUM_V1_reset_uid()
     send_uid = 1;
 }
 
-void STRATUM_V1_initialize_buffer()
-{
+esp_err_t STRATUM_V1_initialize_buffer() {
     json_rpc_buffer = malloc(BUFFER_SIZE);
     json_rpc_buffer_size = BUFFER_SIZE;
     memset(json_rpc_buffer, 0, BUFFER_SIZE);
     if (json_rpc_buffer == NULL) {
-        printf("Error: Failed to allocate memory for buffer\n");
-        exit(1);
+        ESP_LOGE(TAG, "Error: Failed to allocate memory for stratum buffer");
+        return ESP_ERR_NO_MEM;
     }
+    return ESP_OK;
 }
 
-void cleanup_stratum_buffer()
-{
+void cleanup_stratum_buffer() {
     free(json_rpc_buffer);
 }
 

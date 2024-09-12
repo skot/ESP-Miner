@@ -5,6 +5,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "esp_err.h"
+
 #define MAX_MERKLE_BRANCHES 32
 #define HASH_SIZE 32
 #define COINBASE_SIZE 100
@@ -63,7 +65,7 @@ typedef struct
 
 void STRATUM_V1_reset_uid();
 
-void STRATUM_V1_initialize_buffer();
+esp_err_t STRATUM_V1_initialize_buffer();
 
 char *STRATUM_V1_receive_jsonrpc_line(int sockfd);
 
