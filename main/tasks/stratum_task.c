@@ -20,28 +20,13 @@
 #define STRATUM_PW CONFIG_STRATUM_PW
 #define STRATUM_DIFFICULTY CONFIG_STRATUM_DIFFICULTY
 
-#define BASE_DELAY_MS 5000
 #define MAX_RETRY_ATTEMPTS 5
 static const char * TAG = "stratum_task";
-static ip_addr_t ip_Addr;
-static bool bDNSFound = false;
-static bool bDNSInvalid = false;
 
 static StratumApiV1Message stratum_api_v1_message = {};
 
 static SystemTaskModule SYSTEM_TASK_MODULE = {.stratum_difficulty = 8192};
 
-void dns_found_cb(const char * name, const ip_addr_t * ipaddr, void * callback_arg)
-{
-    if (ipaddr != NULL){
-        ip4_addr_t ip4addr = ipaddr->u_addr.ip4;  // Obtener la estructura ip4_addr_t, Hi BitMaker!
-        ESP_LOGI(TAG, "IP found : %d.%d.%d.%d", ip4_addr1(&ip4addr), ip4_addr2(&ip4addr), ip4_addr3(&ip4addr), ip4_addr4(&ip4addr));
-        ip_Addr = *ipaddr;
-    } else {
-        bDNSInvalid = true;
-    }
-    bDNSFound = true;
-}
 
 bool is_wifi_connected() {
     wifi_ap_record_t ap_info;
@@ -67,84 +52,53 @@ void cleanQueue(GlobalState * GLOBAL_STATE) {
 
 //function stratum_connect to open the socket
 esp_err_t Stratum_socket_connect(GlobalState * GLOBAL_STATE) {
-
-    char host_ip[20];
-    int addr_family = 0;
-    int ip_protocol = 0;
-    //int delay_ms = BASE_DELAY_MS;
-
     char *stratum_url = GLOBAL_STATE->SYSTEM_MODULE.pool_url;
     uint16_t port = GLOBAL_STATE->SYSTEM_MODULE.pool_port;
 
-    while (1) {
-        //clear flags used by the dns callback, dns_found_cb()
-        bDNSFound = false;
-        bDNSInvalid = false;
-
-        // check to see if the STRATUM_URL is an ip address already
-        if (inet_pton(AF_INET, stratum_url, &ip_Addr) == 1) {
-            bDNSFound = true;
-        } else {
-            ESP_LOGI(TAG, "Get IP for URL: %s", stratum_url);
-            dns_gethostbyname(stratum_url, &ip_Addr, dns_found_cb, NULL);
-            while (!bDNSFound);
-
-            if (bDNSInvalid) {
-                ESP_LOGE(TAG, "DNS lookup failed for URL: %s", stratum_url);
-                // //set ip_Addr to 0.0.0.0 so that connect() will fail
-                // IP_ADDR4(&ip_Addr, 0, 0, 0, 0);
-                return ESP_FAIL;
-            }
-        }
-
-        // make IP address string from ip_Addr
-        snprintf(host_ip, sizeof(host_ip), "%d.%d.%d.%d", 
-                ip4_addr1(&ip_Addr.u_addr.ip4), 
-                ip4_addr2(&ip_Addr.u_addr.ip4),
-                ip4_addr3(&ip_Addr.u_addr.ip4), 
-                ip4_addr4(&ip_Addr.u_addr.ip4));
-
-        ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d (%s)", stratum_url, port, host_ip);
-
-        while (1) {
-            if (!is_wifi_connected()) {
-                ESP_LOGI(TAG, "WiFi is not connected");
-                // esp_wifi_connect();
-                // vTaskDelay(10000 / portTICK_PERIOD_MS);
-                // //delay_ms *= 2; // Increase delay exponentially
-                // continue;
-                return ESP_ERR_WIFI_BASE;
-            }
-
-            struct sockaddr_in dest_addr;
-            dest_addr.sin_addr.s_addr = inet_addr(host_ip);
-            dest_addr.sin_family = AF_INET;
-            dest_addr.sin_port = htons(port);
-            addr_family = AF_INET;
-            ip_protocol = IPPROTO_IP;
-
-            GLOBAL_STATE->sock = socket(addr_family, SOCK_STREAM, ip_protocol);
-            if (GLOBAL_STATE->sock < 0) {
-                ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
-                return ESP_FAIL;
-            }
-
-            ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, port);
-            int err = connect(GLOBAL_STATE->sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
-            if (err != 0) {
-                ESP_LOGE(TAG, "Socket unable to connect to %s:%d (errno %d)", stratum_url, port, errno);
-                // close the socket
-                shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
-                close(GLOBAL_STATE->sock);
-                return ESP_FAIL;
-            } else {
-                ESP_LOGI(TAG, "Successfully connected to %s:%d", stratum_url, port);
-                return ESP_OK;
-            }
-        }
+    if (!is_wifi_connected()) {
+        ESP_LOGI(TAG, "WiFi is not connected");
+        return ESP_ERR_WIFI_BASE;
     }
-    //shouldn't get here
-    return ESP_FAIL;
+
+    char host_ip[INET_ADDRSTRLEN];
+    struct hostent *dns_addr = gethostbyname(stratum_url);
+    if (dns_addr == NULL) {
+        ESP_LOGE(TAG, "DNS lookup failed for URL: %s", stratum_url);
+        return ESP_FAIL;
+    }
+    inet_ntop(AF_INET, (void *)dns_addr->h_addr_list[0], host_ip, sizeof(host_ip));
+
+    int addr_family = AF_INET;
+    int ip_protocol = IPPROTO_IP;
+    struct sockaddr_in dest_addr;
+    dest_addr.sin_addr.s_addr = inet_addr(host_ip);
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(port);
+
+    GLOBAL_STATE->sock = socket(addr_family, SOCK_STREAM, ip_protocol);
+    if (GLOBAL_STATE->sock < 0) {
+        ESP_LOGE(TAG, "Unable to create socket: errno %d: %s", errno, strerror(errno));
+        return ESP_FAIL;
+    }
+
+    ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d (%s)", stratum_url, port, host_ip);
+    int err = connect(GLOBAL_STATE->sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
+    if (err != 0) {
+        ESP_LOGE(TAG, "Socket unable to connect to %s:%d (errno %d: %s)", stratum_url, port, errno, strerror(errno));
+        shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
+        close(GLOBAL_STATE->sock);
+        return ESP_FAIL;
+    }
+
+    struct timeval timeout = {};
+    timeout.tv_sec = 5;
+    timeout.tv_usec = 0;
+    if (setsockopt(GLOBAL_STATE->sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) != 0) {
+        ESP_LOGE(TAG, "Fail to setsockopt SO_SNDTIMEO");
+    }
+
+    ESP_LOGI(TAG, "Successfully connected to %s:%d", stratum_url, port);
+    return ESP_OK;
 }
 
 void stratum_task(void * pvParameters)

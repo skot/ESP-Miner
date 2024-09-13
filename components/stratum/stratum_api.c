@@ -91,7 +91,7 @@ char * STRATUM_V1_receive_jsonrpc_line(int sockfd)
             memset(recv_buffer, 0, BUFFER_SIZE);
             nbytes = recv(sockfd, recv_buffer, BUFFER_SIZE - 1, 0);
             if (nbytes == -1) {
-                ESP_LOGI(TAG, "Error: recv");
+                ESP_LOGI(TAG, "Error: recv (errno %d: %s)", errno, strerror(errno));
                 if (json_rpc_buffer) {
                     free(json_rpc_buffer);
                     json_rpc_buffer=0;
