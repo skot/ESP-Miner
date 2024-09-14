@@ -215,23 +215,29 @@ void stratum_task(void * pvParameters)
                         stratum_api_v1_message.new_port ? stratum_api_v1_message.new_port : port,
                         stratum_api_v1_message.wait_time);
 
+
+                    // Update the stratum_url and port if provided
                     if (stratum_api_v1_message.new_host) {
                         free(stratum_url);
                         stratum_url = strdup(stratum_api_v1_message.new_host);
+                        free(stratum_api_v1_message.new_host);
+                        stratum_api_v1_message.new_host = NULL;
                     }
                     
                     if (stratum_api_v1_message.new_port > 0) {
                         port = stratum_api_v1_message.new_port;
                     }
 
+                    // close the current socket, and mark as invalid
                     shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
                     close(GLOBAL_STATE->sock);
+                    GLOBAL_STATE->sock = -1;
 
-                    if (stratum_api_v1_message.wait_time > 0) {
-                        vTaskDelay(stratum_api_v1_message.wait_time * 1000 / portTICK_PERIOD_MS);
-                    } else {
-                        vTaskDelay(1000 / portTICK_PERIOD_MS); // Delay before attempting to reconnect
-                    }
+                    // Wait before reconnecting. Default to 1000 ms 
+                    int wait_time_ms = (stratum_api_v1_message.wait_time > 0)
+                        ? stratum_api_v1_message.wait_time * 1000
+                        : 1000;
+                    vTaskDelay(wait_time_ms / portTICK_PERIOD_MS);
 
                     // reset DNS lookup flags 
                     bDNSFound = false;
@@ -259,6 +265,8 @@ void stratum_task(void * pvParameters)
                 ESP_LOGE(TAG, "Shutting down socket and restarting...");
                 shutdown(GLOBAL_STATE->sock, 0);
                 close(GLOBAL_STATE->sock);
+                // mark the socket as invalid
+                GLOBAL_STATE->sock = -1;
             }
         }
     }
