@@ -169,7 +169,7 @@ static void _show_overheat_screen(GlobalState * GLOBAL_STATE)
                 OLED_clearLine(0);
                 OLED_writeString(0, 0, "DEVICE OVERHEAT!");
                 OLED_clearLine(1);
-                OLED_writeString(0, 1, "Check AxeOS");
+                OLED_writeString(0, 1, "See AxeOS settings");
                 OLED_clearLine(2);
                 OLED_clearLine(3);
                 esp_netif_get_ip_info(netif, &ip_info);
