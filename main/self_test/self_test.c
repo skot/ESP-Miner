@@ -13,6 +13,11 @@
 #include "string.h"
 #include "TPS546.h"
 
+#define POWER_CONSUMPTION_TARGET_SUB_402 12     //volts
+#define POWER_CONSUMPTION_TARGET_402 8          //volts
+#define POWER_CONSUMPTION_TARGET_GAMMA 11       //volts
+#define POWER_CONSUMPTION_MARGIN 3              //+/- volts
+
 static const char * TAG = "self_test";
 
 static void display_msg(char * msg, GlobalState * GLOBAL_STATE) {
@@ -27,6 +32,25 @@ static void display_msg(char * msg, GlobalState * GLOBAL_STATE) {
                 memset(module->oled_buf, 0, 20);
                 snprintf(module->oled_buf, 20, msg);
                 OLED_writeString(0, 2, module->oled_buf);
+            }
+            break;
+        default:
+    }
+}
+
+static void display_end_screen(GlobalState * GLOBAL_STATE) {
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+
+    switch (GLOBAL_STATE->device_model) {
+        case DEVICE_MAX:
+        case DEVICE_ULTRA:
+        case DEVICE_SUPRA:
+        case DEVICE_GAMMA:
+            if (OLED_status()) {
+                OLED_clearLine(2);
+                OLED_writeString(0, 2, "           PASS");
+                OLED_clearLine(3);
+                OLED_writeString(0, 3, "PRESS RESET");
             }
             break;
         default:
@@ -269,22 +293,22 @@ void self_test(void * pvParameters)
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
             if(GLOBAL_STATE->board_version != 402){
-                if (!INA260_power_consumption_pass(12, 3)) {
-                    ESP_LOGE(TAG, "INA260 Power Draw Failed");
+                if (!INA260_power_consumption_pass(POWER_CONSUMPTION_TARGET_SUB_402, POWER_CONSUMPTION_MARGIN)) {
+                    ESP_LOGE(TAG, "INA260 Power Draw Failed, target %f", POWER_CONSUMPTION_TARGET_SUB_402);
                     display_msg("POWER:   FAIL", GLOBAL_STATE);
                     return;
                 }
             } else {
-                if (!TPS546_power_consumption_pass(8, 3)) {
-                    ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %f", 8.0);
+                if (!TPS546_power_consumption_pass(POWER_CONSUMPTION_TARGET_402, POWER_CONSUMPTION_MARGIN)) {
+                    ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %f", POWER_CONSUMPTION_TARGET_402);
                     display_msg("POWER:   FAIL", GLOBAL_STATE);
                     return;
                 }
             }
             break;
         case DEVICE_GAMMA:
-                if (!TPS546_power_consumption_pass(11, 3)) {
-                    ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %f", 11.0);
+                if (!TPS546_power_consumption_pass(POWER_CONSUMPTION_TARGET_GAMMA, POWER_CONSUMPTION_MARGIN)) {
+                    ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %f", POWER_CONSUMPTION_TARGET_GAMMA);
                     display_msg("POWER:   FAIL", GLOBAL_STATE);
                     return;
                 }
@@ -298,6 +322,7 @@ void self_test(void * pvParameters)
     }
 
 
-    display_msg("           PASS", GLOBAL_STATE);
+    ESP_LOGI(TAG, "SELF TESTS PASS -- Press RESET to continue");
+    display_end_screen(GLOBAL_STATE);
     nvs_config_set_u16(NVS_CONFIG_SELF_TEST, 0);
 }
