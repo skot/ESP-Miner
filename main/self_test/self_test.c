@@ -178,16 +178,16 @@ void self_test(void * pvParameters)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
-            if (GLOBAL_STATE->board_version != 402){
-                if(!DS4432U_test()) {
-                    ESP_LOGE(TAG, "DS4432 test failed!");
-                    display_msg("DS4432U:FAIL", GLOBAL_STATE);
-                    return;
-                }
-            } else {
+            if (GLOBAL_STATE->board_version >= 402 && GLOBAL_STATE->board_version <= 499){
                 if (result != 0) {
                     ESP_LOGE(TAG, "TPS546 test failed!");
                     display_msg("TPS546:FAIL", GLOBAL_STATE);
+                    return;
+                }
+            } else {
+                if(!DS4432U_test()) {
+                    ESP_LOGE(TAG, "DS4432 test failed!");
+                    display_msg("DS4432U:FAIL", GLOBAL_STATE);
                     return;
                 }
             }
@@ -291,15 +291,15 @@ void self_test(void * pvParameters)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
-            if(GLOBAL_STATE->board_version != 402){
-                if (!INA260_power_consumption_pass(POWER_CONSUMPTION_TARGET_SUB_402, POWER_CONSUMPTION_MARGIN)) {
-                    ESP_LOGE(TAG, "INA260 Power Draw Failed, target %.2f", (float)POWER_CONSUMPTION_TARGET_SUB_402);
+            if(GLOBAL_STATE->board_version >= 402 && GLOBAL_STATE->board_version <= 499){
+                if (!TPS546_power_consumption_pass(POWER_CONSUMPTION_TARGET_402, POWER_CONSUMPTION_MARGIN)) {
+                    ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %.2f", (float)POWER_CONSUMPTION_TARGET_402);
                     display_msg("POWER:   FAIL", GLOBAL_STATE);
                     return;
                 }
             } else {
-                if (!TPS546_power_consumption_pass(POWER_CONSUMPTION_TARGET_402, POWER_CONSUMPTION_MARGIN)) {
-                    ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %.2f", (float)POWER_CONSUMPTION_TARGET_402);
+                if (!INA260_power_consumption_pass(POWER_CONSUMPTION_TARGET_SUB_402, POWER_CONSUMPTION_MARGIN)) {
+                    ESP_LOGE(TAG, "INA260 Power Draw Failed, target %.2f", (float)POWER_CONSUMPTION_TARGET_SUB_402);
                     display_msg("POWER:   FAIL", GLOBAL_STATE);
                     return;
                 }
