@@ -147,23 +147,22 @@ void self_test(void * pvParameters)
         default:
     }
 
+    uint8_t result = VCORE_init(GLOBAL_STATE);
+    VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
+
     // VCore regulator testing
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
-            if(GLOBAL_STATE->board_version != 402){
-                if(!DS4432U_test()){
+            if (GLOBAL_STATE->board_version != 402){
+                if(!DS4432U_test()) {
                     ESP_LOGE(TAG, "DS4432 test failed!");
                     display_msg("DS4432U:FAIL", GLOBAL_STATE);
                     return;
                 }
-            }else{
-                
-                uint8_t result = VCORE_init(GLOBAL_STATE);
-                VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
-
-                if(result != 0){
+            } else {
+                if (result != 0) {
                     ESP_LOGE(TAG, "TPS546 test failed!");
                     display_msg("TPS546:FAIL", GLOBAL_STATE);
                     return;
@@ -171,11 +170,7 @@ void self_test(void * pvParameters)
             }
             break;
         case DEVICE_GAMMA:
-
-                uint8_t result = VCORE_init(GLOBAL_STATE);
-                VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
-
-                if(result != 0){
+                if (result != 0) {
                     ESP_LOGE(TAG, "TPS546 test failed!");
                     display_msg("TPS546:FAIL", GLOBAL_STATE);
                     return;
