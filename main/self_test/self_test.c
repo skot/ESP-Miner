@@ -39,7 +39,6 @@ static void display_msg(char * msg, GlobalState * GLOBAL_STATE) {
 }
 
 static void display_end_screen(GlobalState * GLOBAL_STATE) {
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
@@ -294,13 +293,13 @@ void self_test(void * pvParameters)
         case DEVICE_SUPRA:
             if(GLOBAL_STATE->board_version != 402){
                 if (!INA260_power_consumption_pass(POWER_CONSUMPTION_TARGET_SUB_402, POWER_CONSUMPTION_MARGIN)) {
-                    ESP_LOGE(TAG, "INA260 Power Draw Failed, target %f", POWER_CONSUMPTION_TARGET_SUB_402);
+                    ESP_LOGE(TAG, "INA260 Power Draw Failed, target %.2f", (float)POWER_CONSUMPTION_TARGET_SUB_402);
                     display_msg("POWER:   FAIL", GLOBAL_STATE);
                     return;
                 }
             } else {
                 if (!TPS546_power_consumption_pass(POWER_CONSUMPTION_TARGET_402, POWER_CONSUMPTION_MARGIN)) {
-                    ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %f", POWER_CONSUMPTION_TARGET_402);
+                    ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %.2f", (float)POWER_CONSUMPTION_TARGET_402);
                     display_msg("POWER:   FAIL", GLOBAL_STATE);
                     return;
                 }
@@ -308,7 +307,7 @@ void self_test(void * pvParameters)
             break;
         case DEVICE_GAMMA:
                 if (!TPS546_power_consumption_pass(POWER_CONSUMPTION_TARGET_GAMMA, POWER_CONSUMPTION_MARGIN)) {
-                    ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %f", POWER_CONSUMPTION_TARGET_GAMMA);
+                    ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %.2f", (float)POWER_CONSUMPTION_TARGET_GAMMA);
                     display_msg("POWER:   FAIL", GLOBAL_STATE);
                     return;
                 }
