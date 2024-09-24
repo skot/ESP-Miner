@@ -128,7 +128,7 @@ static void _set_chip_address(uint8_t chipAddr)
     _send_BM1370((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, BM1370_SERIALTX_DEBUG);
 }
 
-static void _set_chip_version_mask(uint32_t version_mask) 
+static void BM1370_set_version_mask(uint32_t version_mask) 
 {
     int versions_to_roll = version_mask >> 13;
     uint8_t version_byte0 = (versions_to_roll >> 8);
@@ -204,11 +204,11 @@ static void do_frequency_ramp_up(float target_frequency) {
     }
 }
 
-static uint8_t _send_init(uint64_t frequency, uint16_t asic_count, uint32_t version_mask)
+static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
 {
     // set version mask
     for (int i = 0; i < 3; i++) {
-        _set_chip_version_mask(version_mask);
+        BM1370_set_version_mask(STRATUM_DEFAULT_VERSION_MASK);
     }
 
     //read register 00 on all chips (should respond AA 55 13 68 00 00 00 00 00 00 0F)
@@ -226,7 +226,7 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count, uint32_t vers
     ESP_LOGI(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
 
     // set version mask
-    _set_chip_version_mask(version_mask);
+    BM1370_set_version_mask(STRATUM_DEFAULT_VERSION_MASK);
 
     //Reg_A8
     unsigned char init5[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0xA8, 0x00, 0x07, 0x00, 0x00, 0x03};
@@ -335,7 +335,7 @@ static void _send_read_address(void)
     _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_READ), read_address, 2, BM1370_SERIALTX_DEBUG);
 }
 
-uint8_t BM1370_init(uint64_t frequency, uint16_t asic_count, uint32_t version_mask)
+uint8_t BM1370_init(uint64_t frequency, uint16_t asic_count)
 {
     ESP_LOGI(TAG, "Initializing BM1370");
 
@@ -347,7 +347,7 @@ uint8_t BM1370_init(uint64_t frequency, uint16_t asic_count, uint32_t version_ma
     // reset the bm1370
     _reset();
 
-    return _send_init(frequency, asic_count,version_mask);
+    return _send_init(frequency, asic_count);
 }
 
 // Baud formula = 25M/((denominator+1)*8)

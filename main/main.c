@@ -77,7 +77,8 @@ void app_main(void)
                                         .receive_result_fn = BM1366_proccess_work,
                                         .set_max_baud_fn = BM1366_set_max_baud,
                                         .set_difficulty_mask_fn = BM1366_set_job_difficulty_mask,
-                                        .send_work_fn = BM1366_send_work};
+                                        .send_work_fn = BM1366_send_work,
+                                        .set_version_mask = BM1366_set_version_mask};
         //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1366_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
         GLOBAL_STATE.asic_job_frequency_ms = ASIC_BM1366_JOB_FREQUENCY_MS; //2000ms
         GLOBAL_STATE.initial_ASIC_difficulty = BM1366_INITIAL_DIFFICULTY;
@@ -90,7 +91,8 @@ void app_main(void)
                                         .receive_result_fn = BM1370_proccess_work,
                                         .set_max_baud_fn = BM1370_set_max_baud,
                                         .set_difficulty_mask_fn = BM1370_set_job_difficulty_mask,
-                                        .send_work_fn = BM1370_send_work};
+                                        .send_work_fn = BM1370_send_work,
+                                        .set_version_mask = BM1370_set_version_mask};
         //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1370_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
         GLOBAL_STATE.asic_job_frequency_ms = ASIC_BM1370_JOB_FREQUENCY_MS; //500ms
         GLOBAL_STATE.initial_ASIC_difficulty = BM1370_INITIAL_DIFFICULTY;
@@ -103,7 +105,8 @@ void app_main(void)
                                         .receive_result_fn = BM1368_proccess_work,
                                         .set_max_baud_fn = BM1368_set_max_baud,
                                         .set_difficulty_mask_fn = BM1368_set_job_difficulty_mask,
-                                        .send_work_fn = BM1368_send_work};
+                                        .send_work_fn = BM1368_send_work,
+                                        .set_version_mask = BM1368_set_version_mask};
         //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1368_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
         GLOBAL_STATE.asic_job_frequency_ms = ASIC_BM1368_JOB_FREQUENCY_MS; //500ms
         GLOBAL_STATE.initial_ASIC_difficulty = BM1368_INITIAL_DIFFICULTY;
@@ -116,7 +119,8 @@ void app_main(void)
                                         .receive_result_fn = BM1397_proccess_work,
                                         .set_max_baud_fn = BM1397_set_max_baud,
                                         .set_difficulty_mask_fn = BM1397_set_job_difficulty_mask,
-                                        .send_work_fn = BM1397_send_work};
+                                        .send_work_fn = BM1397_send_work,
+                                        .set_version_mask = BM1397_set_version_mask};
         GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1397_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // no version-rolling so same Nonce Space is splitted between Small Cores
         GLOBAL_STATE.initial_ASIC_difficulty = BM1397_INITIAL_DIFFICULTY;
 
@@ -196,17 +200,20 @@ void app_main(void)
         queue_init(&GLOBAL_STATE.stratum_queue);
         queue_init(&GLOBAL_STATE.ASIC_jobs_queue);
 
-        xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
-
-        // GLOBAL_STATE.version_mask comes from stratum_task 
         SERIAL_init();
-        (*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE.asic_count,GLOBAL_STATE.version_mask);
+        (*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE.asic_count,(uint32_t)0x1fffe000);
         SERIAL_set_baud((*GLOBAL_STATE.ASIC_functions.set_max_baud_fn)());
         SERIAL_clear_buffer();
 
         GLOBAL_STATE.ASIC_initalized = true;
+        
 
+        xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
         xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);
+
+        //set the version mask after talking to stratum
+        (*GLOBAL_STATE.ASIC_functions.set_version_mask)(GLOBAL_STATE.version_mask)
+
         xTaskCreate(ASIC_task, "asic", 8192, (void *) &GLOBAL_STATE, 10, NULL);
         xTaskCreate(ASIC_result_task, "asic result", 8192, (void *) &GLOBAL_STATE, 15, NULL);
     }

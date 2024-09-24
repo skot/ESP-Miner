@@ -44,6 +44,7 @@ typedef struct
     int (*set_max_baud_fn)(void);
     void (*set_difficulty_mask_fn)(int);
     void (*send_work_fn)(void * GLOBAL_STATE, bm_job * next_bm_job);
+    void (*set_version_mask)(uint32_t);
 } AsicFunctions;
 
 typedef struct

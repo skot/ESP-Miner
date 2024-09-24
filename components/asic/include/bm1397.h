@@ -49,7 +49,7 @@ typedef struct __attribute__((__packed__))
     uint8_t midstate3[32];
 } job_packet;
 
-uint8_t BM1397_init(uint64_t frequency, uint16_t asic_count, uint32_t version_mask);
+uint8_t BM1397_init(uint64_t frequency, uint16_t asic_count);
 
 void BM1397_send_work(void * GLOBAL_STATE, bm_job * next_bm_job);
 void BM1397_set_job_difficulty_mask(int);

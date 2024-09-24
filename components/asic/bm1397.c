@@ -127,6 +127,10 @@ static void _set_chip_address(uint8_t chipAddr)
     _send_BM1397((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, BM1937_SERIALTX_DEBUG);
 }
 
+static void BM1397_set_version_mask(uint32_t version_mask) {
+    // placeholder
+}
+
 // borrowed from cgminer driver-gekko.c calc_gsf_freq()
 void BM1397_send_hash_frequency(float frequency)
 {
@@ -283,7 +287,7 @@ static void _reset(void)
     vTaskDelay(100 / portTICK_PERIOD_MS);
 }
 
-uint8_t BM1397_init(uint64_t frequency, uint16_t asic_count, uint32_t version_mask)
+uint8_t BM1397_init(uint64_t frequency, uint16_t asic_count)
 {
     ESP_LOGI(TAG, "Initializing BM1397");
 
