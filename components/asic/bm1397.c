@@ -283,7 +283,7 @@ static void _reset(void)
     vTaskDelay(100 / portTICK_PERIOD_MS);
 }
 
-uint8_t BM1397_init(uint64_t frequency, uint16_t asic_count)
+uint8_t BM1397_init(uint64_t frequency, uint16_t asic_count, uint32_t version_mask)
 {
     ESP_LOGI(TAG, "Initializing BM1397");
 
