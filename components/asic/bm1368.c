@@ -114,7 +114,7 @@ static void _set_chip_version_mask(uint32_t version_mask)
     uint8_t version_byte0 = (versions_to_roll >> 8);
     uint8_t version_byte1 = (versions_to_roll & 0xFF); 
     uint8_t version_cmd[] = {0x00, 0xA4, 0x90, 0x00, version_byte0, version_byte1};
-    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, version_cmd, 6, false);
+    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, version_cmd, 6, BM1368_SERIALTX_DEBUG);
 }
 
 static void _reset(void)
@@ -234,7 +234,7 @@ static void do_frequency_ramp_up(float target_frequency) {
     do_frequency_transition(target_frequency);
 }
 
-uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
+uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count, uint32_t version_mask)
 {
     ESP_LOGI(TAG, "Initializing BM1368");
 
@@ -244,9 +244,10 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
     gpio_set_direction(BM1368_RST_PIN, GPIO_MODE_OUTPUT);
 
     _reset();
-    uint_32_t version_mask_default = 0x1fffe000;
+
+    // set version mask
     for (int i = 0; i < 4; i++) {
-        _set_chip_version_mask(version_mask_default);
+        _set_chip_version_mask(version_mask);
     }
 
     int chip_counter = count_asic_chips();
@@ -295,7 +296,7 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
     do_frequency_ramp_up((float)frequency);
 
     _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, (uint8_t[]){0x00, 0x10, 0x00, 0x00, 0x15, 0xa4}, 6, false);
-    _set_chip_version_mask(version_mask_default)
+    _set_chip_version_mask(version_mask);
 
     ESP_LOGI(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
     return chip_counter;
