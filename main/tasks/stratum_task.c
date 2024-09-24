@@ -199,12 +199,12 @@ void stratum_task(void * pvParameters)
                         ESP_LOGI(TAG, "Set stratum difficulty: %ld", SYSTEM_TASK_MODULE.stratum_difficulty);
                     }
                 } else if (stratum_api_v1_message.method == MINING_SET_VERSION_MASK ||
-                        stratum_api_v1_message.method == STRATUM_RESULT_VERSION_MASK) {
-                        // 1fffe000
-                        ESP_LOGI(TAG, "Set version mask: %08lx", stratum_api_v1_message.version_mask);  
-                        GLOBAL_STATE->version_mask = stratum_api_v1_message.version_mask;
-                        //set the version mask after talking to stratum
-                        GLOBAL_STATE->version_mask_given = true;
+                    stratum_api_v1_message.method == STRATUM_RESULT_VERSION_MASK) {
+                    // 1fffe000
+                    ESP_LOGI(TAG, "Set version mask: %08lx", stratum_api_v1_message.version_mask);  
+                    GLOBAL_STATE->version_mask = stratum_api_v1_message.version_mask;
+                    //set the version mask after talking to stratum
+                    GLOBAL_STATE->version_mask_given = true;
 
                 } else if (stratum_api_v1_message.method == STRATUM_RESULT_SUBSCRIBE) {
                     GLOBAL_STATE->extranonce_str = stratum_api_v1_message.extranonce_str;
