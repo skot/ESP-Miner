@@ -191,7 +191,7 @@ void app_main(void)
 
     // set the startup_done flag
     GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
-    GLOBAL_STATE.version_mask_given = false;
+    GLOBAL_STATE.new_stratum_version_rolling_msg = false;
 
     xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
 

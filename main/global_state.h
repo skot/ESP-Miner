@@ -105,7 +105,7 @@ typedef struct
 
     uint32_t stratum_difficulty;
     uint32_t version_mask;
-    bool version_mask_given;
+    bool new_stratum_version_rolling_msg;
 
     int sock;
     bool ASIC_initalized;
