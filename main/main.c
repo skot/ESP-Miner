@@ -196,14 +196,16 @@ void app_main(void)
         queue_init(&GLOBAL_STATE.stratum_queue);
         queue_init(&GLOBAL_STATE.ASIC_jobs_queue);
 
+        xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
+
+        // GLOBAL_STATE.version_mask comes from stratum_task 
         SERIAL_init();
-        (*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE.asic_count);
+        (*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE.asic_count,GLOBAL_STATE.version_mask);
         SERIAL_set_baud((*GLOBAL_STATE.ASIC_functions.set_max_baud_fn)());
         SERIAL_clear_buffer();
 
         GLOBAL_STATE.ASIC_initalized = true;
 
-        xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
         xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);
         xTaskCreate(ASIC_task, "asic", 8192, (void *) &GLOBAL_STATE, 10, NULL);
         xTaskCreate(ASIC_result_task, "asic result", 8192, (void *) &GLOBAL_STATE, 15, NULL);
