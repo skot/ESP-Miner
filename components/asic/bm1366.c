@@ -126,7 +126,7 @@ static void _set_chip_address(uint8_t chipAddr)
     _send_BM1366((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, BM1366_SERIALTX_DEBUG);
 }
 
-static void BM1366_set_version_mask(uint32_t version_mask) 
+void BM1366_set_version_mask(uint32_t version_mask) 
 {
     int versions_to_roll = version_mask >> 13;
     uint8_t version_byte0 = (versions_to_roll >> 8);

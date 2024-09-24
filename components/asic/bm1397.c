@@ -127,7 +127,7 @@ static void _set_chip_address(uint8_t chipAddr)
     _send_BM1397((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, BM1937_SERIALTX_DEBUG);
 }
 
-static void BM1397_set_version_mask(uint32_t version_mask) {
+void BM1397_set_version_mask(uint32_t version_mask) {
     // placeholder
 }
 
