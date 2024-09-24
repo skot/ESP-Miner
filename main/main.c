@@ -191,6 +191,7 @@ void app_main(void)
 
     // set the startup_done flag
     GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
+    GLOBAL_STATE.version_mask_given = false;
 
     xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
 
@@ -210,10 +211,6 @@ void app_main(void)
 
         xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
         xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);
-
-        //set the version mask after talking to stratum
-        (*GLOBAL_STATE.ASIC_functions.set_version_mask)(GLOBAL_STATE.version_mask);
-
         xTaskCreate(ASIC_task, "asic", 8192, (void *) &GLOBAL_STATE, 10, NULL);
         xTaskCreate(ASIC_result_task, "asic result", 8192, (void *) &GLOBAL_STATE, 15, NULL);
     }
