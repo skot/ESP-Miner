@@ -207,7 +207,6 @@ void app_main(void)
         SERIAL_clear_buffer();
 
         GLOBAL_STATE.ASIC_initalized = true;
-        
 
         xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
         xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);
