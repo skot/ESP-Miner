@@ -159,12 +159,12 @@ void stratum_task(void * pvParameters)
             char * username = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, STRATUM_USER);
             char * password = nvs_config_get_string(NVS_CONFIG_STRATUM_PASS, STRATUM_PW);
 
-            //mining.authorize - ID: 4
+            //mining.authorize - ID: 3
             STRATUM_V1_authenticate(GLOBAL_STATE->sock, username, password);
             free(password);
             free(username);
 
-            //mining.suggest_difficulty - ID: 3
+            //mining.suggest_difficulty - ID: 4
             STRATUM_V1_suggest_difficulty(GLOBAL_STATE->sock, STRATUM_DIFFICULTY);
 
             while (1) {
