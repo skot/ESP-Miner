@@ -1,5 +1,5 @@
 import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, finalize } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -14,18 +14,19 @@ export class LoadingService {
     return <T>(source: Observable<T>): Observable<T> => {
       return new Observable(subscriber => {
         this.loading$.next(true);
-        source.subscribe({
-          next: (value) => {
-            subscriber.next(value);
-          },
-          error: (err) => {
-            subscriber.next(err);
-          },
-          complete: () => {
+        const subscription = source.pipe(
+          finalize(() => {
             this.loading$.next(false);
-            subscriber.complete();
-          }
-        })
+          })
+        ).subscribe({
+          next: (value) => subscriber.next(value),
+          error: (err) => subscriber.error(err),
+          complete: () => subscriber.complete()
+        });
+
+        return () => {
+          subscription.unsubscribe();
+        };
       });
     }
   }
