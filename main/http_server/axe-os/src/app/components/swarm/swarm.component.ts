@@ -16,6 +16,7 @@ export class SwarmComponent {
   public swarm$: Observable<Observable<any>[]>;
 
   public refresh$: BehaviorSubject<null> = new BehaviorSubject(null);
+  public sort$: BehaviorSubject<{ column: string; direction: 'asc' | 'desc' }> = new BehaviorSubject<{ column: string; direction: 'asc' | 'desc' }>({ column: 'ip', direction: 'asc' });
 
   public selectedAxeOs: any = null;
   public showEdit = false;
@@ -29,33 +30,46 @@ export class SwarmComponent {
       ip: [null, [Validators.required, Validators.pattern('(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)')]]
     });
 
-    this.swarm$ = this.systemService.getSwarmInfo().pipe(
-      map(swarmInfo => {
-        return swarmInfo.map(({ ip }) => {
-          // Make individual API calls for each IP
-          return this.refresh$.pipe(
-            switchMap(() => {
-              return this.systemService.getInfo(`http://${ip}`);
-            })
-          ).pipe(
-            startWith({ ip }),
-            map(info => {
-              return {
-                ip,
-                ...info
-              };
-            }),
-            catchError(error => {
-              return of({ ip, error: true });
-            })
-          );
-        });
-      })
+    this.swarm$ = combineLatest([
+      this.systemService.getSwarmInfo(),
+      this.refresh$,
+      this.sort$
+    ]).pipe(
+      switchMap(([swarmInfo, _, sort]) => {
+        return forkJoin(
+          swarmInfo.map(({ ip }) =>
+            this.systemService.getInfo(`http://${ip}`).pipe(
+              map(info => ({ ip, ...info })),
+              catchError(error => of({ ip, error: true }))
+            )
+          )
+        ).pipe(
+          map(detailedSwarmInfo => this.sortSwarmData(detailedSwarmInfo, sort.column, sort.direction))
+        );
+      }),
+      map(sortedSwarmInfo => sortedSwarmInfo.map(info => of(info)))
     );
-
-
   }
 
+  public onSort(column: string) {
+    const currentSort = this.sort$.value;
+    if (currentSort.column === column) {
+      this.sort$.next({ column, direction: currentSort.direction === 'asc' ? 'desc' : 'asc' });
+    } else {
+      this.sort$.next({ column, direction: 'asc' });
+    }
+  }
+
+  private sortSwarmData(data: any[], column: string, direction: 'asc' | 'desc'): any[] {
+    return [...data].sort((a, b) => {
+      const valueA = a[column];
+      const valueB = b[column];
+      
+      if (valueA < valueB) return direction === 'asc' ? -1 : 1;
+      if (valueA > valueB) return direction === 'asc' ? 1 : -1;
+      return 0;
+    });
+  }
 
   public add() {
     const newIp = this.form.value.ip;
