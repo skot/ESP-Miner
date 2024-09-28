@@ -197,8 +197,6 @@ export class EditComponent implements OnInit {
       delete form.stratumPassword;
     }
 
-    form.overheat_mode = form.overheat_mode ? 1 : 0;
-
     this.systemService.updateSystem(this.uri, form)
       .pipe(this.loadingService.lockUIUntilComplete())
       .subscribe({
@@ -219,6 +217,11 @@ export class EditComponent implements OnInit {
   showWifiPassword: boolean = false;
   toggleWifiPasswordVisibility() {
     this.showWifiPassword = !this.showWifiPassword;
+  }
+
+  disableOverheatMode() {
+    this.form.patchValue({ overheat_mode: 0 });
+    this.updateSystem();
   }
 
 }
