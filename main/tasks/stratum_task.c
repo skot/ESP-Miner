@@ -208,10 +208,39 @@ void stratum_task(void * pvParameters)
                     GLOBAL_STATE->extranonce_str = stratum_api_v1_message.extranonce_str;
                     GLOBAL_STATE->extranonce_2_len = stratum_api_v1_message.extranonce_2_len;
                 } else if (stratum_api_v1_message.method == CLIENT_RECONNECT) {
-                    ESP_LOGE(TAG, "Pool requested client reconnect...");
+                    ESP_LOGI(TAG, "Pool requested client reconnect to %s:%d (wait: %d seconds)",
+                        stratum_api_v1_message.new_host ? stratum_api_v1_message.new_host : "same host",
+                        stratum_api_v1_message.new_port ? stratum_api_v1_message.new_port : port,
+                        stratum_api_v1_message.wait_time);
+
+
+                    // Update the stratum_url and port if provided
+                    if (stratum_api_v1_message.new_host) {
+                        free(stratum_url);
+                        stratum_url = strdup(stratum_api_v1_message.new_host);
+                        free(stratum_api_v1_message.new_host);
+                        stratum_api_v1_message.new_host = NULL;
+                    }
+                    
+                    if (stratum_api_v1_message.new_port > 0) {
+                        port = stratum_api_v1_message.new_port;
+                    }
+
+                    // close the current socket, and mark as invalid
                     shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
                     close(GLOBAL_STATE->sock);
-                    vTaskDelay(1000 / portTICK_PERIOD_MS); // Delay before attempting to reconnect
+                    GLOBAL_STATE->sock = -1;
+
+                    // Wait before reconnecting. Default to 1000 ms 
+                    int wait_time_ms = (stratum_api_v1_message.wait_time > 0)
+                        ? stratum_api_v1_message.wait_time * 1000
+                        : 1000;
+                    vTaskDelay(wait_time_ms / portTICK_PERIOD_MS);
+
+                    // reset DNS lookup flags 
+                    bDNSFound = false;
+                    bDNSInvalid = false;
+
                     break;
                 } else if (stratum_api_v1_message.method == STRATUM_RESULT) {
                     if (stratum_api_v1_message.response_success) {
@@ -234,6 +263,8 @@ void stratum_task(void * pvParameters)
                 ESP_LOGE(TAG, "Shutting down socket and restarting...");
                 shutdown(GLOBAL_STATE->sock, 0);
                 close(GLOBAL_STATE->sock);
+                // mark the socket as invalid
+                GLOBAL_STATE->sock = -1;
             }
         }
     }
