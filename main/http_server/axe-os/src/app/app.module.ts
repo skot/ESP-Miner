@@ -22,6 +22,7 @@ import { DateAgoPipe } from './pipes/date-ago.pipe';
 import { HashSuffixPipe } from './pipes/hash-suffix.pipe';
 import { PrimeNGModule } from './prime-ng.module';
 import { MessageModule } from 'primeng/message';
+import { UptimeSincePipe } from './pipes/uptime-since.pipe';
 
 const components = [
   AppComponent,
@@ -40,7 +41,8 @@ const components = [
     DateAgoPipe,
     SwarmComponent,
     SettingsComponent,
-    HashSuffixPipe
+    HashSuffixPipe,
+    UptimeSincePipe
   ],
   imports: [
     BrowserModule,
