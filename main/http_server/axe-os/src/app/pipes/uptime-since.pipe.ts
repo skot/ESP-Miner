@@ -20,7 +20,7 @@ export class UptimeSincePipe implements PipeTransform {
       const mDisplay = m > 0 ? m + ( "m" ) : ""
       const sDisplay = s > 0 ? s + ( "s" ) : ""
 
-      return dDisplay + hDisplay + mDisplay + sDisplay
+      return dDisplay + " " + hDisplay + " " + mDisplay + " " + sDisplay
     }
     return value;
   }
