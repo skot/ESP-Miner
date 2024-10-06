@@ -412,7 +412,7 @@ asic_result *BM1397_receive_work(void)
         return NULL;
     } else if (uart_timeout) {
         if (asic_timeout_counter>=asic_timeout_warning) {
-            ESP_LOGE(TAG, "Device not sending data");
+            ESP_LOGE(TAG, "ASIC not sending data");
             asic_timeout_counter = 0;
         }
         asic_timeout_counter++;
