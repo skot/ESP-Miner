@@ -641,7 +641,7 @@ asic_result * BM1366_receive_work(void)
         ESP_LOGI(TAG, "UART Error in serial RX");
         return NULL;
     } else if (uart_timeout) {
-        if (asic_timeout_counter>=asic_timeout_warning) {
+        if (asic_timeout_counter>=asic_timeout_warning_threshold) {
             ESP_LOGE(TAG, "ASIC not sending data");
             asic_timeout_counter = 0;
         }
