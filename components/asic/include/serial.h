@@ -4,6 +4,9 @@
 #define SERIAL_BUF_SIZE 16
 #define CHUNK_SIZE 1024
 
+static uint8_t asic_timeout_counter = 0;
+static uint8_t asic_timeout_warning = 2;
+static int uart_timeout_ms = 10000;
 
 int SERIAL_send(uint8_t *, int, bool);
 void SERIAL_init(void);
