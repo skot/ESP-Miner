@@ -370,12 +370,22 @@ void BM1368_send_work(void * pvParameters, bm_job * next_bm_job)
 
 asic_result * BM1368_receive_work(void)
 {
-    int received = SERIAL_rx(asic_response_buffer, 11, 60000);
+    // wait for a response
+    int received = SERIAL_rx(asic_response_buffer, 11, uart_timeout_ms);
 
-    if (received < 0) {
-        ESP_LOGI(TAG, "Error in serial RX");
+    bool uart_err = received < 0;
+    bool uart_timeout = received == 0;
+
+    // handle response
+    if (uart_err) {
+        ESP_LOGI(TAG, "UART Error in serial RX");
         return NULL;
-    } else if (received == 0) {
+    } else if (uart_timeout) {
+        if (asic_timeout_counter>=asic_timeout_warning) {
+            ESP_LOGE(TAG, "Device not sending data");
+            asic_timeout_counter = 0;
+        }
+        asic_timeout_counter++;
         return NULL;
     }
 

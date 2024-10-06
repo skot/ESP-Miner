@@ -400,17 +400,22 @@ void BM1397_send_work(void *pvParameters, bm_job *next_bm_job)
 asic_result *BM1397_receive_work(void)
 {
 
-    // wait for a response, wait time is pretty arbitrary
-    int received = SERIAL_rx(asic_response_buffer, 9, 60000);
+    // wait for a response
+    int received = SERIAL_rx(asic_response_buffer, 9, uart_timeout_ms);
 
-    if (received < 0)
-    {
-        ESP_LOGI(TAG, "Error in serial RX");
+    bool uart_err = received < 0;
+    bool uart_timeout = received == 0;
+
+    // handle response
+    if (uart_err) {
+        ESP_LOGI(TAG, "UART Error in serial RX");
         return NULL;
-    }
-    else if (received == 0)
-    {
-        // Didn't find a solution, restart and try again
+    } else if (uart_timeout) {
+        if (asic_timeout_counter>=asic_timeout_warning) {
+            ESP_LOGE(TAG, "Device not sending data");
+            asic_timeout_counter = 0;
+        }
+        asic_timeout_counter++;
         return NULL;
     }
 
