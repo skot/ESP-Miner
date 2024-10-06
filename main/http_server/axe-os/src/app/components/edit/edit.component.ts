@@ -232,4 +232,9 @@ export class EditComponent implements OnInit {
     this.showWifiPassword = !this.showWifiPassword;
   }
 
+  showFallbackStratumPassword: boolean = false;
+  toggleFallbackStratumPasswordVisibility() {
+    this.showFallbackStratumPassword = !this.showFallbackStratumPassword;
+  }
+
 }
