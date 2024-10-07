@@ -15,7 +15,7 @@
 // A copy of the display memory is maintained by this code so that single pixel
 // writes can occur without having to read from the display controller.
 
-#include "i2c_master.h"
+#include "i2c_bitaxe.h"
 #include "esp_err.h"
 #include "esp_log.h"
 #include "nvs_config.h"

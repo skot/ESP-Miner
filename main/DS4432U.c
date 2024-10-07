@@ -2,7 +2,7 @@
 #include <math.h>
 #include "esp_log.h"
 
-#include "i2c_master.h"
+#include "i2c_bitaxe.h"
 
 #include "DS4432U.h"
 

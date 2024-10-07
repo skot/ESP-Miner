@@ -2,7 +2,7 @@
 
 #include "esp_log.h"
 
-#include "i2c_master.h"
+#include "i2c_bitaxe.h"
 #include "EMC2101.h"
 #include "INA260.h"
 #include "TMP1075.h"

@@ -1,4 +1,4 @@
-#include "i2c_master.h"
+#include "i2c_bitaxe.h"
 
 #define I2C_MASTER_SCL_IO 48        /*!< GPIO number used for I2C master clock */
 #define I2C_MASTER_SDA_IO 47        /*!< GPIO number used for I2C master data  */

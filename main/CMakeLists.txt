@@ -4,7 +4,7 @@ SRCS
     "DS4432U.c"
     "EMC2101.c"
     "fonts.c"
-    "i2c_master.c"
+    "i2c_bitaxe.c"
     "INA260.c"
     "led_controller.c"
     "main.c"

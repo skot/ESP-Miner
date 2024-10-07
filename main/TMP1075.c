@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include "esp_log.h"
-#include "i2c_master.h"
+#include "i2c_bitaxe.h"
 
 #include "TMP1075.h"
 
