@@ -4,8 +4,7 @@
 
 #include "i2c_bitaxe.h"
 #include "EMC2101.h"
-#include "INA260.h"
-#include "TMP1075.h"
+//#include "INA260.h"
 #include "adc.h"
 #include "connect.h"
 #include "led_controller.h"
@@ -105,8 +104,11 @@ static void _init_system(GlobalState * GLOBAL_STATE)
     //  led_set();
 
     // Init I2C
-    ESP_ERROR_CHECK(i2c_master_init());
+    ESP_ERROR_CHECK(i2c_bitaxe_init());
     ESP_LOGI(TAG, "I2C initialized successfully");
+
+    //wait for I2C to init
+    vTaskDelay(100 / portTICK_PERIOD_MS);
 
     // Initialize the core voltage regulator
     VCORE_init(GLOBAL_STATE);

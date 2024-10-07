@@ -104,6 +104,8 @@ typedef enum _alert_latch
   INA260_ALERT_LATCH_TRANSPARENT = 0x0, /**< Alert will reset when fault is
                                            cleared **/
 } INA260_AlertLatch;
+
+esp_err_t INA260_init(void);
 bool INA260_installed(void);
 float INA260_read_current(void);
 float INA260_read_voltage(void);

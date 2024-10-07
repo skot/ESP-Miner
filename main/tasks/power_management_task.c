@@ -9,7 +9,6 @@
 #include "mining.h"
 #include "nvs_config.h"
 #include "serial.h"
-#include "TMP1075.h"
 #include "TPS546.h"
 #include "vcore.h"
 #include <string.h>
@@ -134,10 +133,14 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     power_management->power = (TPS546_get_vout() * power_management->current) / 1000;
                     // The power reading from the TPS546 is only it's output power. So the rest of the Bitaxe power is not accounted for.
                     power_management->power += SUPRA_POWER_OFFSET; // Add offset for the rest of the Bitaxe power. TODO: this better.
-				} else if (INA260_installed() == true) {
-                    power_management->voltage = INA260_read_voltage();
-                    power_management->current = INA260_read_current();
-                    power_management->power = INA260_read_power() / 1000;
+				} else {
+                    INA260_init();
+
+                    if (INA260_installed() == true) {
+                        power_management->voltage = INA260_read_voltage();
+                        power_management->current = INA260_read_current();
+                        power_management->power = INA260_read_power() / 1000;
+                    }
 				}
             
                 break;
