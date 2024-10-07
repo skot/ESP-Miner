@@ -29,7 +29,7 @@ static uint8_t MFR_ID[] = {'B', 'A', 'X'};
 static uint8_t MFR_MODEL[] = {'H', 'E', 'X'};
 static uint8_t MFR_REVISION[] = {0x00, 0x00, 0x01};
 
-static uint8_t COMPENSATION_CONFIG[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
+//static uint8_t COMPENSATION_CONFIG[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 /**
  * @brief SMBus read byte
@@ -362,9 +362,6 @@ int TPS546_init(void)
 	uint8_t data[6];
     uint8_t u8_value;
     uint16_t u16_value;
-    float vin;
-    float iout;
-    float vout;
     uint8_t read_mfr_revision[4];
     int temp;
     uint8_t comp_config[5];
@@ -587,7 +584,7 @@ int TPS546_get_frequency(void)
 void TPS546_set_frequency(int newfreq)
 {
     uint16_t value;
-    int freq;
+    //int freq;
 
     ESP_LOGI(TAG, "Writing new frequency: %d", newfreq);
     value = int_2_slinear11(newfreq);
