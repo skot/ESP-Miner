@@ -193,17 +193,10 @@ static esp_err_t rest_common_get_handler(httpd_req_t * req)
     return ESP_OK;
 }
 
-static esp_err_t PATCH_update_swarm(httpd_req_t * req)
+static esp_err_t recv_http_req(httpd_req_t * req, char * const buf)
 {
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_FAIL;
-    }
-
     int total_len = req->content_len;
     int cur_len = 0;
-    char * buf = ((rest_server_context_t *) (req->user_ctx))->scratch;
     int received = 0;
     if (total_len >= SCRATCH_BUFSIZE) {
         /* Respond with 500 Internal Server Error */
@@ -220,6 +213,22 @@ static esp_err_t PATCH_update_swarm(httpd_req_t * req)
         cur_len += received;
     }
     buf[total_len] = '\0';
+
+    return ESP_OK;
+}
+
+static esp_err_t PATCH_update_swarm(httpd_req_t * req)
+{
+    // Set CORS headers
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    char * buf = ((rest_server_context_t *) (req->user_ctx))->scratch;
+    if (ESP_OK != recv_http_req(req, buf)) {
+        return ESP_FAIL;
+    }
 
     nvs_config_set_string(NVS_CONFIG_SWARM, buf);
     httpd_resp_send_chunk(req, NULL, 0);
@@ -248,25 +257,10 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
         return ESP_FAIL;
     }
 
-    int total_len = req->content_len;
-    int cur_len = 0;
     char * buf = ((rest_server_context_t *) (req->user_ctx))->scratch;
-    int received = 0;
-    if (total_len >= SCRATCH_BUFSIZE) {
-        /* Respond with 500 Internal Server Error */
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
+    if (ESP_OK != recv_http_req(req, buf)) {
         return ESP_FAIL;
     }
-    while (cur_len < total_len) {
-        received = httpd_req_recv(req, buf + cur_len, total_len);
-        if (received <= 0) {
-            /* Respond with 500 Internal Server Error */
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to post control value");
-            return ESP_FAIL;
-        }
-        cur_len += received;
-    }
-    buf[total_len] = '\0';
 
     cJSON * root = cJSON_Parse(buf);
     cJSON * item;
