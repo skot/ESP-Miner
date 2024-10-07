@@ -432,7 +432,7 @@ void BM1370_send_work(void * pvParameters, bm_job * next_bm_job)
     ESP_LOGI(TAG, "Send Job: %02X", job.job_id);
     #endif
 
-    _send_BM1370((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), &job, sizeof(BM1370_job), BM1370_DEBUG_WORK);
+    _send_BM1370((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(BM1370_job), BM1370_DEBUG_WORK);
 }
 
 asic_result * BM1370_receive_work(void)
