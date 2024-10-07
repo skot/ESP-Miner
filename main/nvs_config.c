@@ -132,3 +132,21 @@ void nvs_config_set_u64(const char * key, const uint64_t value)
     }
     nvs_close(handle);
 }
+
+void nvs_config_erase(const char * key)
+{
+
+    nvs_handle handle;
+    esp_err_t err;
+    err = nvs_open(NVS_CONFIG_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Could not open nvs");
+        return;
+    }
+
+    err = nvs_erase_key(handle, key);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "Could not erase nvs key: %s", key);
+    }
+    nvs_close(handle);
+}
