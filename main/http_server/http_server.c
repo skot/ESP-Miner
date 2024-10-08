@@ -475,6 +475,14 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
 esp_err_t POST_WWW_update(httpd_req_t * req)
 {
+    wifi_mode_t mode;
+    esp_wifi_get_mode(&mode);
+    if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)
+    {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Not allowed in AP mode");
+        return ESP_FAIL;
+    }
+
     char buf[1000];
     int remaining = req->content_len;
 
@@ -521,6 +529,14 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
  */
 esp_err_t POST_OTA_update(httpd_req_t * req)
 {
+    wifi_mode_t mode;
+    esp_wifi_get_mode(&mode);
+    if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)
+    {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Not allowed in AP mode");
+        return ESP_FAIL;
+    }
+    
     char buf[1000];
     esp_ota_handle_t ota_handle;
     int remaining = req->content_len;
