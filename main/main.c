@@ -17,6 +17,7 @@
 #include "stratum_task.h"
 #include "user_input_task.h"
 #include "i2c_bitaxe.h"
+#include "adc.h"
 
 static GlobalState GLOBAL_STATE = {
     .extranonce_str = NULL, 
@@ -39,6 +40,9 @@ void app_main(void)
 
     //wait for I2C to init
     vTaskDelay(100 / portTICK_PERIOD_MS);
+
+    //Init ADC
+    ADC_init();
 
     ESP_ERROR_CHECK(nvs_flash_init());
 
