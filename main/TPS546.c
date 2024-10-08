@@ -364,26 +364,26 @@ int TPS546_init(void)
     TPS546_write_entire_config();
     //}
 
-    /* Show temperature */
-    ESP_LOGI(TAG, "--------------------------------");
-    ESP_LOGI(TAG, "Temp: %d", TPS546_get_temperature());
+    // /* Show temperature */
+    // ESP_LOGI(TAG, "--------------------------------");
+    // ESP_LOGI(TAG, "Temp: %d", TPS546_get_temperature());
 
-    /* Show switching frequency */
-    TPS546_get_frequency();
-    TPS546_set_frequency(650);
+    // /* Show switching frequency */
+    // TPS546_get_frequency();
+    // TPS546_set_frequency(650);
 
     /* Show voltage settings */
     TPS546_show_voltage_settings();
 
-    TPS546_print_status();
+    //TPS546_print_status();
 
-    ESP_LOGI(TAG, "-----------VOLTAGE/CURRENT---------------------");
-    /* Get voltage input (SLINEAR11) */
-    TPS546_get_vin();
-    /* Get output current (SLINEAR11) */
-    TPS546_get_iout();
-    /* Get voltage output (ULINEAR16) */
-    TPS546_get_vout();
+    // ESP_LOGI(TAG, "-----------VOLTAGE/CURRENT---------------------");
+    // /* Get voltage input (SLINEAR11) */
+    // ESP_LOGI(TAG, "READ_VIN: %.2fV", TPS546_get_vin());
+    // /* Get output current (SLINEAR11) */
+    // ESP_LOGI(TAG, "READ_IOUT: %.2fA", TPS546_get_iout());
+    // /* Get voltage output (ULINEAR16) */
+    // ESP_LOGI(TAG, "READ_VOUT: %.2fV", TPS546_get_vout());
 
     ESP_LOGI(TAG, "-----------TIMING---------------------");
     smb_read_word(PMBUS_TON_DELAY, &u16_value);
@@ -729,56 +729,56 @@ void TPS546_show_voltage_settings(void)
     /* VIN_ON SLINEAR11 */
     smb_read_word(PMBUS_VIN_ON, &u16_value);
     f_value = slinear11_2_float(u16_value);
-    ESP_LOGI(TAG, "VIN ON set to: %f", f_value);
+    ESP_LOGI(TAG, "VIN ON set to: %.2f", f_value);
 
     /* VIN_OFF SLINEAR11 */
     smb_read_word(PMBUS_VIN_OFF, &u16_value);
     f_value = slinear11_2_float(u16_value);
-    ESP_LOGI(TAG, "VIN OFF set to: %f", f_value);
+    ESP_LOGI(TAG, "VIN OFF set to: %.2f", f_value);
 
     /* VOUT_MAX */
     smb_read_word(PMBUS_VOUT_MAX, &u16_value);
     f_value = ulinear16_2_float(u16_value);
-    ESP_LOGI(TAG, "Vout Max set to: %f V", f_value);
+    ESP_LOGI(TAG, "Vout Max set to: %.2f V", f_value);
 
     /* VOUT_OV_FAULT_LIMIT */
     smb_read_word(PMBUS_VOUT_OV_FAULT_LIMIT, &u16_value);
     f_value = ulinear16_2_float(u16_value);
-    ESP_LOGI(TAG, "Vout OV Fault Limit: %f V", f_value);
+    ESP_LOGI(TAG, "Vout OV Fault Limit: %.2f V", f_value);
 
     /* VOUT_OV_WARN_LIMIT */
     smb_read_word(PMBUS_VOUT_OV_WARN_LIMIT, &u16_value);
     f_value = ulinear16_2_float(u16_value);
-    ESP_LOGI(TAG, "Vout OV Warn Limit: %f V", f_value);
+    ESP_LOGI(TAG, "Vout OV Warn Limit: %.2f V", f_value);
 
     /* VOUT_MARGIN_HIGH */
     smb_read_word(PMBUS_VOUT_MARGIN_HIGH, &u16_value);
     f_value = ulinear16_2_float(u16_value);
-    ESP_LOGI(TAG, "Vout Margin HIGH: %f V", f_value);
+    ESP_LOGI(TAG, "Vout Margin HIGH: %.2f V", f_value);
 
     /* --- VOUT_COMMAND --- */
     smb_read_word(PMBUS_VOUT_COMMAND, &u16_value);
     f_value = ulinear16_2_float(u16_value);
-    ESP_LOGI(TAG, "Vout set to: %f V", f_value);
+    ESP_LOGI(TAG, "Vout set to: %.2f V", f_value);
 
     /* VOUT_MARGIN_LOW */
     smb_read_word(PMBUS_VOUT_MARGIN_LOW, &u16_value);
     f_value = ulinear16_2_float(u16_value);
-    ESP_LOGI(TAG, "Vout Margin LOW: %f V", f_value);
+    ESP_LOGI(TAG, "Vout Margin LOW: %.2f V", f_value);
 
     /* VOUT_UV_WARN_LIMIT */
     smb_read_word(PMBUS_VOUT_UV_WARN_LIMIT, &u16_value);
     f_value = ulinear16_2_float(u16_value);
-    ESP_LOGI(TAG, "Vout UV Warn Limit: %f V", f_value);
+    ESP_LOGI(TAG, "Vout UV Warn Limit: %.2f V", f_value);
 
     /* VOUT_UV_FAULT_LIMIT */
     smb_read_word(PMBUS_VOUT_UV_FAULT_LIMIT, &u16_value);
     f_value = ulinear16_2_float(u16_value);
-    ESP_LOGI(TAG, "Vout UV Fault Limit: %f V", f_value);
+    ESP_LOGI(TAG, "Vout UV Fault Limit: %.2f V", f_value);
 
     /* VOUT_MIN */
     smb_read_word(PMBUS_VOUT_MIN, &u16_value);
     f_value = ulinear16_2_float(u16_value);
-    ESP_LOGI(TAG, "Vout Min set to: %f V", f_value);
+    ESP_LOGI(TAG, "Vout Min set to: %.2f V", f_value);
 }
 

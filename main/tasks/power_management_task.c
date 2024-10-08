@@ -116,7 +116,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
         default:
     }
 
-    vTaskDelay(4000 / portTICK_PERIOD_MS);
+    vTaskDelay(500 / portTICK_PERIOD_MS);
     uint16_t last_core_voltage = 0.0;
     uint16_t last_asic_frequency = power_management->frequency_value;
     
