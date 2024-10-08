@@ -1,0 +1,68 @@
+import { HttpErrorResponse, HttpEventType } from '@angular/common/http';
+import { Component } from '@angular/core';
+import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { ToastrService } from 'ngx-toastr';
+import { FileUploadHandlerEvent } from 'primeng/fileupload';
+import { map, Observable, shareReplay, startWith } from 'rxjs';
+import { GithubUpdateService } from 'src/app/services/github-update.service';
+import { LoadingService } from 'src/app/services/loading.service';
+import { SystemService } from 'src/app/services/system.service';
+import { eASICModel } from 'src/models/enum/eASICModel';
+
+@Component({
+  selector: 'app-network',
+  templateUrl: './network.component.html',
+  styleUrls: ['./network.component.scss']
+})
+export class NetworkComponent {
+
+  public form!: FormGroup;
+
+  public info$: Observable<any>;
+
+  constructor(
+    private fb: FormBuilder,
+    private systemService: SystemService,
+    private toastr: ToastrService,
+    private toastrService: ToastrService,
+    private loadingService: LoadingService,
+    private githubUpdateService: GithubUpdateService
+  ) {
+    this.info$ = this.systemService.getInfo().pipe(shareReplay({refCount: true, bufferSize: 1}))
+
+      this.info$.pipe(this.loadingService.lockUIUntilComplete())
+      .subscribe(info => {
+        this.form = this.fb.group({
+          ssid: [info.ssid, [Validators.required]],
+          wifiPass: ['*****'],
+        });
+      });
+
+  }
+
+  public updateSystem() {
+
+    const form = this.form.getRawValue();
+
+    // Allow an empty wifi password
+    form.wifiPass = form.wifiPass == null ? '' : form.wifiPass;
+
+    if (form.wifiPass === '*****') {
+      delete form.wifiPass;
+    }
+    if (form.stratumPassword === '*****') {
+      delete form.stratumPassword;
+    }
+
+    this.systemService.updateSystem(undefined, form)
+      .pipe(this.loadingService.lockUIUntilComplete())
+      .subscribe({
+        next: () => {
+          this.toastr.success('Success!', 'Saved.');
+        },
+        error: (err: HttpErrorResponse) => {
+          this.toastr.error('Error.', `Could not save. ${err.message}`);
+        }
+      });
+  }
+}
