@@ -46,6 +46,7 @@ PRIV_REQUIRES
     "nvs_flash"
     "spiffs"
     "vfs"
+    "esp_driver_i2c"
 )
 
 set(WEB_SRC_DIR "${CMAKE_CURRENT_SOURCE_DIR}/http_server/axe-os")
