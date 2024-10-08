@@ -153,6 +153,11 @@ void app_main(void)
         vTaskDelay(60 * 60 * 1000 / portTICK_PERIOD_MS);
     }
 
+    SYSTEM_init_system(&GLOBAL_STATE);
+
+    xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void *) &GLOBAL_STATE, 3, NULL);
+    xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
+
     // pull the wifi credentials and hostname out of NVS
     char * wifi_ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, WIFI_SSID);
     char * wifi_pass = nvs_config_get_string(NVS_CONFIG_WIFI_PASS, WIFI_PASS);
@@ -194,11 +199,6 @@ void app_main(void)
     free(wifi_ssid);
     free(wifi_pass);
     free(hostname);
-
-    SYSTEM_init_system(&GLOBAL_STATE);
-
-    xTaskCreate(SYSTEM_task, "SYSTEM_task", 4096, (void *) &GLOBAL_STATE, 3, NULL);
-    xTaskCreate(POWER_MANAGEMENT_task, "power mangement", 8192, (void *) &GLOBAL_STATE, 10, NULL);
 
     // set the startup_done flag
     GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
