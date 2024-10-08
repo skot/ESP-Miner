@@ -2,12 +2,9 @@ import { HttpErrorResponse, HttpEventType } from '@angular/common/http';
 import { Component } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
-import { FileUploadHandlerEvent } from 'primeng/fileupload';
 import { map, Observable, shareReplay, startWith } from 'rxjs';
-import { GithubUpdateService } from 'src/app/services/github-update.service';
 import { LoadingService } from 'src/app/services/loading.service';
 import { SystemService } from 'src/app/services/system.service';
-import { eASICModel } from 'src/models/enum/eASICModel';
 
 @Component({
   selector: 'app-network',
@@ -26,13 +23,13 @@ export class NetworkComponent {
     private toastr: ToastrService,
     private toastrService: ToastrService,
     private loadingService: LoadingService,
-    private githubUpdateService: GithubUpdateService
   ) {
     this.info$ = this.systemService.getInfo().pipe(shareReplay({refCount: true, bufferSize: 1}))
 
       this.info$.pipe(this.loadingService.lockUIUntilComplete())
       .subscribe(info => {
         this.form = this.fb.group({
+          hostname: [info.hostname, [Validators.required]],
           ssid: [info.ssid, [Validators.required]],
           wifiPass: ['*****'],
         });
@@ -49,9 +46,6 @@ export class NetworkComponent {
 
     if (form.wifiPass === '*****') {
       delete form.wifiPass;
-    }
-    if (form.stratumPassword === '*****') {
-      delete form.stratumPassword;
     }
 
     this.systemService.updateSystem(undefined, form)

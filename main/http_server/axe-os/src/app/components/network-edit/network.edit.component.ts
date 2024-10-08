@@ -5,7 +5,6 @@ import { ToastrService } from 'ngx-toastr';
 import { startWith } from 'rxjs';
 import { LoadingService } from 'src/app/services/loading.service';
 import { SystemService } from 'src/app/services/system.service';
-import { eASICModel } from 'src/models/enum/eASICModel';
 
 @Component({
   selector: 'app-network-edit',
@@ -15,11 +14,6 @@ import { eASICModel } from 'src/models/enum/eASICModel';
 export class NetworkEditComponent implements OnInit {
 
   public form!: FormGroup;
-
-
-  public devToolsOpen: boolean = false;
-  public eASICModel = eASICModel;
-  public ASICModel!: eASICModel;
 
   @Input() uri = '';
 
@@ -36,7 +30,6 @@ export class NetworkEditComponent implements OnInit {
     this.systemService.getInfo(this.uri)
       .pipe(this.loadingService.lockUIUntilComplete())
       .subscribe(info => {
-        this.ASICModel = info.ASICModel;
         this.form = this.fb.group({
           hostname: [info.hostname, [Validators.required]],
           ssid: [info.ssid, [Validators.required]],
@@ -57,9 +50,6 @@ export class NetworkEditComponent implements OnInit {
     if (form.wifiPass === '*****') {
       delete form.wifiPass;
     }
-    if (form.stratumPassword === '*****') {
-      delete form.stratumPassword;
-    }
 
     this.systemService.updateSystem(this.uri, form)
       .pipe(this.loadingService.lockUIUntilComplete())
@@ -77,5 +67,4 @@ export class NetworkEditComponent implements OnInit {
   toggleWifiPasswordVisibility() {
     this.showWifiPassword = !this.showWifiPassword;
   }
-
 }

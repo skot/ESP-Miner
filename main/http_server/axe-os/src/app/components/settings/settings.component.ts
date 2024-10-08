@@ -71,8 +71,6 @@ export class SettingsComponent {
           ]],
           stratumUser: [info.stratumUser, [Validators.required]],
           stratumPassword: ['*****', [Validators.required]],
-          ssid: [info.ssid, [Validators.required]],
-          wifiPass: ['*****'],
           coreVoltage: [info.coreVoltage, [Validators.required]],
           frequency: [info.frequency, [Validators.required]],
           autofanspeed: [info.autofanspeed == 1, [Validators.required]],
@@ -205,9 +203,4 @@ export class SettingsComponent {
     });
     this.toastr.success('Success!', 'Bitaxe restarted');
   }
-
-
-
-
-
 }
