@@ -198,12 +198,6 @@ export class EditComponent implements OnInit {
 
     const form = this.form.getRawValue();
 
-    // Allow an empty wifi password
-    form.wifiPass = form.wifiPass == null ? '' : form.wifiPass;
-
-    if (form.wifiPass === '*****') {
-      delete form.wifiPass;
-    }
     if (form.stratumPassword === '*****') {
       delete form.stratumPassword;
     }
@@ -225,11 +219,6 @@ export class EditComponent implements OnInit {
   showStratumPassword: boolean = false;
   toggleStratumPasswordVisibility() {
     this.showStratumPassword = !this.showStratumPassword;
-  }
-
-  showWifiPassword: boolean = false;
-  toggleWifiPasswordVisibility() {
-    this.showWifiPassword = !this.showWifiPassword;
   }
 
 }
