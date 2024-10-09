@@ -105,6 +105,7 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
     VCORE_init(GLOBAL_STATE);
     VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
 
+    //init the EMC2101, if we have one
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
@@ -129,8 +130,6 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
         default:
     }
 
-                        
-
     vTaskDelay(500 / portTICK_PERIOD_MS);
 
     // Ensure overheat_mode config exists
@@ -139,6 +138,7 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
         ESP_LOGE(TAG, "Failed to ensure overheat_mode config");
     }
 
+    //Init the OLED
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
