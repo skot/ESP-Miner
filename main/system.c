@@ -1,24 +1,3 @@
-#include "system.h"
-
-#include "esp_log.h"
-
-#include "i2c_bitaxe.h"
-#include "EMC2101.h"
-//#include "INA260.h"
-#include "adc.h"
-#include "connect.h"
-#include "led_controller.h"
-#include "nvs_config.h"
-#include "oled.h"
-#include "vcore.h"
-
-#include "driver/gpio.h"
-#include "esp_app_desc.h"
-#include "esp_netif.h"
-#include "esp_timer.h"
-#include "esp_wifi.h"
-#include "lwip/inet.h"
-
 #include <inttypes.h>
 #include <math.h>
 #include <stdint.h>
@@ -30,6 +9,27 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "driver/gpio.h"
+#include "esp_log.h"
+
+#include "driver/gpio.h"
+#include "esp_app_desc.h"
+#include "esp_netif.h"
+#include "esp_timer.h"
+#include "esp_wifi.h"
+#include "lwip/inet.h"
+
+#include "system.h"
+#include "i2c_bitaxe.h"
+#include "EMC2101.h"
+#include "INA260.h"
+#include "adc.h"
+#include "connect.h"
+#include "led_controller.h"
+#include "nvs_config.h"
+#include "oled.h"
+#include "vcore.h"
+
+
 
 static const char * TAG = "SystemModule";
 
@@ -114,6 +114,22 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
             break;
         default:
     }
+
+    //initialize the INA260, if we have one.
+    switch (GLOBAL_STATE->device_model) {
+        case DEVICE_MAX:
+        case DEVICE_ULTRA:
+        case DEVICE_SUPRA:
+            if (GLOBAL_STATE->board_version < 402) {
+                // Initialize the LED controller
+                INA260_init();
+            }
+            break;
+        case DEVICE_GAMMA:
+        default:
+    }
+
+                        
 
     vTaskDelay(500 / portTICK_PERIOD_MS);
 
