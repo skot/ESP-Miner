@@ -44,7 +44,7 @@
 #define TICKET_MASK 0x14
 #define MISC_CONTROL 0x18
 
-#define BM1368_TIMEOUT_MS 10000;
+#define BM1368_TIMEOUT_MS 10000
 #define BM1368_TIMEOUT_THRESHOLD 2
 typedef struct __attribute__((__packed__))
 {
