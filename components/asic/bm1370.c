@@ -57,6 +57,10 @@ typedef struct __attribute__((__packed__))
 
 static const char * TAG = "bm1370Module";
 
+static uint8_t asic_timeout_counter = 0;
+static uint8_t asic_timeout_warning_threshold = 2;
+static int uart_timeout_ms = 10000;
+
 static uint8_t asic_response_buffer[SERIAL_BUF_SIZE];
 static task_result result;
 
