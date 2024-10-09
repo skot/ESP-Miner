@@ -45,6 +45,9 @@
 #define TICKET_MASK 0x14
 #define MISC_CONTROL 0x18
 
+#define BM1397_TIMEOUT_MS 10000;
+#define BM1397_TIMEOUT_THRESHOLD 2
+
 typedef struct __attribute__((__packed__))
 {
     uint8_t preamble[2];
@@ -55,10 +58,6 @@ typedef struct __attribute__((__packed__))
 } asic_result;
 
 static const char *TAG = "bm1397Module";
-
-static uint8_t asic_timeout_counter = 0;
-static uint8_t asic_timeout_warning_threshold = 2;
-static int uart_timeout_ms = 10000;
 
 static uint8_t asic_response_buffer[SERIAL_BUF_SIZE];
 static uint32_t prev_nonce = 0;
@@ -405,17 +404,18 @@ asic_result *BM1397_receive_work(void)
 {
 
     // wait for a response
-    int received = SERIAL_rx(asic_response_buffer, 9, uart_timeout_ms);
+    int received = SERIAL_rx(asic_response_buffer, 9, BM1397_TIMEOUT_MS);
 
     bool uart_err = received < 0;
     bool uart_timeout = received == 0;
+    uint8_t asic_timeout_counter = 0;
 
     // handle response
     if (uart_err) {
         ESP_LOGI(TAG, "UART Error in serial RX");
         return NULL;
     } else if (uart_timeout) {
-        if (asic_timeout_counter>=asic_timeout_warning_threshold) {
+        if (asic_timeout_counter >= BM1397_TIMEOUT_THRESHOLD) {
             ESP_LOGE(TAG, "ASIC not sending data");
             asic_timeout_counter = 0;
         }
