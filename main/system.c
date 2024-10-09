@@ -36,7 +36,6 @@ static const char * TAG = "SystemModule";
 static void _suffix_string(uint64_t, char *, size_t, int);
 
 static esp_netif_t * netif;
-static esp_netif_ip_info_t ip_info;
 
 QueueHandle_t user_input_queue;
 
@@ -98,7 +97,10 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
 
     // set the wifi_status to blank
     memset(module->wifi_status, 0, 20);
+}
 
+
+void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
     // Initialize the core voltage regulator
     VCORE_init(GLOBAL_STATE);
     VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
@@ -145,8 +147,6 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     _clear_display(GLOBAL_STATE);
     _init_connection(GLOBAL_STATE);
 }
-
-
 
 void SYSTEM_task(void * pvParameters)
 {
@@ -270,7 +270,7 @@ void SYSTEM_notify_found_nonce(GlobalState * GLOBAL_STATE, double found_diff, ui
     // Calculate the time difference in seconds with sub-second precision
     // hashrate = (nonce_difficulty * 2^32) / time_to_find
 
-    module->historical_hashrate[module->historical_hashrate_rolling_index] = GLOBAL_STATE->initial_ASIC_difficulty;
+    module->historical_hashrate[module->historical_hashrate_rolling_index] = GLOBAL_STATE->ASIC_difficulty;
     module->historical_hashrate_time_stamps[module->historical_hashrate_rolling_index] = esp_timer_get_time();
 
     module->historical_hashrate_rolling_index = (module->historical_hashrate_rolling_index + 1) % HISTORY_LENGTH;
@@ -314,6 +314,7 @@ void SYSTEM_notify_found_nonce(GlobalState * GLOBAL_STATE, double found_diff, ui
 static void _show_overheat_screen(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    esp_netif_ip_info_t ip_info;
 
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
@@ -460,6 +461,8 @@ static void _update_system_info(GlobalState * GLOBAL_STATE)
 static void _update_esp32_info(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+
+    esp_netif_ip_info_t ip_info;
     uint32_t free_heap_size = esp_get_free_heap_size();
 
     uint16_t vcore = VCORE_get_voltage_mv(GLOBAL_STATE);
