@@ -72,9 +72,9 @@ export class EditComponent implements OnInit {
   public BM1370DropdownFrequency = [
     { name: '400', value: 400 },
     { name: '490', value: 490 },
-    { name: '525', value: 525 },
+    { name: '525 (default)', value: 525 },
     { name: '575', value: 575 },
-    { name: '596 (default)', value: 596 },
+    { name: '596', value: 596 },
     { name: '610', value: 610 },
     { name: '625', value: 625 },
   ];
@@ -159,9 +159,6 @@ export class EditComponent implements OnInit {
           stratumPassword: ['*****', [Validators.required]],
           fallbackStratumUser: [info.fallbackStratumUser, [Validators.required]],
           fallbackStratumPassword: ['password', [Validators.required]],
-          hostname: [info.hostname, [Validators.required]],
-          ssid: [info.ssid, [Validators.required]],
-          wifiPass: ['*****'],
           coreVoltage: [info.coreVoltage, [Validators.required]],
           frequency: [info.frequency, [Validators.required]],
           autofanspeed: [info.autofanspeed == 1, [Validators.required]],
@@ -198,12 +195,6 @@ export class EditComponent implements OnInit {
 
     const form = this.form.getRawValue();
 
-    // Allow an empty wifi password
-    form.wifiPass = form.wifiPass == null ? '' : form.wifiPass;
-
-    if (form.wifiPass === '*****') {
-      delete form.wifiPass;
-    }
     if (form.stratumPassword === '*****') {
       delete form.stratumPassword;
     }
