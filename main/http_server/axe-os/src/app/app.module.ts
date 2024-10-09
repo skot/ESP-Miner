@@ -17,7 +17,6 @@ import { LoadingComponent } from './components/loading/loading.component';
 import { LogsComponent } from './components/logs/logs.component';
 import { NetworkComponent } from './components/network/network.component';
 import { SettingsComponent } from './components/settings/settings.component';
-import { SwarmComponent } from './components/swarm/swarm.component';
 import { AppLayoutModule } from './layout/app.layout.module';
 import { ANSIPipe } from './pipes/ansi.pipe';
 import { DateAgoPipe } from './pipes/date-ago.pipe';
@@ -42,7 +41,6 @@ const components = [
 
     ANSIPipe,
     DateAgoPipe,
-    SwarmComponent,
     SettingsComponent,
     HashSuffixPipe
   ],

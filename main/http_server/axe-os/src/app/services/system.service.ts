@@ -113,13 +113,4 @@ export class SystemService {
   public performWWWOTAUpdate(file: File | Blob) {
     return this.otaUpdate(file, `/api/system/OTAWWW`);
   }
-
-
-  public getSwarmInfo(uri: string = ''): Observable<{ ip: string }[]> {
-    return this.httpClient.get(`${uri}/api/swarm/info`) as Observable<{ ip: string }[]>;
-  }
-
-  public updateSwarm(uri: string = '', swarmConfig: any) {
-    return this.httpClient.patch(`${uri}/api/swarm`, swarmConfig);
-  }
 }

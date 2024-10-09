@@ -5,7 +5,6 @@ import { HomeComponent } from './components/home/home.component';
 import { LogsComponent } from './components/logs/logs.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { NetworkComponent } from './components/network/network.component';
-import { SwarmComponent } from './components/swarm/swarm.component';
 import { AppLayoutComponent } from './layout/app.layout.component';
 
 const routes: Routes = [
@@ -28,10 +27,6 @@ const routes: Routes = [
       {
         path: 'settings',
         component: SettingsComponent
-      },
-      {
-        path: 'swarm',
-        component: SwarmComponent
       }
     ]
   },
