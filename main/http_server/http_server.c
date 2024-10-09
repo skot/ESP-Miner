@@ -480,7 +480,7 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
     if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)
     {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Not allowed in AP mode");
-        return ESP_FAIL;
+        return ESP_OK;
     }
 
     char buf[1000];
