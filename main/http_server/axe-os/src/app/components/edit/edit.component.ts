@@ -72,9 +72,9 @@ export class EditComponent implements OnInit {
   public BM1370DropdownFrequency = [
     { name: '400', value: 400 },
     { name: '490', value: 490 },
-    { name: '525', value: 525 },
+    { name: '525 (default)', value: 525 },
     { name: '575', value: 575 },
-    { name: '596 (default)', value: 596 },
+    { name: '596', value: 596 },
     { name: '610', value: 610 },
     { name: '625', value: 625 },
   ];
@@ -146,11 +146,19 @@ export class EditComponent implements OnInit {
             Validators.min(0),
             Validators.max(65353)
           ]],
+          fallbackStratumURL: [info.fallbackStratumURL, [
+            Validators.pattern(/^(?!.*stratum\+tcp:\/\/).*$/),
+          ]],
+          fallbackStratumPort: [info.fallbackStratumPort, [
+            Validators.required,
+            Validators.pattern(/^[^:]*$/),
+            Validators.min(0),
+            Validators.max(65353)
+          ]],
           stratumUser: [info.stratumUser, [Validators.required]],
           stratumPassword: ['*****', [Validators.required]],
-          hostname: [info.hostname, [Validators.required]],
-          ssid: [info.ssid, [Validators.required]],
-          wifiPass: ['*****'],
+          fallbackStratumUser: [info.fallbackStratumUser, [Validators.required]],
+          fallbackStratumPassword: ['password', [Validators.required]],
           coreVoltage: [info.coreVoltage, [Validators.required]],
           frequency: [info.frequency, [Validators.required]],
           autofanspeed: [info.autofanspeed == 1, [Validators.required]],
@@ -187,12 +195,6 @@ export class EditComponent implements OnInit {
 
     const form = this.form.getRawValue();
 
-    // Allow an empty wifi password
-    form.wifiPass = form.wifiPass == null ? '' : form.wifiPass;
-
-    if (form.wifiPass === '*****') {
-      delete form.wifiPass;
-    }
     if (form.stratumPassword === '*****') {
       delete form.stratumPassword;
     }
@@ -222,6 +224,11 @@ export class EditComponent implements OnInit {
   disableOverheatMode() {
     this.form.patchValue({ overheat_mode: 0 });
     this.updateSystem();
+  }
+
+  showFallbackStratumPassword: boolean = false;
+  toggleFallbackStratumPasswordVisibility() {
+    this.showFallbackStratumPassword = !this.showFallbackStratumPassword;
   }
 
 }

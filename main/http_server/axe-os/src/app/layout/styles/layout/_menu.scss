@@ -1,6 +1,6 @@
 .layout-sidebar {
     position: fixed;
-    width: 300px;
+    width: 250px;
     height: calc(100vh - 9rem);
     z-index: 999;
     overflow-y: auto;
@@ -135,6 +135,10 @@
 }
 
 #restart {
-    padding: 2rem 1rem;
-    display: block;
+    display: inline-block;
+}
+
+#restart-container {
+    margin: 2rem 1rem;
+    display: flex;
 }

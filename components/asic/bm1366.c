@@ -45,6 +45,8 @@
 #define TICKET_MASK 0x14
 #define MISC_CONTROL 0x18
 
+#define BM1366_TIMEOUT_MS 10000
+#define BM1366_TIMEOUT_THRESHOLD 2
 typedef struct __attribute__((__packed__))
 {
     uint8_t preamble[2];
@@ -456,7 +458,7 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
 
     // unsigned char init137[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xFF, 0x08};
     // _send_simple(init137, 11);
-    BM1366_set_job_difficulty_mask(BM1366_INITIAL_DIFFICULTY);
+    BM1366_set_job_difficulty_mask(BM1366_ASIC_DIFFICULTY);
 
     unsigned char init138[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x54, 0x00, 0x00, 0x00, 0x03, 0x1D};
     _send_simple(init138, 11);
@@ -516,13 +518,13 @@ static void _reset(void)
     vTaskDelay(100 / portTICK_PERIOD_MS);
 }
 
-static void _send_read_address(void)
-{
+// static void _send_read_address(void)
+// {
 
-    unsigned char read_address[2] = {0x00, 0x00};
-    // send serial data
-    _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_READ), read_address, 2, BM1366_SERIALTX_DEBUG);
-}
+//     unsigned char read_address[2] = {0x00, 0x00};
+//     // send serial data
+//     _send_BM1366((TYPE_CMD | GROUP_ALL | CMD_READ), read_address, 2, BM1366_SERIALTX_DEBUG);
+// }
 
 uint8_t BM1366_init(uint64_t frequency, uint16_t asic_count)
 {
@@ -625,19 +627,28 @@ void BM1366_send_work(void * pvParameters, bm_job * next_bm_job)
     ESP_LOGI(TAG, "Send Job: %02X", job.job_id);
     #endif
 
-    _send_BM1366((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), &job, sizeof(BM1366_job), BM1366_DEBUG_WORK);
+    _send_BM1366((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(BM1366_job), BM1366_DEBUG_WORK);
 }
 
 asic_result * BM1366_receive_work(void)
 {
-    // wait for a response, wait time is pretty arbitrary
-    int received = SERIAL_rx(asic_response_buffer, 11, 60000);
+    // wait for a response
+    int received = SERIAL_rx(asic_response_buffer, 11, BM1366_TIMEOUT_MS);
 
-    if (received < 0) {
-        ESP_LOGI(TAG, "Error in serial RX");
+    bool uart_err = received < 0;
+    bool uart_timeout = received == 0;
+    uint8_t asic_timeout_counter = 0;
+
+    // handle response
+    if (uart_err) {
+        ESP_LOGI(TAG, "UART Error in serial RX");
         return NULL;
-    } else if (received == 0) {
-        // Didn't find a solution, restart and try again
+    } else if (uart_timeout) {
+        if (asic_timeout_counter >= BM1366_TIMEOUT_THRESHOLD) {
+            ESP_LOGE(TAG, "ASIC not sending data");
+            asic_timeout_counter = 0;
+        }
+        asic_timeout_counter++;
         return NULL;
     }
 

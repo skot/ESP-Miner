@@ -1,6 +1,5 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { finalize, tap } from 'rxjs/operators';
 
 @Injectable({
   providedIn: 'root'
@@ -11,11 +10,24 @@ export class LoadingService {
 
   constructor() { }
 
-  public lockUIUntilComplete<T>(): (source: Observable<T>) => Observable<T> {
-    return (source: Observable<T>) => source.pipe(
-      tap(() => this.loading$.next(true)),
-      finalize(() => this.loading$.next(false))
-    );
+  public lockUIUntilComplete() {
+    return <T>(source: Observable<T>): Observable<T> => {
+      return new Observable(subscriber => {
+        this.loading$.next(true);
+        source.subscribe({
+          next: (value) => {
+            subscriber.next(value);
+          },
+          error: (err) => {
+            this.loading$.next(false);
+            subscriber.next(err);
+          },
+          complete: () => {
+            this.loading$.next(false);
+            subscriber.complete();
+          }
+        })
+      });
+    }
   }
 }
-

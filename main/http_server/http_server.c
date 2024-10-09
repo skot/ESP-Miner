@@ -273,14 +273,26 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "stratumURL")) != NULL) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_URL, item->valuestring);
     }
+    if ((item = cJSON_GetObjectItem(root, "fallbackStratumURL")) != NULL) {
+        nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_URL, item->valuestring);
+    }
     if ((item = cJSON_GetObjectItem(root, "stratumUser")) != NULL) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_USER, item->valuestring);
     }
     if ((item = cJSON_GetObjectItem(root, "stratumPassword")) != NULL) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_PASS, item->valuestring);
     }
+    if ((item = cJSON_GetObjectItem(root, "fallbackStratumUser")) != NULL) {
+        nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_USER, item->valuestring);
+    }
+    if ((item = cJSON_GetObjectItem(root, "fallbackStratumPassword")) != NULL) {
+        nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_PASS, item->valuestring);
+    }
     if ((item = cJSON_GetObjectItem(root, "stratumPort")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_STRATUM_PORT, item->valueint);
+    }
+    if ((item = cJSON_GetObjectItem(root, "fallbackStratumPort")) != NULL) {
+        nvs_config_set_u16(NVS_CONFIG_FALLBACK_STRATUM_PORT, item->valueint);
     }
     if ((item = cJSON_GetObjectItem(root, "ssid")) != NULL) {
         nvs_config_set_string(NVS_CONFIG_WIFI_SSID, item->valuestring);
@@ -372,7 +384,9 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     uint8_t mac[6];
     char formattedMac[18];
     char * stratumURL = nvs_config_get_string(NVS_CONFIG_STRATUM_URL, CONFIG_STRATUM_URL);
+    char * fallbackStratumURL = nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_URL, CONFIG_FALLBACK_STRATUM_URL);
     char * stratumUser = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, CONFIG_STRATUM_USER);
+    char * fallbackStratumUser = nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_USER, CONFIG_FALLBACK_STRATUM_USER);
     char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "unknown");
 
     esp_wifi_get_mac(WIFI_IF_STA, mac);
@@ -387,6 +401,8 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "hashRate", GLOBAL_STATE->SYSTEM_MODULE.current_hashrate);
     cJSON_AddStringToObject(root, "bestDiff", GLOBAL_STATE->SYSTEM_MODULE.best_diff_string);
     cJSON_AddStringToObject(root, "bestSessionDiff", GLOBAL_STATE->SYSTEM_MODULE.best_session_diff_string);
+
+    cJSON_AddNumberToObject(root, "isUsingFallbackStratum", GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback);
 
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "coreVoltage", nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE));
@@ -422,8 +438,11 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "smallCoreCount", small_core_count);
     cJSON_AddStringToObject(root, "ASICModel", GLOBAL_STATE->asic_model_str);
     cJSON_AddStringToObject(root, "stratumURL", stratumURL);
+    cJSON_AddStringToObject(root, "fallbackStratumURL", fallbackStratumURL);
     cJSON_AddNumberToObject(root, "stratumPort", nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, CONFIG_STRATUM_PORT));
+    cJSON_AddNumberToObject(root, "fallbackStratumPort", nvs_config_get_u16(NVS_CONFIG_FALLBACK_STRATUM_PORT, CONFIG_FALLBACK_STRATUM_PORT));
     cJSON_AddStringToObject(root, "stratumUser", stratumUser);
+    cJSON_AddStringToObject(root, "fallbackStratumUser", fallbackStratumUser);
 
     cJSON_AddStringToObject(root, "version", esp_app_get_description()->version);
     cJSON_AddStringToObject(root, "boardVersion", board_version);
@@ -442,18 +461,28 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     free(ssid);
     free(hostname);
     free(stratumURL);
+    free(fallbackStratumURL);
     free(stratumUser);
+    free(fallbackStratumUser);
     free(board_version);
 
-        const char * sys_info = cJSON_Print(root);
+    const char * sys_info = cJSON_Print(root);
     httpd_resp_sendstr(req, sys_info);
-    free(sys_info);
+    free((char *)sys_info);
     cJSON_Delete(root);
     return ESP_OK;
 }
 
 esp_err_t POST_WWW_update(httpd_req_t * req)
 {
+    wifi_mode_t mode;
+    esp_wifi_get_mode(&mode);
+    if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)
+    {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Not allowed in AP mode");
+        return ESP_OK;
+    }
+
     char buf[1000];
     int remaining = req->content_len;
 
@@ -461,13 +490,13 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
         esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "www");
     if (www_partition == NULL) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "WWW partition not found");
-        return ESP_FAIL;
+        return ESP_OK;
     }
 
     // Don't attempt to write more than what can be stored in the partition
     if (remaining > www_partition->size) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "File provided is too large for device");
-        return ESP_FAIL;
+        return ESP_OK;
     }
 
     // Erase the entire www partition before writing
@@ -480,12 +509,12 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
             continue;
         } else if (recv_len <= 0) {
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Protocol Error");
-            return ESP_FAIL;
+            return ESP_OK;
         }
 
         if (esp_partition_write(www_partition, www_partition->size - remaining, (const void *) buf, recv_len) != ESP_OK) {
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Write Error");
-            return ESP_FAIL;
+            return ESP_OK;
         }
 
         remaining -= recv_len;
@@ -500,6 +529,14 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
  */
 esp_err_t POST_OTA_update(httpd_req_t * req)
 {
+    wifi_mode_t mode;
+    esp_wifi_get_mode(&mode);
+    if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)
+    {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Not allowed in AP mode");
+        return ESP_OK;
+    }
+    
     char buf[1000];
     esp_ota_handle_t ota_handle;
     int remaining = req->content_len;
@@ -517,14 +554,14 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
             // Serious Error: Abort OTA
         } else if (recv_len <= 0) {
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Protocol Error");
-            return ESP_FAIL;
+            return ESP_OK;
         }
 
         // Successful Upload: Flash firmware chunk
         if (esp_ota_write(ota_handle, (const void *) buf, recv_len) != ESP_OK) {
             esp_ota_abort(ota_handle);
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Flash Error");
-            return ESP_FAIL;
+            return ESP_OK;
         }
 
         remaining -= recv_len;
@@ -533,7 +570,7 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
     // Validate and switch to new OTA image and reboot
     if (esp_ota_end(ota_handle) != ESP_OK || esp_ota_set_boot_partition(ota_partition) != ESP_OK) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Validation / Activation Error");
-        return ESP_FAIL;
+        return ESP_OK;
     }
 
     httpd_resp_sendstr(req, "Firmware update complete, rebooting now!\n");
@@ -544,7 +581,7 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
     return ESP_OK;
 }
 
-void log_to_queue(const char * format, va_list args)
+int log_to_queue(const char * format, va_list args)
 {
     va_list args_copy;
     va_copy(args_copy, args);
@@ -556,7 +593,7 @@ void log_to_queue(const char * format, va_list args)
     // Allocate the buffer dynamically
     char * log_buffer = (char *) calloc(needed_size + 2, sizeof(char));  // +2 for potential \n and \0
     if (log_buffer == NULL) {
-        return;
+        return 0;
     }
 
     // Format the string into the allocated buffer
@@ -580,6 +617,8 @@ void log_to_queue(const char * format, va_list args)
             free((void*)log_buffer);
         }
     }
+
+    return 0;
 }
 
 void send_log_to_websocket(char *message)
