@@ -26,7 +26,7 @@ export class SystemService {
           current: 2237.5,
           temp: 60,
           vrTemp: 45,
-          hashRate: Math.floor(Math.random() * (350 - 300 + 1)) + 300,
+          hashRate: 475,
           bestDiff: "0",
           bestSessionDiff: "0",
           freeHeap: 200504,
