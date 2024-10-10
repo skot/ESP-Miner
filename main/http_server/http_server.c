@@ -499,6 +499,12 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
         return ESP_OK;
     }
 
+    // Don't attempt to write anything way too small to the partition
+    if (remaining < 32768) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "File provided is too small, likely corrupt or invalid");
+        return ESP_OK;
+    }
+
     // Erase the entire www partition before writing
     ESP_ERROR_CHECK(esp_partition_erase_range(www_partition, 0, www_partition->size));
 
