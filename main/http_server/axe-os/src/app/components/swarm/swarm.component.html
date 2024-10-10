@@ -18,15 +18,15 @@
 </div>
 <div>
     <table cellspacing="0" cellpadding="0" *ngIf="swarm$ | async as swarm">
-        <tr>
-            <th>IP</th>
-            <th>Hash Rate</th>
-            <th>Uptime</th>
-            <th>Accepted</th>
-            <th>Power</th>
-            <th>Temp</th>
-            <th>Best Difficulty</th>
-            <th>Version</th>
+        <tr *ngIf="sort$ | async as sort">
+            <th (click)="onSort('ip')">IP <i [class]="sort.column === 'ip' ? (sort.direction === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down-alt') : ''"></i></th>
+            <th (click)="onSort('hashRate')">Hash Rate <i [class]="sort.column === 'hashRate' ? (sort.direction === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down-alt') : ''"></i></th>
+            <th (click)="onSort('uptimeSeconds')">Uptime <i [class]="sort.column === 'uptimeSeconds' ? (sort.direction === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down-alt') : ''"></i></th>
+            <th (click)="onSort('sharesAccepted')">Accepted <i [class]="sort.column === 'sharesAccepted' ? (sort.direction === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down-alt') : ''"></i></th>
+            <th (click)="onSort('power')">Power <i [class]="sort.column === 'power' ? (sort.direction === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down-alt') : ''"></i></th>
+            <th (click)="onSort('temp')">Temp <i [class]="sort.column === 'temp' ? (sort.direction === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down-alt') : ''"></i></th>
+            <th (click)="onSort('bestDiff')">Best Difficulty <i [class]="sort.column === 'bestDiff' ? (sort.direction === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down-alt') : ''"></i></th>
+            <th (click)="onSort('version')">Version <i [class]="sort.column === 'version' ? (sort.direction === 'asc' ? 'pi pi-sort-amount-up-alt' : 'pi pi-sort-amount-down-alt') : ''"></i></th>
             <th>Edit</th>
             <th>Restart</th>
             <th>Remove</th>
