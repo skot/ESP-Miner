@@ -402,6 +402,8 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddStringToObject(root, "bestDiff", GLOBAL_STATE->SYSTEM_MODULE.best_diff_string);
     cJSON_AddStringToObject(root, "bestSessionDiff", GLOBAL_STATE->SYSTEM_MODULE.best_session_diff_string);
 
+    cJSON_AddNumberToObject(root, "isUsingFallbackStratum", GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback);
+
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "coreVoltage", nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE));
     cJSON_AddNumberToObject(root, "coreVoltageActual", VCORE_get_voltage_mv(GLOBAL_STATE));
@@ -473,6 +475,14 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
 esp_err_t POST_WWW_update(httpd_req_t * req)
 {
+    wifi_mode_t mode;
+    esp_wifi_get_mode(&mode);
+    if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)
+    {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Not allowed in AP mode");
+        return ESP_OK;
+    }
+
     char buf[1000];
     int remaining = req->content_len;
 
@@ -480,13 +490,13 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
         esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "www");
     if (www_partition == NULL) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "WWW partition not found");
-        return ESP_FAIL;
+        return ESP_OK;
     }
 
     // Don't attempt to write more than what can be stored in the partition
     if (remaining > www_partition->size) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "File provided is too large for device");
-        return ESP_FAIL;
+        return ESP_OK;
     }
 
     // Erase the entire www partition before writing
@@ -499,12 +509,12 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
             continue;
         } else if (recv_len <= 0) {
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Protocol Error");
-            return ESP_FAIL;
+            return ESP_OK;
         }
 
         if (esp_partition_write(www_partition, www_partition->size - remaining, (const void *) buf, recv_len) != ESP_OK) {
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Write Error");
-            return ESP_FAIL;
+            return ESP_OK;
         }
 
         remaining -= recv_len;
@@ -519,6 +529,14 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
  */
 esp_err_t POST_OTA_update(httpd_req_t * req)
 {
+    wifi_mode_t mode;
+    esp_wifi_get_mode(&mode);
+    if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)
+    {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Not allowed in AP mode");
+        return ESP_OK;
+    }
+    
     char buf[1000];
     esp_ota_handle_t ota_handle;
     int remaining = req->content_len;
@@ -536,14 +554,14 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
             // Serious Error: Abort OTA
         } else if (recv_len <= 0) {
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Protocol Error");
-            return ESP_FAIL;
+            return ESP_OK;
         }
 
         // Successful Upload: Flash firmware chunk
         if (esp_ota_write(ota_handle, (const void *) buf, recv_len) != ESP_OK) {
             esp_ota_abort(ota_handle);
             httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Flash Error");
-            return ESP_FAIL;
+            return ESP_OK;
         }
 
         remaining -= recv_len;
@@ -552,7 +570,7 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
     // Validate and switch to new OTA image and reboot
     if (esp_ota_end(ota_handle) != ESP_OK || esp_ota_set_boot_partition(ota_partition) != ESP_OK) {
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Validation / Activation Error");
-        return ESP_FAIL;
+        return ESP_OK;
     }
 
     httpd_resp_sendstr(req, "Firmware update complete, rebooting now!\n");

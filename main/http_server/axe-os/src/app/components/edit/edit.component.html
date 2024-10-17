@@ -1,29 +1,5 @@
 <ng-container *ngIf="form != null">
     <form [formGroup]="form">
-
-        <div class="field grid p-fluid">
-            <label htmlFor="hostname" class="col-12 mb-2 md:col-2 md:mb-0">Hostname:</label>
-            <div class="col-12 md:col-10">
-                <input pInputText id="hostname" type="text" formControlName="hostname" />
-            </div>
-        </div>
-        <div class="field grid p-fluid">
-            <label htmlFor="ssid" class="col-12 mb-2 md:col-2 md:mb-0">WiFi SSID:</label>
-            <div class="col-12 md:col-10">
-                <input pInputText id="ssid" type="text" formControlName="ssid" />
-            </div>
-        </div>
-        <div class="field grid p-fluid">
-            <label htmlFor="wifiPass" class="col-12 mb-2 md:col-2 md:mb-0">WiFi Password:</label>
-            <div class="col-12 md:col-10 p-input-icon-right">
-                <i *ngIf="form.get('wifiPass')?.dirty" class="pi"
-                   [ngClass]="{'pi-eye': !showWifiPassword, 'pi-eye-slash': showWifiPassword}"
-                   (click)="toggleWifiPasswordVisibility()" style="cursor: pointer;"></i>
-                <input pInputText id="wifiPass" formControlName="wifiPass"
-                       [type]="showWifiPassword ? 'text' : 'password'"
-                       placeholder="Enter WiFi password" />
-            </div>
-        </div>
         <div class="field grid p-fluid">
             <label htmlFor="stratumURL" class="col-12 mb-2 md:col-2 md:mb-0">Stratum URL:</label>
             <div class="col-12 md:col-10">
@@ -81,8 +57,13 @@
         </div>
         <div class="field grid p-fluid">
             <label htmlFor="fallbackStratumPassword" class="col-12 mb-2 md:col-2 md:mb-0">Fallback Stratum Password:</label>
-            <div class="col-12 md:col-10">
-                <input pInputText id="fallbackStratumPassword" formControlName="fallbackStratumPassword" type="password" />
+            <div class="col-12 md:col-10 p-input-icon-right">
+                <i *ngIf="form.get('fallbackStratumPassword')?.dirty" class="pi"
+                   [ngClass]="{'pi-eye': !showFallbackStratumPassword, 'pi-eye-slash': showFallbackStratumPassword}"
+                   (click)="toggleFallbackStratumPasswordVisibility()" style="cursor: pointer;"></i>
+                <input pInputText id="fallbackStratumPassword" formControlName="fallbackStratumPassword"
+                       [type]="showFallbackStratumPassword ? 'text' : 'password'"
+                       placeholder="Enter fallback stratum password" />
             </div>
         </div>
 
@@ -172,6 +153,15 @@
 
         </ng-container>
 
+        <div class="col-12" *ngIf="form.get('overheat_mode')?.value === 1">
+            <button pButton type="button" label="Disable Overheat Mode" 
+                    class="p-button-danger w-full py-3" 
+                    (click)="disableOverheatMode()">
+            </button>
+            <small class="block mt-1 text-center" style="color: #ff0000;">
+                Make sure to reset Frequency and Voltage before clicking this button.
+            </small>
+        </div>
 
         <div class="col-12 md:col-4">
             <div class="field-checkbox">
@@ -204,14 +194,6 @@
                         Simulator</b></label>
 
                 <p-slider formControlName="fanspeed"></p-slider>
-            </div>
-        </div>
-
-        <div class="col-12" *ngIf="form.get('overheat_mode')?.value === 1">
-            <div class="field-checkbox">
-                <p-checkbox name="overheat_mode" formControlName="overheat_mode" inputId="overheat_mode"
-                    [binary]="true"></p-checkbox>
-                <label for="overheat_mode" style="color: #ff0000;">Disable Overheat Mode. Make sure to reset Frequency and Voltage</label>
             </div>
         </div>
 

@@ -19,7 +19,8 @@ export class LoadingService {
             subscriber.next(value);
           },
           error: (err) => {
-            subscriber.next(err);
+            this.loading$.next(false);
+            subscriber.error(err);
           },
           complete: () => {
             this.loading$.next(false);
@@ -30,4 +31,3 @@ export class LoadingService {
     }
   }
 }
-
