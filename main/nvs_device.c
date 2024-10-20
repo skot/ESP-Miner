@@ -86,10 +86,10 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_difficulty_mask_fn = BM1366_set_job_difficulty_mask,
                                         .send_work_fn = BM1366_send_work,
                                         .set_version_mask = BM1366_set_version_mask};
-        GLOBAL_STATE.asic_job_frequency_ms =  (
+        GLOBAL_STATE->asic_job_frequency_ms =  (
             (double) (BM1366_FULLSCAN_PERCENT * BM1366_HCN_PERCENT * BM1366_NONCE_PERCENT * BM1366_VERSION_PERCENT * NONCE_SPACE * VERSION_SPACE) / 
             (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1366_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count;
-        GLOBAL_STATE->asic_job_frequency_ms = 2000; //ms
+        //GLOBAL_STATE->asic_job_frequency_ms = 2000; //ms
         GLOBAL_STATE->ASIC_difficulty = BM1366_ASIC_DIFFICULTY;
 
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
@@ -121,7 +121,7 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
         // this scales with chips, hcn, frequency, version mask
         //GLOBAL_STATE->asic_job_frequency_ms = 500; //ms
 
-        GLOBAL_STATE.asic_job_frequency_ms =  (
+        GLOBAL_STATE->asic_job_frequency_ms =  (
             (double) (BM1368_FULLSCAN_PERCENT * BM1368_HCN_PERCENT * BM1368_NONCE_PERCENT * BM1368_VERSION_PERCENT * NONCE_SPACE * VERSION_SPACE) / 
             (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1368_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count;
         GLOBAL_STATE->ASIC_difficulty = BM1368_ASIC_DIFFICULTY;
