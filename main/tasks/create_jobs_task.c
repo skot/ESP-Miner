@@ -32,6 +32,7 @@ void create_jobs_task(void *pvParameters)
 
         if (GLOBAL_STATE->new_stratum_version_rolling_msg) {
             ESP_LOGI(TAG, "Set chip version rolls %i", (int)(GLOBAL_STATE->version_mask >> 13));
+            //we need to modify fullscans here, by version scan percent
             (GLOBAL_STATE->ASIC_functions.set_version_mask)(GLOBAL_STATE->version_mask);
             GLOBAL_STATE->new_stratum_version_rolling_msg = false;
         }
