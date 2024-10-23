@@ -212,7 +212,12 @@
                         <tr>
                             <td>URL:</td>
                             <td style="word-break: break-all;">
-                                <a style="text-decoration: underline;" [href]="(quickLink$ | async) || info.stratumURL" target="_blank">{{info.stratumURL}}</a>
+                                <ng-container *ngIf="quickLink$ | async as quickLink; else plainText">
+                                    <a style="text-decoration: underline;" [href]="quickLink" target="_blank">{{info.stratumURL}}</a>
+                                </ng-container>
+                                <ng-template #plainText>
+                                    {{info.stratumURL}}
+                                </ng-template>
                             </td>
                         </tr>
                         <tr>
@@ -228,7 +233,12 @@
                         <tr>
                             <td>URL:</td>
                             <td style="word-break: break-all;">
-                                <a style="text-decoration: underline;" [href]="(fallbackQuickLink$ | async) || info.fallbackStratumURL" target="_blank">{{info.fallbackStratumURL}}</a>
+                                <ng-container *ngIf="fallbackQuickLink$ | async as fallbackQuickLink; else plainText">
+                                    <a style="text-decoration: underline;" [href]="fallbackQuickLink" target="_blank">{{info.fallbackStratumURL}}</a>
+                                </ng-container>
+                                <ng-template #plainText>
+                                    {{info.fallbackStratumURL}}
+                                </ng-template>
                             </td>
                         </tr>
                         <tr>
