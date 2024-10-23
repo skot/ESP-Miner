@@ -193,17 +193,10 @@ static esp_err_t rest_common_get_handler(httpd_req_t * req)
     return ESP_OK;
 }
 
-static esp_err_t PATCH_update_swarm(httpd_req_t * req)
+static esp_err_t recv_http_req(httpd_req_t * req, char * const buf)
 {
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_FAIL;
-    }
-
     int total_len = req->content_len;
     int cur_len = 0;
-    char * buf = ((rest_server_context_t *) (req->user_ctx))->scratch;
     int received = 0;
     if (total_len >= SCRATCH_BUFSIZE) {
         /* Respond with 500 Internal Server Error */
@@ -220,6 +213,22 @@ static esp_err_t PATCH_update_swarm(httpd_req_t * req)
         cur_len += received;
     }
     buf[total_len] = '\0';
+
+    return ESP_OK;
+}
+
+static esp_err_t PATCH_update_swarm(httpd_req_t * req)
+{
+    // Set CORS headers
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    char * buf = ((rest_server_context_t *) (req->user_ctx))->scratch;
+    if (ESP_OK != recv_http_req(req, buf)) {
+        return ESP_FAIL;
+    }
 
     nvs_config_set_string(NVS_CONFIG_SWARM, buf);
     httpd_resp_send_chunk(req, NULL, 0);
@@ -248,25 +257,10 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
         return ESP_FAIL;
     }
 
-    int total_len = req->content_len;
-    int cur_len = 0;
     char * buf = ((rest_server_context_t *) (req->user_ctx))->scratch;
-    int received = 0;
-    if (total_len >= SCRATCH_BUFSIZE) {
-        /* Respond with 500 Internal Server Error */
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "content too long");
+    if (ESP_OK != recv_http_req(req, buf)) {
         return ESP_FAIL;
     }
-    while (cur_len < total_len) {
-        received = httpd_req_recv(req, buf + cur_len, total_len);
-        if (received <= 0) {
-            /* Respond with 500 Internal Server Error */
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to post control value");
-            return ESP_FAIL;
-        }
-        cur_len += received;
-    }
-    buf[total_len] = '\0';
 
     cJSON * root = cJSON_Parse(buf);
     cJSON * item;
@@ -326,6 +320,44 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     }
     if ((item = cJSON_GetObjectItem(root, "fanspeed")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, item->valueint);
+    }
+
+    cJSON_Delete(root);
+    httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;
+}
+
+static esp_err_t PATCH_update_raw(httpd_req_t * req)
+{
+    // Set CORS headers
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    char * buf = ((rest_server_context_t *) (req->user_ctx))->scratch;
+    if (ESP_OK != recv_http_req(req, buf)) {
+        return ESP_FAIL;
+    }
+
+    cJSON * root = cJSON_Parse(buf);
+    cJSON * item;
+    cJSON_ArrayForEach(item, root) {
+        cJSON * const type_j = cJSON_GetObjectItem(item, "type");
+        if (!type_j) continue;
+        const char * const type = type_j->valuestring;
+        cJSON * const val = cJSON_GetObjectItem(item, "val");
+        if (!val) continue;
+
+        if (!strcmp(type, "str")) {
+            nvs_config_set_string(item->string, val->valuestring);
+        } else if (!strcmp(type, "u16")) {
+            nvs_config_set_u16(item->string, val->valueint);
+        } else if (!strcmp(type, "u64")) {
+            nvs_config_set_u64(item->string, val->valuedouble);
+        } else if (!strcmp(type, "erase")) {
+            nvs_config_erase(item->string);
+        }
     }
 
     cJSON_Delete(root);
@@ -759,6 +791,18 @@ esp_err_t start_rest_server(void * pvParameters)
         .user_ctx = NULL,
     };
     httpd_register_uri_handler(server, &system_options_uri);
+
+    httpd_uri_t update_system_raw_uri = {
+        .uri = "/api/system/raw", .method = HTTP_PATCH, .handler = PATCH_update_raw, .user_ctx = rest_context};
+    httpd_register_uri_handler(server, &update_system_raw_uri);
+
+    httpd_uri_t system_raw_options_uri = {
+        .uri = "/api/system/raw",
+        .method = HTTP_OPTIONS,
+        .handler = handle_options_request,
+        .user_ctx = NULL,
+    };
+    httpd_register_uri_handler(server, &system_raw_options_uri);
 
     httpd_uri_t update_post_ota_firmware = {
         .uri = "/api/system/OTA", .method = HTTP_POST, .handler = POST_OTA_update, .user_ctx = NULL};
