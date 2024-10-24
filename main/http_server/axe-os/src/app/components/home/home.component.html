@@ -99,7 +99,7 @@
                 <p-chart [data]="chartData" [options]="chartOptions"></p-chart>
             </div>
         </div>
-        <div class="col-12 lg:col-12 xl:col-6">
+        <div class="col-12 lg:col-12 xl:col-4">
             <div class="card">
                 <h5>Power</h5>
                 <div class="grid text-center">
@@ -127,7 +127,7 @@
             </div>
         </div>
 
-        <div class="col-12 lg:col-6 xl:col-3">
+        <div class="col-12 lg:col-6 xl:col-4">
             <div class="card">
                 <h5>Heat</h5>
                 <div class="grid text-center">
@@ -180,7 +180,7 @@
 
 
 
-        <div class="col-12 lg:col-6 xl:col-3">
+        <div class="col-12 lg:col-6 xl:col-4">
             <div class="card">
                 <h5>Performance</h5>
                 <div class="grid text-center">
@@ -244,7 +244,12 @@
             </div>
         </div>
 
-
+        <div class="col-12 lg:col-6">
+            <div class="card" *ngIf="info$ | async as info; else loading">
+                <h5>Uptime</h5>
+                {{info.uptimeSeconds | dateAgo}}
+            </div>
+        </div>       
     </div>
 
 
