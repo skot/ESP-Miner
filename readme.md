@@ -38,9 +38,6 @@ For more details take a look at `main/http_server/http_server.c`.
 Things that can be done are:
   
   - Get System Info
-  - Get Swarm Info
-  - Update Swarm
-  - Swarm Options
   - System Restart Action
   - Update System Settings Action
   - System Options
@@ -52,10 +49,6 @@ Some API examples in curl:
   ```bash
   # Get system information
   curl http://YOUR-BITAXE-IP/api/system/info
-  ```
-  ```bash
-  # Get swarm information
-  curl http://YOUR-BITAXE-IP/api/swarm/info
   ```
   ```bash
   # System restart action
