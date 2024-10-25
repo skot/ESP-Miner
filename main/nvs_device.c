@@ -90,6 +90,7 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
             (double) (BM1366_FULLSCAN_PERCENT * BM1366_HCN_PERCENT * BM1366_NONCE_PERCENT * BM1366_VERSION_PERCENT * NONCE_SPACE * VERSION_SPACE) / 
             (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1366_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count;
         GLOBAL_STATE->ASIC_difficulty = BM1366_ASIC_DIFFICULTY;
+        GLOBAL_STATE->version_space_percent = (double)BM1366_VERSION_PERCENT;
 
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
         } else if (strcmp(GLOBAL_STATE->asic_model_str, "BM1370") == 0) {
@@ -105,6 +106,7 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
             (double) (BM1370_FULLSCAN_PERCENT * BM1370_HCN_PERCENT * BM1370_NONCE_PERCENT * BM1370_VERSION_PERCENT * NONCE_SPACE * VERSION_SPACE) / 
             (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1370_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count;
         GLOBAL_STATE->ASIC_difficulty = BM1370_ASIC_DIFFICULTY;
+        GLOBAL_STATE->version_space_percent = (double)BM1370_VERSION_PERCENT;
 
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
     } else if (strcmp(GLOBAL_STATE->asic_model_str, "BM1368") == 0) {
@@ -121,6 +123,7 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
             (double) (BM1368_FULLSCAN_PERCENT * BM1368_HCN_PERCENT * BM1368_NONCE_PERCENT * BM1368_VERSION_PERCENT * NONCE_SPACE * VERSION_SPACE) / 
             (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1368_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count;
         GLOBAL_STATE->ASIC_difficulty = BM1368_ASIC_DIFFICULTY;
+        GLOBAL_STATE->version_space_percent = (double)BM1368_VERSION_PERCENT;
 
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
     } else if (strcmp(GLOBAL_STATE->asic_model_str, "BM1397") == 0) {
@@ -137,6 +140,7 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
             (double) (BM1397_FULLSCAN_PERCENT * BM1397_MIDSTATE_ENGINES * BM1397_NONCE_PERCENT * NONCE_SPACE) / 
             (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1397_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count; 
         GLOBAL_STATE->ASIC_difficulty = BM1397_ASIC_DIFFICULTY;
+        GLOBAL_STATE->version_space_percent = (double)1.0;
 
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
     } else {
