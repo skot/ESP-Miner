@@ -10,7 +10,7 @@
 
 static const char * TAG = "nvs_device";
 static const double NONCE_SPACE = 4294967296.0; //  2^32
-static const double VERSION_SPACE = 65536.0; //  2^32
+static const double VERSION_SPACE = 65536.0; //  2^16
 
 
 esp_err_t NVSDevice_init(void) {
@@ -89,7 +89,6 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
         GLOBAL_STATE->asic_job_frequency_ms =  (
             (double) (BM1366_FULLSCAN_PERCENT * BM1366_HCN_PERCENT * BM1366_NONCE_PERCENT * BM1366_VERSION_PERCENT * NONCE_SPACE * VERSION_SPACE) / 
             (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1366_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count;
-        //GLOBAL_STATE->asic_job_frequency_ms = 2000; //ms
         GLOBAL_STATE->ASIC_difficulty = BM1366_ASIC_DIFFICULTY;
 
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
@@ -102,8 +101,9 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_difficulty_mask_fn = BM1370_set_job_difficulty_mask,
                                         .send_work_fn = BM1370_send_work,
                                         .set_version_mask = BM1370_set_version_mask};
-        //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1370_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
-        GLOBAL_STATE->asic_job_frequency_ms = 500; //ms
+        GLOBAL_STATE->asic_job_frequency_ms =  (
+            (double) (BM1370_FULLSCAN_PERCENT * BM1370_HCN_PERCENT * BM1370_NONCE_PERCENT * BM1370_VERSION_PERCENT * NONCE_SPACE * VERSION_SPACE) / 
+            (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1370_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count;
         GLOBAL_STATE->ASIC_difficulty = BM1370_ASIC_DIFFICULTY;
 
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
@@ -116,10 +116,6 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_difficulty_mask_fn = BM1368_set_job_difficulty_mask,
                                         .send_work_fn = BM1368_send_work,
                                         .set_version_mask = BM1368_set_version_mask};
-
-        // we actually need to update the equation everytime BM1368_set_version_mask is called
-        // this scales with chips, hcn, frequency, version mask
-        //GLOBAL_STATE->asic_job_frequency_ms = 500; //ms
 
         GLOBAL_STATE->asic_job_frequency_ms =  (
             (double) (BM1368_FULLSCAN_PERCENT * BM1368_HCN_PERCENT * BM1368_NONCE_PERCENT * BM1368_VERSION_PERCENT * NONCE_SPACE * VERSION_SPACE) / 
@@ -136,7 +132,7 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_difficulty_mask_fn = BM1397_set_job_difficulty_mask,
                                         .send_work_fn = BM1397_send_work,
                                         .set_version_mask = BM1397_set_version_mask};
-        // no version-rolling but 4 midstates, so 4 nonce spaces are splitted between small cores
+        // the bm1397 is a different equation as no version rolling and operates on 4 different spaces in paralell  
         GLOBAL_STATE->asic_job_frequency_ms = (
             (double) (BM1397_FULLSCAN_PERCENT * BM1397_MIDSTATE_ENGINES * BM1397_NONCE_PERCENT * NONCE_SPACE) / 
             (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1397_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count; 
