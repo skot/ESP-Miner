@@ -26,7 +26,7 @@
 #include "connect.h"
 #include "led_controller.h"
 #include "nvs_config.h"
-#include "oled.h"
+#include "display.h"
 #include "vcore.h"
 
 
@@ -41,8 +41,6 @@ QueueHandle_t user_input_queue;
 //local function prototypes
 static esp_err_t ensure_overheat_mode_config();
 static void _show_overheat_screen(GlobalState * GLOBAL_STATE);
-static void _clear_display(GlobalState * GLOBAL_STATE);
-static void _init_connection(GlobalState * GLOBAL_STATE);
 static void _update_connection(GlobalState * GLOBAL_STATE);
 static void _update_screen_one(GlobalState * GLOBAL_STATE);
 static void _update_screen_two(GlobalState * GLOBAL_STATE);
@@ -145,12 +143,11 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
             // oled
-            if (!OLED_init()) {
-                ESP_LOGI(TAG, "OLED init failed!");
+            if (display_init() != ESP_OK) {
+                ESP_LOGW(TAG, "OLED init failed!");
             } else {
                 ESP_LOGI(TAG, "OLED init success!");
-                // clear the oled screen
-                OLED_fill(0);
+                display_clear();
             }
             break;
         default:
@@ -159,45 +156,7 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
     netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
 
     user_input_queue = xQueueCreate(10, sizeof(char[10])); // Create a queue to handle user input events
-
-    _clear_display(GLOBAL_STATE);
-    _init_connection(GLOBAL_STATE);
 }
-
-static const uint8_t bitaxe_splash[] = {
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xc0, 0x20, 0x10, 0x18, 0x3c, 
-	0x7e, 0xfc, 0xf8, 0xf0, 0x38, 0x3c, 0x3c, 0x7c, 0xf8, 0xf8, 0xf8, 0x30, 0x10, 0x08, 0x00, 0x08, 
-	0x9c, 0x3e, 0x1c, 0x08, 0x00, 0x00, 0x80, 0x80, 0xc0, 0xe0, 0xf0, 0x80, 0x80, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x80, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0f, 0x10, 0x20, 0x20, 0x10, 0x08, 
-	0x00, 0xff, 0xff, 0xff, 0x80, 0xe0, 0xf0, 0xe0, 0xff, 0xff, 0xdf, 0xc0, 0x60, 0x00, 0x06, 0xff, 
-	0xff, 0xff, 0xfe, 0x02, 0x00, 0x01, 0x01, 0xff, 0xff, 0xff, 0xff, 0x01, 0x00, 0x00, 0x18, 0x18, 
-	0x3c, 0xfe, 0x87, 0x07, 0x0f, 0xff, 0xff, 0xfe, 0xfe, 0x06, 0x00, 0x04, 0xff, 0xff, 0xff, 0xfe, 
-	0x82, 0x00, 0x04, 0xff, 0xff, 0xff, 0xfe, 0x02, 0x00, 0x00, 0xf8, 0xfc, 0xfc, 0xfe, 0x07, 0x07, 
-	0x8f, 0xff, 0x7f, 0x3e, 0x1e, 0x12, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x80, 0x80, 
-	0x82, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x01, 0xff, 0xff, 0xff, 0x00, 0x00, 0x00, 0x02, 0xff, 
-	0xff, 0xff, 0xff, 0x02, 0x00, 0x00, 0x02, 0xff, 0xff, 0xff, 0xff, 0x02, 0x00, 0x00, 0xf0, 0xf0, 
-	0xf8, 0xf8, 0x0c, 0x06, 0x02, 0xff, 0xff, 0xff, 0xff, 0x02, 0x00, 0x04, 0xf3, 0xf7, 0xff, 0xff, 
-	0x0f, 0x0f, 0x1f, 0xff, 0xff, 0xfe, 0xfc, 0x02, 0x00, 0x02, 0xff, 0xff, 0xff, 0xff, 0x02, 0x03, 
-	0x01, 0x80, 0x80, 0xc0, 0xe0, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x3c, 0x46, 0x47, 0x03, 0x03, 0x07, 
-	0x07, 0x0f, 0x0f, 0x1f, 0x1e, 0x3e, 0x1c, 0x0c, 0x07, 0x03, 0x03, 0x03, 0x00, 0x00, 0x00, 0x0f, 
-	0x1f, 0x3f, 0x1f, 0x0c, 0x04, 0x00, 0x00, 0x0f, 0x1f, 0x3f, 0x1f, 0x0c, 0x04, 0x10, 0x0f, 0x0f, 
-	0x1f, 0x1f, 0x1e, 0x1e, 0x1c, 0x0f, 0x1f, 0x1f, 0x1f, 0x04, 0x00, 0x00, 0x0f, 0x1f, 0x1f, 0x0f, 
-	0x04, 0x00, 0x00, 0x0f, 0x1f, 0x1f, 0x0f, 0x04, 0x00, 0x10, 0x0f, 0x0f, 0x1f, 0x1f, 0x1e, 0x1e, 
-	0x1c, 0x0f, 0x07, 0x03, 0x03, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
-};
 
 void SYSTEM_task(void * pvParameters)
 {
@@ -220,9 +179,9 @@ void SYSTEM_task(void * pvParameters)
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
     
-    OLED_showBitmap(0, 0, bitaxe_splash, 128, 32);
+    display_show_logo();
     vTaskDelay(5000 / portTICK_PERIOD_MS);
-    
+
     int current_screen = 0;
     TickType_t last_update_time = xTaskGetTickCount();
 
@@ -236,7 +195,6 @@ void SYSTEM_task(void * pvParameters)
         }
 
         // Update the current screen
-        _clear_display(GLOBAL_STATE);
         module->screen_page = current_screen;
 
         switch (current_screen) {
@@ -272,8 +230,6 @@ void SYSTEM_task(void * pvParameters)
         }
 
         last_update_time = xTaskGetTickCount();
-    
-        
     }
 }
 
@@ -375,7 +331,6 @@ void SYSTEM_notify_found_nonce(GlobalState * GLOBAL_STATE, double found_diff, ui
 /// 
 static void _show_overheat_screen(GlobalState * GLOBAL_STATE)
 {
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
     esp_netif_ip_info_t ip_info;
 
     switch (GLOBAL_STATE->device_model) {
@@ -383,20 +338,16 @@ static void _show_overheat_screen(GlobalState * GLOBAL_STATE)
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            if (OLED_status()) {
-                OLED_clearLine(0);
-                OLED_writeString(0, 0, "DEVICE OVERHEAT!");
-                OLED_clearLine(1);
-                OLED_writeString(0, 1, "See AxeOS settings");
-                OLED_clearLine(2);
-                OLED_clearLine(3);
+            if (display_active()) {
                 esp_netif_get_ip_info(netif, &ip_info);
                 char ip_address_str[IP4ADDR_STRLEN_MAX];
                 esp_ip4addr_ntoa(&ip_info.ip, ip_address_str, IP4ADDR_STRLEN_MAX);
-
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, "IP: %s", ip_address_str);
-                OLED_writeString(0, 3, module->oled_buf);
+                display_show_status((const char *[]){
+                    "DEVICE OVERHEAT!", 
+                    "See AxeOS settings", 
+                    "IP:", 
+                    ip_address_str
+                }, 4);
             }
             break;
         default:
@@ -407,30 +358,23 @@ static void _show_overheat_screen(GlobalState * GLOBAL_STATE)
 static void _update_screen_one(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
-    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+    esp_netif_ip_info_t ip_info;
+
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            if (OLED_status()) {
-                float efficiency = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power / (module->current_hashrate / 1000.0);
-
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, "Gh/s: %.2f", module->current_hashrate);
-                OLED_writeString(0, 0, module->oled_buf);
-
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, "J/Th: %.2f", efficiency);
-                OLED_writeString(0, 1, module->oled_buf);
-
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, module->FOUND_BLOCK ? "!!! BLOCK FOUND !!!" : "Best: %s", module->best_diff_string);
-                OLED_writeString(0, 2, module->oled_buf);
-
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, "Temp: %.1f C", power_management->chip_temp_avg);
-                OLED_writeString(0, 3, module->oled_buf);
+            if (display_active()) {
+                esp_netif_get_ip_info(netif, &ip_info);
+                char ip_address_str[IP4ADDR_STRLEN_MAX];
+                esp_ip4addr_ntoa(&ip_info.ip, ip_address_str, IP4ADDR_STRLEN_MAX);
+                display_show_status((const char *[]){
+                    "Mining URL:", 
+                    module->is_using_fallback ? module->fallback_pool_url : module->pool_url, 
+                    "Bitaxe IP:", 
+                    ip_address_str
+                }, 4);
             }
             break;
         default:
@@ -441,80 +385,36 @@ static void _update_screen_one(GlobalState * GLOBAL_STATE)
 static void _update_screen_two(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
-    esp_netif_ip_info_t ip_info;
-
+    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            if (OLED_status()) {
-                // Pool URL
-                OLED_writeString(0, 0, "Mining URL:");
-                memset(module->oled_buf, 0, 20);
-                if (module->is_using_fallback) {
-                snprintf(module->oled_buf, 20, "%.19s", module->fallback_pool_url);
-                } else {
-                    snprintf(module->oled_buf, 20, "%.19s", module->pool_url);
-                }
-                OLED_writeString(0, 1, module->oled_buf);
-                // // Second line of pool URL
-                // memset(module->oled_buf, 0, 20);
-                // if (module->is_using_fallback) {
-                // snprintf(module->oled_buf, 20, "%.19s", module->fallback_pool_url + 13);
-                // } else {
-                //     snprintf(module->oled_buf, 20, "%.19s", module->pool_url + 13);
-                // }
-                // OLED_writeString(0, 1, module->oled_buf);
+            if (display_active()) {
+                char label_hashrate[20];
+                snprintf(label_hashrate, 20, "Gh/s: %.2f", module->current_hashrate);
 
-                // IP Address
-                OLED_writeString(0, 2, "Bitaxe IP:");
-                esp_netif_get_ip_info(netif, &ip_info);
-                char ip_address_str[IP4ADDR_STRLEN_MAX];
-                esp_ip4addr_ntoa(&ip_info.ip, ip_address_str, IP4ADDR_STRLEN_MAX);
+                char label_efficiency[20];
+                float efficiency = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power / (module->current_hashrate / 1000.0);
+                snprintf(label_efficiency, 20, "J/Th: %.2f", efficiency);
 
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, "%s", ip_address_str);
-                OLED_writeString(0, 3, module->oled_buf);
+                char label_best[20];
+                snprintf(label_best, 27, "Best: %s/%s", module->best_session_diff_string, module->best_diff_string);
+
+                char label_temp_avg[20];
+                snprintf(label_temp_avg, 20, "Temp: %.1f C", power_management->chip_temp_avg);
+
+                display_show_status((const char *[]){
+                    label_hashrate, 
+                    label_efficiency, 
+                    module->FOUND_BLOCK ? "!!! BLOCK FOUND !!!" : label_best,
+                    label_temp_avg
+                }, 4);
             }
             break;
         default:
             break;
-    }
-}
-
-static void _clear_display(GlobalState * GLOBAL_STATE)
-{
-    switch (GLOBAL_STATE->device_model) {
-        case DEVICE_MAX:
-        case DEVICE_ULTRA:
-        case DEVICE_SUPRA:
-        case DEVICE_GAMMA:
-            OLED_clearLine(0);
-            OLED_clearLine(1);
-            OLED_clearLine(2);
-            OLED_clearLine(3);
-            break;
-        default:
-    }
-}
-
-static void _init_connection(GlobalState * GLOBAL_STATE)
-{
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
-
-    switch (GLOBAL_STATE->device_model) {
-        case DEVICE_MAX:
-        case DEVICE_ULTRA:
-        case DEVICE_SUPRA:
-        case DEVICE_GAMMA:
-            if (OLED_status()) {
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, "Connecting to SSID:");
-                OLED_writeString(0, 0, module->oled_buf);
-            }
-            break;
-        default:
     }
 }
 
@@ -527,21 +427,17 @@ static void _update_connection(GlobalState * GLOBAL_STATE)
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            if (OLED_status()) {
-                OLED_clearLine(2);
-                strncpy(module->oled_buf, module->ssid, sizeof(module->oled_buf));
-                module->oled_buf[sizeof(module->oled_buf) - 1] = 0;
-                OLED_writeString(0, 1, module->oled_buf);
-                
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, "Configuration SSID:");
-                OLED_writeString(0, 2, module->oled_buf);
+            if (display_active()) {
 
                 char ap_ssid[13];
                 generate_ssid(ap_ssid);
-                memset(module->oled_buf, 0, 20);
-                snprintf(module->oled_buf, 20, ap_ssid);
-                OLED_writeString(0, 3, module->oled_buf);
+
+                display_show_status((const char *[]){
+                    "Connecting to SSID:",
+                    module->ssid,
+                    "Configuration SSID:",
+                    ap_ssid
+                }, 4);
             }
             break;
         default:
@@ -556,15 +452,14 @@ static void show_ap_information(const char * error, GlobalState * GLOBAL_STATE)
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            if (OLED_status()) {
-                _clear_display(GLOBAL_STATE);
-                if (error != NULL) {
-                    OLED_writeString(0, 0, error);
-                }
-                OLED_writeString(0, 1, "Configuration SSID:");
+            if (display_active()) {
                 char ap_ssid[13];
                 generate_ssid(ap_ssid);
-                OLED_writeString(0, 2, ap_ssid);
+
+                display_show_status((const char *[]){
+                    "Configuration SSID:",
+                    ap_ssid
+                }, 2);
             }
             break;
         default:
