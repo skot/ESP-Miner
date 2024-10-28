@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTTP Server API Documentation - 1990s Hacker Style</title>
+<style>
+    body {
+        background-color: black;
+        color: #00FF00;
+        font-family: "Courier New", monospace;
+        font-size: 14px;
+        margin: 0;
+        padding: 20px;
+    }
+    h1, h2 {
+        color: #00FF00;
+        text-decoration: underline;
+    }
+    .blink {
+        animation: blinker 1s step-start infinite;
+    }
+    @keyframes blinker {
+        50% { opacity: 0; }
+    }
+    .container {
+        border: 2px solid #00FF00;
+        padding: 20px;
+    }
+    .ascii-art {
+        font-size: 12px;
+        color: #00FF00;
+        white-space: pre;
+        text-align: center;
+    }
+    .code-block {
+        background-color: #000;
+        color: #00FF00;
+        padding: 10px;
+        border: 1px dashed #00FF00;
+        margin: 10px 0;
+    }
+    a {
+        color: #00FF00;
+        text-decoration: none;
+    }
+    a:hover {
+        text-decoration: underline;
+    }
+    .footer {
+        font-size: 12px;
+        color: #00FF00;
+        text-align: center;
+        margin-top: 20px;
+    }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <div class="ascii-art">
+        <pre>
+__________.__  __     _____                  ________                        
+\______   \__|/  |_  /  _  \ ___  ___ ____   \______ \   ____   ____   ______
+ |    |  _/  \   __\/  /_\  \\  \/  // __ \   |    |  \ /  _ \_/ ___\ /  ___/
+ |    |   \  ||  | /    |    \>    <\  ___/   |    `   (  <_> )  \___ \___ \ 
+ |______  /__||__| \____|__  /__/\_ \\___  > /_______  /\____/ \___  >____  >
+        \/                 \/      \/    \/          \/            \/     \/ [APi]
+		
+		https://afflicted.sh/
+		
+		BTC: 1CNg32ut3ABbtGVqfcsTeWvXHHFJtGy1mE
+
+        </pre>
+    </div>
+
+    <h1>HTTP Server API Documentation</h1>
+
+    <h2>Table of Contents</h2>
+    <ul>
+        <li><a href="#recovery-endpoint">Recovery Endpoint</a></li>
+        <li><a href="#system-info-endpoint">System Info Endpoint</a></li>
+        <li><a href="#swarm-info-update-endpoints">Swarm Info & Update Endpoints</a></li>
+        <li><a href="#system-restart-endpoint">System Restart Endpoint</a></li>
+        <li><a href="#system-settings-update-endpoint">System Settings Update Endpoint</a></li>
+        <li><a href="#ota-firmware-update-endpoint">OTA Firmware Update Endpoint</a></li>
+        <li><a href="#www-partition-update-endpoint">WWW Partition Update Endpoint</a></li>
+        <li><a href="#websocket-logging-endpoint">WebSocket Logging Endpoint</a></li>
+    </ul>
+
+    <h2 id="recovery-endpoint">Recovery Endpoint</h2>
+    <p>**URI**: <code>/recovery</code><br>**Method**: <code>GET</code><br>**Description**: Accesses the recovery page for the system.</p>
+    <div class="code-block">
+        curl -X GET http://&lt;server-ip&gt;/recovery
+    </div>
+
+    <h2 id="system-info-endpoint">System Info Endpoint</h2>
+    <p>**URI**: <code>/api/system/info</code><br>**Method**: <code>GET</code><br>**Description**: Fetches current system information in JSON format.</p>
+    <div class="code-block">
+        curl -X GET http://&lt;server-ip&gt;/api/system/info
+    </div>
+
+    <h2 id="swarm-info-update-endpoints">Swarm Info & Update Endpoints</h2>
+    <p><strong>Get Swarm Info</strong></p>
+    <p>**URI**: <code>/api/swarm/info</code><br>**Method**: <code>GET</code></p>
+    <div class="code-block">
+        curl -X GET http://&lt;server-ip&gt;/api/swarm/info
+    </div>
+
+    <p><strong>Update Swarm Settings</strong></p>
+    <p>**URI**: <code>/api/swarm</code><br>**Method**: <code>PATCH</code><br>**Description**: Updates swarm configuration with JSON data.</p>
+    <div class="code-block">
+        curl -X PATCH http://&lt;server-ip&gt;/api/swarm -H "Content-Type: application/json" -d '{"newSetting": "value"}'
+    </div>
+
+    <h2 id="system-restart-endpoint">System Restart Endpoint</h2>
+    <p>**URI**: <code>/api/system/restart</code><br>**Method**: <code>POST</code><br>**Description**: Restarts the system.</p>
+    <div class="code-block">
+        curl -X POST http://&lt;server-ip&gt;/api/system/restart
+    </div>
+
+    <h2 id="system-settings-update-endpoint">System Settings Update Endpoint</h2>
+    <p>**URI**: <code>/api/system</code><br>**Method**: <code>PATCH</code><br>**Description**: Updates various system settings with JSON data.</p>
+    <div class="code-block">
+        curl -X PATCH http://&lt;server-ip&gt;/api/system -H "Content-Type: application/json" -d '{"ssid": "MySSID", "wifiPass": "MyPassword"}'
+    </div>
+
+    <h2 id="ota-firmware-update-endpoint">OTA Firmware Update Endpoint</h2>
+    <p>**URI**: <code>/api/system/OTA</code><br>**Method**: <code>POST</code><br>**Description**: Uploads new firmware for OTA updates.</p>
+    <div class="code-block">
+        curl -X POST http://&lt;server-ip&gt;/api/system/OTA -H "Content-Type: application/octet-stream" --data-binary @firmware.bin
+    </div>
+
+    <h2 id="www-partition-update-endpoint">WWW Partition Update Endpoint</h2>
+    <p>**URI**: <code>/api/system/OTAWWW</code><br>**Method**: <code>POST</code><br>**Description**: Updates the WWW partition with provided data.</p>
+    <div class="code-block">
+        curl -X POST http://&lt;server-ip&gt;/api/system/OTAWWW -H "Content-Type: application/octet-stream" --data-binary @www_partition.bin
+    </div>
+
+    <h2 id="websocket-logging-endpoint">WebSocket Logging Endpoint</h2>
+    <p>**URI**: <code>/api/ws</code><br>**Method**: <code>GET</code><br>**Description**: Opens a WebSocket connection to receive log messages.</p>
+    <div class="code-block">
+        wscat -c ws://&lt;server-ip&gt;/api/ws
+    </div>
+</div>
+
+<div class="footer">
+    &copy; 2024 AFFLICTED INTELLIGENCE LLC. <span class="blink">_</span>
+</div>
+
+</body>
+</html>
