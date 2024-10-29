@@ -5,7 +5,6 @@
 #include "mining.h"
 #include <limits.h>
 #include "string.h"
-
 #include <sys/time.h>
 
 static const char *TAG = "create_jobs_task";
@@ -15,7 +14,6 @@ static const char *TAG = "create_jobs_task";
 #define QUEUE_LOW_WATER_MARK 10 // Adjust based on your requirements
 
 static void process_mining_job(GlobalState *GLOBAL_STATE, mining_notify *notification);
-static bool should_generate_more_work(GlobalState *GLOBAL_STATE);
 static void generate_additional_work(GlobalState *GLOBAL_STATE, mining_notify *notification);
 
 void create_jobs_task(void *pvParameters)
@@ -44,8 +42,8 @@ void create_jobs_task(void *pvParameters)
         uint32_t iteration_count = 0;
         while (GLOBAL_STATE->stratum_queue.count < 1 && GLOBAL_STATE->abandon_work == 0)
         {
-            // Check if we need to generate more work based on the current job
-            if (should_generate_more_work(GLOBAL_STATE))
+            // Inline the should_generate_more_work check directly
+            if (GLOBAL_STATE->ASIC_jobs_queue.count < QUEUE_LOW_WATER_MARK)
             {
                 generate_additional_work(GLOBAL_STATE, mining_notification);
             }
@@ -118,11 +116,6 @@ static void process_mining_job(GlobalState *GLOBAL_STATE, mining_notify *notific
     free(merkle_root);
 
     ESP_LOGI(TAG, "Job processed and queued: %s", notification->job_id);
-}
-
-static bool should_generate_more_work(GlobalState *GLOBAL_STATE)
-{
-    return GLOBAL_STATE->ASIC_jobs_queue.count < QUEUE_LOW_WATER_MARK;
 }
 
 static void generate_additional_work(GlobalState *GLOBAL_STATE, mining_notify *notification)
