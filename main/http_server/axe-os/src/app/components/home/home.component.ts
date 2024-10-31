@@ -2,18 +2,20 @@ import { Component } from '@angular/core';
 import { interval, map, Observable, shareReplay, startWith, switchMap, tap } from 'rxjs';
 import { HashSuffixPipe } from 'src/app/pipes/hash-suffix.pipe';
 import { SystemService } from 'src/app/services/system.service';
-import { eASICModel } from 'src/models/enum/eASICModel';
+import { BtcStatsService } from 'src/app/services/btcstats.service';  // Make sure to import this service
 import { ISystemInfo } from 'src/models/ISystemInfo';
+import { IBtcInfo } from 'src/models/ISystemInfo'; // Create an interface for Btc Info
 
 @Component({
   selector: 'app-home',
   templateUrl: './home.component.html',
   styleUrls: ['./home.component.scss']
 })
+
 export class HomeComponent {
 
   public info$: Observable<ISystemInfo>;
-
+  public btcInfo$: Observable<IBtcInfo>;  // Define btcInfo$ observable
   public quickLink$: Observable<string | undefined>;
   public fallbackQuickLink$: Observable<string | undefined>;
   public expectedHashRate$: Observable<number | undefined>;
@@ -21,8 +23,7 @@ export class HomeComponent {
 
   public chartOptions: any;
   public dataLabel: number[] = [];
-  public hashrateData: number[] = [];
-  public temperatureData: number[] = [];
+  public dataData: number[] = [];
   public dataDataAverage: number[] = [];
   public chartData?: any;
 
@@ -31,7 +32,8 @@ export class HomeComponent {
   public maxFrequency: number = 800;
 
   constructor(
-    private systemService: SystemService
+    private systemService: SystemService,
+    private btcStatsService: BtcStatsService // Inject BtcStatsService
   ) {
 
     const documentStyle = getComputedStyle(document.documentElement);
@@ -40,8 +42,6 @@ export class HomeComponent {
     const surfaceBorder = documentStyle.getPropertyValue('--surface-border');
     const primaryColor = documentStyle.getPropertyValue('--primary-color');
 
-    console.log(primaryColor)
-
     this.chartData = {
       labels: [],
       datasets: [
@@ -49,40 +49,25 @@ export class HomeComponent {
           type: 'line',
           label: 'Hashrate',
           data: [],
-          backgroundColor: primaryColor + '30',
+          fill: false,
+          backgroundColor: primaryColor,
           borderColor: primaryColor,
           tension: 0,
           pointRadius: 2,
           pointHoverRadius: 5,
-          borderWidth: 1,
-          yAxisID: 'y',
-          fill: true,
+          borderWidth: 1
         },
         {
           type: 'line',
           label: 'Average Hashrate',
           data: [],
           fill: false,
-          backgroundColor: primaryColor +  '30',
-          borderColor: primaryColor + '30',
-          tension: 0,
-          pointRadius: 0,
-          borderWidth: 2,
-          borderDash: [5, 5],
-          yAxisID: 'y',
-        },
-        {
-          type: 'line',
-          label: 'ASIC Temp',
-          data: [],
-          fill: false,
           backgroundColor: textColorSecondary,
           borderColor: textColorSecondary,
           tension: 0,
-          pointRadius: 2,
-          pointHoverRadius: 5,
-          borderWidth: 1,
-          yAxisID: 'y2',
+          pointRadius: 0,
+          borderWidth: 2,
+          borderDash: [5, 5]
         }
       ]
     };
@@ -98,7 +83,7 @@ export class HomeComponent {
         },
         tooltip: {
           callbacks: {
-            label: function (tooltipItem: any) {
+            label: function(tooltipItem: any) {
               let label = tooltipItem.dataset.label || '';
               if (label) {
                 label += ': ';
@@ -133,19 +118,6 @@ export class HomeComponent {
             color: surfaceBorder,
             drawBorder: false
           }
-        },
-        y2: {
-          type: 'linear',
-          display: true,
-          position: 'right',
-          ticks: {
-            color: textColorSecondary
-          },
-          grid: {
-            drawOnChartArea: false,
-            color: surfaceBorder
-          },
-          suggestedMax: 80
         }
       }
     };
@@ -157,23 +129,20 @@ export class HomeComponent {
         return this.systemService.getInfo()
       }),
       tap(info => {
-        this.hashrateData.push(info.hashRate * 1000000000);
-        this.temperatureData.push(info.temp);
-
+        this.dataData.push(info.hashRate * 1000000000);
         this.dataLabel.push(new Date().getTime());
 
-        if (this.hashrateData.length >= 720) {
-          this.hashrateData.shift();
+        if (this.dataData.length >= 720) {
+          this.dataData.shift();
           this.dataLabel.shift();
         }
 
         this.chartData.labels = this.dataLabel;
-        this.chartData.datasets[0].data = this.hashrateData;
-        this.chartData.datasets[2].data = this.temperatureData;
+        this.chartData.datasets[0].data = this.dataData;
 
         // Calculate average hashrate and fill the array with the same value for the average line
-        const averageHashrate = this.calculateAverage(this.hashrateData);
-        this.chartData.datasets[1].data = Array(this.hashrateData.length).fill(averageHashrate);
+        const averageHashrate = this.calculateAverage(this.dataData);
+        this.chartData.datasets[1].data = Array(this.dataData.length).fill(averageHashrate);
 
         this.chartData = {
           ...this.chartData
@@ -220,7 +189,14 @@ export class HomeComponent {
         }
       })
     )
-
+	
+    // Fetching the Bitcoin stats with a similar approach
+    this.btcInfo$ = interval(5000).pipe(
+      startWith(0), // Start immediately
+      switchMap(() => this.btcStatsService.getBitcoinStats()), // Replace with actual method
+      shareReplay({ refCount: true, bufferSize: 1 }) // Share the latest value
+    );
+    
     this.fallbackQuickLink$ = this.info$.pipe(
       map(info => {
         if (info.fallbackStratumURL.includes('public-pool.io')) {
@@ -242,6 +218,8 @@ export class HomeComponent {
     )
 
   }
+
+
 
   private calculateAverage(data: number[]): number {
     if (data.length === 0) return 0;

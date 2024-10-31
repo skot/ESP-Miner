@@ -44,3 +44,12 @@ export interface ISystemInfo {
     boardtemp2?: number,
     overheat_mode: number
 }
+
+export interface IBtcInfo {
+  
+	difficulty: number;
+	market_price_usd: number;
+	hash_rate: number;
+	totalbc: number;
+	minutes_between_blocks: number;
+}

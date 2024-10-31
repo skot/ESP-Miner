@@ -7,6 +7,7 @@ import { FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { BrowserModule } from '@angular/platform-browser';
 import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
 import { ToastrModule } from 'ngx-toastr';
+import { FormatMinutesPipe, FormatBtcMinedPipe, FormatNumbersPipe } from './pipes/formats.pipe';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -44,7 +45,10 @@ const components = [
     DateAgoPipe,
     SwarmComponent,
     SettingsComponent,
-    HashSuffixPipe
+    HashSuffixPipe,
+    FormatMinutesPipe,
+    FormatBtcMinedPipe,
+    FormatNumbersPipe
   ],
   imports: [
     BrowserModule,
