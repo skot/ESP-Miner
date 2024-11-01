@@ -15,7 +15,7 @@
     </form>
 </div>
 <button style="margin-right: 1rem;" pButton (click)="scanNetwork()" [disabled]="scanning">{{scanning ? 'Scanning...' : 'Automatic Scan'}}</button>
-<button pButton  severity="secondary" (click)="refreshList()" [disabled]="scanning">Refresh List</button>
+<button pButton  severity="secondary" (click)="refreshList()" [disabled]="scanning">Refresh List ({{refreshIntervalTime}})</button>
 <div>
     <table cellspacing="0" cellpadding="0" >
         <tr>

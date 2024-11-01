@@ -1,18 +1,18 @@
 import { HttpClient } from '@angular/common/http';
-import { Component, OnInit } from '@angular/core';
+import { Component, OnDestroy, OnInit } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
 import { BehaviorSubject, catchError, combineLatest, debounce, debounceTime, forkJoin, from, interval, map, mergeAll, mergeMap, Observable, of, startWith, switchMap, take, timeout, toArray } from 'rxjs';
 import { LocalStorageService } from 'src/app/local-storage.service';
 import { SystemService } from 'src/app/services/system.service';
-
+const REFRESH_TIME_SECONDS = 30;
 const SWARM_DATA = 'SWARM_DATA'
 @Component({
   selector: 'app-swarm',
   templateUrl: './swarm.component.html',
   styleUrls: ['./swarm.component.scss']
 })
-export class SwarmComponent implements OnInit {
+export class SwarmComponent implements OnInit, OnDestroy {
 
   public swarm: any[] = [];
 
@@ -22,6 +22,9 @@ export class SwarmComponent implements OnInit {
   public form: FormGroup;
 
   public scanning = false;
+
+  public refreshIntervalRef!: number;
+  public refreshIntervalTime = REFRESH_TIME_SECONDS;
 
   constructor(
     private fb: FormBuilder,
@@ -36,6 +39,7 @@ export class SwarmComponent implements OnInit {
     })
 
   }
+
   ngOnInit(): void {
     const swarmData = this.localStorageService.getObject(SWARM_DATA);
     console.log(swarmData);
@@ -45,8 +49,19 @@ export class SwarmComponent implements OnInit {
     } else {
       this.swarm = swarmData;
     }
+
+    this.refreshIntervalRef = window.setInterval(() => {
+      this.refreshIntervalTime --;
+      if(this.refreshIntervalTime <= 0){
+        this.refreshIntervalTime = REFRESH_TIME_SECONDS;
+        this.refreshList();
+      }
+    }, 1000);
   }
 
+  ngOnDestroy(): void {
+    window.clearInterval(this.refreshIntervalRef);
+  }
 
 
 
@@ -142,7 +157,7 @@ export class SwarmComponent implements OnInit {
           }),
           timeout(5000),
           catchError(error => {
-            return this.swarm.find(axeOs => axeOs.IP == ipAddr);
+            return of(this.swarm.find(axeOs => axeOs.IP == ipAddr));
           })
         ),
         256 // Limit concurrency to avoid overload
