@@ -100,7 +100,9 @@
 
                         <h6>Input Voltage <span style="float: right;">{{info.voltage}} V</span></h6>
                         <p-progressBar [value]="(info.voltage / 5.5) * 100" [style]="{ height: '6px' }" >
-                            <ng-template pTemplate="content" let-value></ng-template>
+                            <ng-template pTemplate="content" let-value>
+                                test
+                            </ng-template>
                         </p-progressBar>
                         <span class="danger" *ngIf="info.voltage < 4.8">&nbsp; Danger: Low voltage</span>
                     </div>
@@ -157,16 +159,8 @@
                             High Temperature</span>
                     </div>
                     <div class="col-12">
-                        <h6>Fan Speed<span style="float: right;">{{info.fanspeed}}%</span></h6>
+                        <h6>Fan Speed<span style="float: right;">{{info.fanspeed}}%  ({{info.fanrpm}} RPM)</span></h6>
                         <p-progressBar [value]="info.fanspeed" [style]="{ height: '6px' }" >
-                            <ng-template pTemplate="content" let-value></ng-template>
-                        </p-progressBar>
-                    </div>
-                    <div class="col-12">
-
-
-                        <h6>Fan RPM <span style="float: right;">{{info.fanrpm}}RPM</span></h6>
-                        <p-progressBar [value]="(info.fanrpm / 8000) * 100" [style]="{ height: '6px' }" >
                             <ng-template pTemplate="content" let-value></ng-template>
                         </p-progressBar>
                     </div>
