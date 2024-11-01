@@ -101,7 +101,6 @@
                         <h6>Input Voltage <span style="float: right;">{{info.voltage}} V</span></h6>
                         <p-progressBar [value]="(info.voltage / 5.5) * 100" [style]="{ height: '6px' }" >
                             <ng-template pTemplate="content" let-value>
-                                test
                             </ng-template>
                         </p-progressBar>
                         <span class="danger" *ngIf="info.voltage < 4.8">&nbsp; Danger: Low voltage</span>
