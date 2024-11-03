@@ -1,8 +1,9 @@
-name: Build & Release Firmware
+name: Build & Release Firmware [Release]
+
 on:
-  push:
-    tags:
-      - '*'
+  release:
+    types: [released]
+
 jobs:
   build:
     runs-on: ubuntu-latest

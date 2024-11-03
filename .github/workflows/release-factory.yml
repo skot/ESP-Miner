@@ -1,8 +1,8 @@
-name: Build & Release Factory Images
+name: Build & Release Factory Images [Release]
+
 on:
-  push:
-    tags:
-      - '*'
+  release:
+    types: [released]
 
 jobs:
   build:
