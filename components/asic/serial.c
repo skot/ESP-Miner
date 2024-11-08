@@ -51,6 +51,8 @@ void SERIAL_set_baud(int baud)
 
 int SERIAL_send(uint8_t *data, int len, bool debug)
 {
+    int written = uart_write_bytes(UART_NUM_1, (const char *)data, len);
+    uart_wait_tx_done(UART_NUM_1, portMAX_DELAY);
     if (debug)
     {
         printf("tx: ");
@@ -58,7 +60,7 @@ int SERIAL_send(uint8_t *data, int len, bool debug)
         printf("\n");
     }
 
-    return uart_write_bytes(UART_NUM_1, (const char *)data, len);
+    return written;
 }
 
 /// @brief waits for a serial response from the device
