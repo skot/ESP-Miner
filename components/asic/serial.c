@@ -49,10 +49,10 @@ void SERIAL_set_baud(int baud)
     uart_set_baudrate(UART_NUM_1, baud);
 }
 
-int SERIAL_send(uint8_t *data, int len, bool debug)
+esp_err_t SERIAL_send(uint8_t *data, int len, bool debug)
 {
     int written = uart_write_bytes(UART_NUM_1, (const char *)data, len);
-    uart_wait_tx_done(UART_NUM_1, portMAX_DELAY);
+
     if (debug)
     {
         printf("tx: ");
@@ -60,7 +60,15 @@ int SERIAL_send(uint8_t *data, int len, bool debug)
         printf("\n");
     }
 
-    return written;
+    if (written == 0) {
+        return ESP_FAIL;
+    }
+
+    if (uart_wait_tx_done(UART_NUM_1, 1000 / portTICK_PERIOD_MS) != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
 }
 
 /// @brief waits for a serial response from the device
