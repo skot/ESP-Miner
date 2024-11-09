@@ -63,7 +63,7 @@ static task_result result;
 
 static float current_frequency = 56.25;
 
-static void _send_BM1368(uint8_t header, uint8_t * data, uint8_t data_len, bool debug)
+static void _send_BM1368(uint8_t header, uint8_t * data, uint8_t data_len, bool debug, bool wait)
 {
     packet_type_t packet_type = (header & TYPE_JOB) ? JOB_PACKET : CMD_PACKET;
     uint8_t total_length = (packet_type == JOB_PACKET) ? (data_len + 6) : (data_len + 5);
@@ -84,7 +84,7 @@ static void _send_BM1368(uint8_t header, uint8_t * data, uint8_t data_len, bool 
         buf[4 + data_len] = crc5(buf + 2, data_len + 2);
     }
 
-    SERIAL_send(buf, total_length, debug);
+    SERIAL_send(buf, total_length, debug, wait);
 
     free(buf);
 }
@@ -93,7 +93,7 @@ static void _send_simple(uint8_t * data, uint8_t total_length)
 {
     unsigned char * buf = malloc(total_length);
     memcpy(buf, data, total_length);
-    SERIAL_send(buf, total_length, BM1368_SERIALTX_DEBUG);
+    SERIAL_send(buf, total_length, BM1368_SERIALTX_DEBUG, true);
 
     free(buf);
 }
@@ -101,13 +101,13 @@ static void _send_simple(uint8_t * data, uint8_t total_length)
 static void _send_chain_inactive(void)
 {
     unsigned char read_address[2] = {0x00, 0x00};
-    _send_BM1368((TYPE_CMD | GROUP_ALL | CMD_INACTIVE), read_address, 2, BM1368_SERIALTX_DEBUG);
+    _send_BM1368((TYPE_CMD | GROUP_ALL | CMD_INACTIVE), read_address, 2, BM1368_SERIALTX_DEBUG, true);
 }
 
 static void _set_chip_address(uint8_t chipAddr)
 {
     unsigned char read_address[2] = {chipAddr, 0x00};
-    _send_BM1368((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, BM1368_SERIALTX_DEBUG);
+    _send_BM1368((TYPE_CMD | GROUP_SINGLE | CMD_SETADDRESS), read_address, 2, BM1368_SERIALTX_DEBUG, true);
 }
 
 void BM1368_set_version_mask(uint32_t version_mask) 
@@ -116,7 +116,7 @@ void BM1368_set_version_mask(uint32_t version_mask)
     uint8_t version_byte0 = (versions_to_roll >> 8);
     uint8_t version_byte1 = (versions_to_roll & 0xFF); 
     uint8_t version_cmd[] = {0x00, 0xA4, 0x90, 0x00, version_byte0, version_byte1};
-    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, version_cmd, 6, BM1368_SERIALTX_DEBUG);
+    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, version_cmd, 6, BM1368_SERIALTX_DEBUG, true);
 }
 
 static void _reset(void)
@@ -171,7 +171,7 @@ bool BM1368_send_hash_frequency(float target_freq) {
     freqbuf[4] = best_refdiv;
     freqbuf[5] = (((best_postdiv1 - 1) & 0xf) << 4) | ((best_postdiv2 - 1) & 0xf);
 
-    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, freqbuf, sizeof(freqbuf), BM1368_SERIALTX_DEBUG);
+    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, freqbuf, sizeof(freqbuf), BM1368_SERIALTX_DEBUG, true);
 
     ESP_LOGI(TAG, "Setting Frequency to %.2fMHz (%.2f)", target_freq, best_freq);
     current_frequency = target_freq;
@@ -212,7 +212,7 @@ bool BM1368_set_frequency(float target_freq) {
 }
 
 static int count_asic_chips(void) {
-    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_READ, (uint8_t[]){0x00, 0x00}, 2, false);
+    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_READ, (uint8_t[]){0x00, 0x00}, 2, false, true);
 
     int chip_counter = 0;
     while (true) {
@@ -270,7 +270,7 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
     };
 
     for (int i = 0; i < sizeof(init_cmds) / sizeof(init_cmds[0]); i++) {
-        _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, init_cmds[i], 6, false);
+        _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, init_cmds[i], 6, false, true);
     }
 
     uint8_t address_interval = (uint8_t) (256 / chip_counter);
@@ -288,7 +288,7 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
         };
 
         for (int j = 0; j < sizeof(chip_init_cmds) / sizeof(chip_init_cmds[0]); j++) {
-            _send_BM1368(TYPE_CMD | GROUP_SINGLE | CMD_WRITE, chip_init_cmds[j], 6, false);
+            _send_BM1368(TYPE_CMD | GROUP_SINGLE | CMD_WRITE, chip_init_cmds[j], 6, false, true);
         }
         vTaskDelay(pdMS_TO_TICKS(500));
     }
@@ -297,7 +297,7 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
 
     do_frequency_ramp_up((float)frequency);
 
-    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, (uint8_t[]){0x00, 0x10, 0x00, 0x00, 0x15, 0xa4}, 6, false);
+    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, (uint8_t[]){0x00, 0x10, 0x00, 0x00, 0x15, 0xa4}, 6, false, true);
     BM1368_set_version_mask(STRATUM_DEFAULT_VERSION_MASK);
 
     ESP_LOGI(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
@@ -307,7 +307,7 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
 int BM1368_set_default_baud(void)
 {
     unsigned char baudrate[9] = {0x00, MISC_CONTROL, 0x00, 0x00, 0b01111010, 0b00110001};
-    _send_BM1368((TYPE_CMD | GROUP_ALL | CMD_WRITE), baudrate, 6, BM1368_SERIALTX_DEBUG);
+    _send_BM1368((TYPE_CMD | GROUP_ALL | CMD_WRITE), baudrate, 6, BM1368_SERIALTX_DEBUG, true);
     return 115749;
 }
 
@@ -333,7 +333,7 @@ void BM1368_set_job_difficulty_mask(int difficulty)
 
     ESP_LOGI(TAG, "Setting job ASIC mask to %d", difficulty);
 
-    _send_BM1368((TYPE_CMD | GROUP_ALL | CMD_WRITE), job_difficulty_mask, 6, BM1368_SERIALTX_DEBUG);
+    _send_BM1368((TYPE_CMD | GROUP_ALL | CMD_WRITE), job_difficulty_mask, 6, BM1368_SERIALTX_DEBUG, true);
 }
 
 static uint8_t id = 0;
@@ -367,7 +367,7 @@ void BM1368_send_work(void * pvParameters, bm_job * next_bm_job)
     ESP_LOGI(TAG, "Send Job: %02X", job.job_id);
     #endif
 
-    _send_BM1368((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(BM1368_job), BM1368_DEBUG_WORK);
+    _send_BM1368((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(BM1368_job), BM1368_DEBUG_WORK, false);
 }
 
 asic_result * BM1368_receive_work(void)

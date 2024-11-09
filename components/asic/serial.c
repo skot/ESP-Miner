@@ -49,7 +49,7 @@ void SERIAL_set_baud(int baud)
     uart_set_baudrate(UART_NUM_1, baud);
 }
 
-esp_err_t SERIAL_send(uint8_t *data, int len, bool debug)
+esp_err_t SERIAL_send(uint8_t *data, int len, bool debug, bool wait)
 {
     int written = uart_write_bytes(UART_NUM_1, (const char *)data, len);
 
@@ -64,8 +64,10 @@ esp_err_t SERIAL_send(uint8_t *data, int len, bool debug)
         return ESP_FAIL;
     }
 
-    if (uart_wait_tx_done(UART_NUM_1, 1000 / portTICK_PERIOD_MS) != ESP_OK) {
-        return ESP_FAIL;
+    if (wait) {
+        if (uart_wait_tx_done(UART_NUM_1, 1000 / portTICK_PERIOD_MS) != ESP_OK) {
+            return ESP_FAIL;
+        }
     }
 
     return ESP_OK;
