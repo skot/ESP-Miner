@@ -6,6 +6,7 @@
 #include "esp_lcd_panel_ops.h"
 #include "esp_err.h"
 #include "esp_log.h"
+#include "esp_check.h"
 #include "lvgl.h"
 #include "esp_lvgl_port.h"
 #include "nvs_config.h"
@@ -35,7 +36,7 @@ esp_err_t display_init(void)
     uint8_t invert_screen = nvs_config_get_u16(NVS_CONFIG_INVERT_SCREEN, 0);
 
     i2c_master_bus_handle_t i2c_master_bus_handle;
-    ESP_ERROR_CHECK(i2c_bitaxe_get_master_bus_handle(&i2c_master_bus_handle));
+    ESP_RETURN_ON_ERROR(i2c_bitaxe_get_master_bus_handle(&i2c_master_bus_handle), TAG, "Failed to get i2c master bus handle");
 
     ESP_LOGI(TAG, "Install panel IO");
     esp_lcd_panel_io_handle_t io_handle = NULL;
@@ -48,7 +49,7 @@ esp_err_t display_init(void)
         .dc_bit_offset = 6                     
     };
     
-    ESP_ERROR_CHECK(esp_lcd_new_panel_io_i2c(i2c_master_bus_handle, &io_config, &io_handle));
+    ESP_RETURN_ON_ERROR(esp_lcd_new_panel_io_i2c(i2c_master_bus_handle, &io_config, &io_handle), TAG, "Failed to initialise i2c panel bus");
 
     ESP_LOGI(TAG, "Install SSD1306 panel driver");
     esp_lcd_panel_handle_t panel_handle = NULL;
@@ -63,18 +64,17 @@ esp_err_t display_init(void)
     };
     panel_config.vendor_config = &ssd1306_config;
 
-    ESP_ERROR_CHECK(esp_lcd_new_panel_ssd1306(io_handle, &panel_config, &panel_handle));
-
-    ESP_ERROR_CHECK(esp_lcd_panel_reset(panel_handle));
-    ESP_ERROR_CHECK(esp_lcd_panel_init(panel_handle));
-    // ESP_ERROR_CHECK(esp_lcd_panel_mirror(panel_handle, false, false));
-    ESP_ERROR_CHECK(esp_lcd_panel_invert_color(panel_handle, invert_screen));
+    ESP_RETURN_ON_ERROR(esp_lcd_new_panel_ssd1306(io_handle, &panel_config, &panel_handle), TAG, "No display found");
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_reset(panel_handle), TAG, "Panel reset failed");
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_init(panel_handle), TAG, "Panel init failed");
+    // ESP_RETURN_ON_ERROR(esp_lcd_panel_mirror(panel_handle, false, false), TAG, "Panel mirror failed");
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(panel_handle, invert_screen), TAG, "Panel invert failed");
     
-    ESP_ERROR_CHECK(esp_lcd_panel_disp_on_off(panel_handle, true));
+    ESP_RETURN_ON_ERROR(esp_lcd_panel_disp_on_off(panel_handle, true), TAG, "Panel display on failed");
 
     ESP_LOGI(TAG, "Initialize LVGL");
     const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
-    lvgl_port_init(&lvgl_cfg);
+    ESP_RETURN_ON_ERROR(lvgl_port_init(&lvgl_cfg), TAG, "LVGL init failed");
 
     const lvgl_port_display_cfg_t disp_cfg = {
         .io_handle = io_handle,

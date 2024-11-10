@@ -179,8 +179,10 @@ void SYSTEM_task(void * pvParameters)
         vTaskDelay(1000 / portTICK_PERIOD_MS);
     }
     
-    display_show_logo();
-    vTaskDelay(5000 / portTICK_PERIOD_MS);
+    if (display_active()) {
+        display_show_logo();
+        vTaskDelay(5000 / portTICK_PERIOD_MS);
+    }
 
     int current_screen = 0;
     TickType_t last_update_time = xTaskGetTickCount();
