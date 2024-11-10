@@ -7,6 +7,7 @@ import { SettingsComponent } from './components/settings/settings.component';
 import { NetworkComponent } from './components/network/network.component';
 import { SwarmComponent } from './components/swarm/swarm.component';
 import { AppLayoutComponent } from './layout/app.layout.component';
+import { GenesisBlockComponent } from './components/genesis-block/genesis-block.component';
 
 const routes: Routes = [
   {
@@ -32,6 +33,10 @@ const routes: Routes = [
       {
         path: 'swarm',
         component: SwarmComponent
+      },
+      {
+        path: 'genesis-block',
+        component: GenesisBlockComponent
       }
     ]
   },

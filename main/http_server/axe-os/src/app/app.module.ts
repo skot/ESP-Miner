@@ -18,6 +18,7 @@ import { LogsComponent } from './components/logs/logs.component';
 import { NetworkComponent } from './components/network/network.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { SwarmComponent } from './components/swarm/swarm.component';
+import { GenesisBlockComponent } from './components/genesis-block/genesis-block.component';
 import { AppLayoutModule } from './layout/app.layout.module';
 import { ANSIPipe } from './pipes/ansi.pipe';
 import { DateAgoPipe } from './pipes/date-ago.pipe';
@@ -33,7 +34,8 @@ const components = [
   LoadingComponent,
   NetworkComponent,
   SettingsComponent,
-  LogsComponent
+  LogsComponent,
+  GenesisBlockComponent
 ];
 
 @NgModule({

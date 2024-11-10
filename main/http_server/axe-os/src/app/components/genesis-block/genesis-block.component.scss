@@ -1,0 +1,89 @@
+:host {
+    display: block;
+    background-color: #000;
+    color: var(--primary-color);
+    font-family: 'Courier New', monospace;
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 0 20px rgba(255, 0, 0, 0.2);
+    position: relative;
+    overflow: hidden;
+  }
+  
+  .genesis-container {
+    position: relative;
+    min-height: 350px;
+  
+    &::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--primary-color), transparent);
+      animation: scan 9.5s linear forwards;
+    }
+  }
+  
+  .data-line {
+    margin: 4px 0;
+    opacity: 0;
+    transform: translateX(-20px);
+    animation: fadeIn 0.5s ease forwards;
+  
+    &::before {
+      content: '>';
+      margin-right: 10px;
+      color: var(--primary-color);
+    }
+  }
+  
+  @keyframes scan {
+    0% {
+      transform: translateY(0);
+      opacity: 1;
+    }
+    99% {
+      opacity: 1;
+    }
+    100% {
+      transform: translateY(310px);
+      opacity: 0;
+    }
+  }
+
+  .hex-block {
+    font-family: monospace;
+    white-space: pre;
+    margin-top: 20px;
+
+    pre {
+      font-family: monospace;
+      transform: translateX(-20px);
+      margin: 0;
+      line-height: 1.2;
+
+      &::before {
+        content: '>';
+        margin-right: 10px;
+        color: var(--primary-color);
+      }
+    }
+  }
+
+  .genesis-message {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 1.5em;
+    opacity: 0;
+    transform: translateY(20px);
+    transition: all 0.8s ease-out;
+    // color: #f7931a; /* Bitcoin orange */
+    text-shadow: 0 0 10px rgba(255, 0, 0, 0.2);
+  }
+
+  .genesis-message.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }

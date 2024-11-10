@@ -1,0 +1,9 @@
+<div class="genesis-container">
+  <div class="hex-block">
+    <pre *ngFor="let line of displayedHexData">{{ line }}</pre>
+  </div>
+  
+  <div class="genesis-message" [class.visible]="currentHexIndex === rawHexData.length + 1">
+    Genesis Block Decoded - Bitcoin's Beginning
+  </div>
+</div>
