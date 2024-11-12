@@ -181,11 +181,9 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
                 message->response_success = true;
             } else {
                 message->response_success = false;
-                if (!cJSON_IsNull(reject_reason_json)) {
-                    if (cJSON_IsString(reject_reason_json)) {
-                        message->error_str = strdup(cJSON_GetStringValue(reject_reason_json));
-                    }                
-                }
+                if (cJSON_IsString(reject_reason_json)) {
+                    message->error_str = strdup(cJSON_GetStringValue(reject_reason_json));
+                }                
             }
         
         //if the id is STRATUM_ID_SUBSCRIBE parse it
