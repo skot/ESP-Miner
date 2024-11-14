@@ -196,6 +196,11 @@ static void do_frequency_ramp_up(float target_frequency) {
     float current = 56.25;
     float step = 6.25;
 
+    if (target_frequency == 0) {
+        ESP_LOGI(TAG, "Skipping frequency ramp");
+        return;
+    }
+
     ESP_LOGI(TAG, "Ramping up frequency from %.2f MHz to %.2f MHz with step %.2f MHz", current, target_frequency, step);
 
     BM1370_send_hash_frequency(-1, current, 0.001);

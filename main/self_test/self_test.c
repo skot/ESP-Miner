@@ -18,7 +18,11 @@
 #define POWER_CONSUMPTION_TARGET_GAMMA 11       //watts
 #define POWER_CONSUMPTION_MARGIN 3              //+/- watts
 
+#define TEMP_CAL_LIMIT 1200
+
 static const char * TAG = "self_test";
+
+static void run_temp_cal(void);
 
 bool should_test(GlobalState * GLOBAL_STATE) {
     bool is_max = GLOBAL_STATE->asic_model == ASIC_BM1397;
@@ -175,7 +179,7 @@ void self_test(void * pvParameters)
     }
 
     uint8_t result = VCORE_init(GLOBAL_STATE);
-    VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
+    VCORE_set_voltage(1150 / 1000.0, GLOBAL_STATE);
 
     // VCore regulator testing
     switch (GLOBAL_STATE->device_model) {
@@ -222,8 +226,15 @@ void self_test(void * pvParameters)
 
 
     SERIAL_init();
-    uint8_t chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE->asic_count);
+    uint8_t chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(0, GLOBAL_STATE->asic_count);
     ESP_LOGI(TAG, "%u chips detected, %u expected", chips_detected, GLOBAL_STATE->asic_count);
+
+    //turn off vcore
+    VCORE_set_voltage(0, GLOBAL_STATE);
+    //delay 1 second to stabilize
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    run_temp_cal();
+    
 
     int baud = (*GLOBAL_STATE->ASIC_functions.set_max_baud_fn)();
     vTaskDelay(10 / portTICK_PERIOD_MS);
@@ -371,4 +382,16 @@ void self_test(void * pvParameters)
         }
         vTaskDelay(500 / portTICK_PERIOD_MS);
     }
+}
+
+static void run_temp_cal(void) {
+    float external = 0, internal = 0;
+
+    while (1) {
+        external = EMC2101_get_external_temp();
+        internal = EMC2101_get_internal_temp();
+        ESP_LOGI(TAG, "ASIC: %.3f, AIR: %.3f [%.3f]", external, internal, external - internal);
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+    }
+
 }

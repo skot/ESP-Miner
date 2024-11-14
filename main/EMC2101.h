@@ -3,6 +3,9 @@
 
 #include "i2c_bitaxe.h"
 
+#define EMC2101_DEFAULT_IDEALITY 0x12 ///< Default ideality factor
+#define EMC2101_DEFAULT_BETA 0x00     ///< Default beta compensation
+
 #define EMC2101_I2CADDR_DEFAULT 0x4C ///< EMC2101 default i2c address
 #define EMC2101_CHIP_ID 0x16         ///< EMC2101 default device id from part id
 #define EMC2101_ALT_CHIP_ID 0x28     ///< EMC2101 alternate device id from part id
@@ -18,6 +21,8 @@
 #define EMC2101_REG_CONFIG 0x03      ///< configuration register
 #define EMC2101_REG_DATA_RATE 0x04   ///< Data rate config
 #define EMC2101_TEMP_FORCE 0x0C      ///< Temp force setting for LUT testing
+#define EMC2101_IDEALITY_FACTOR 0x17      ///< Beta Compensation Register
+#define EMC2101_BETA_COMPENSATION 0x18      ///< Beta Compensation Register
 #define EMC2101_TACH_LSB 0x46        ///< Tach RPM data low byte
 #define EMC2101_TACH_MSB 0x47        ///< Tach RPM data high byte
 #define EMC2101_TACH_LIMIT_LSB 0x48  ///< Tach low-speed setting low byte. INVERSE OF THE SPEED
