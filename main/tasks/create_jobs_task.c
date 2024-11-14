@@ -47,7 +47,7 @@ void create_jobs_task(void *pvParameters)
                 extranonce_2++;
 
                 if (extranonce_2 % TASK_YIELD_THRESHOLD == 0) {
-                    vTaskDelay(1);  // Minimal delay, just to yield
+                    taskYIELD();
                 }
                 if (extranonce_2 >= MAX_EXTRANONCE_2) {
                     extranonce_2 = 0; // Reset to 0 if we've reached the maximum
