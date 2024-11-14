@@ -100,7 +100,7 @@ static void _send_BM1370(uint8_t header, uint8_t * data, uint8_t data_len, bool 
     }
 
     // send serial data
-    if (SERIAL_send(buf, total_length, debug) == 0) {
+    if (SERIAL_send(buf, total_length, debug) == ESP_FAIL) {
         ESP_LOGE(TAG, "Failed to send data to BM1370");
     }
 
