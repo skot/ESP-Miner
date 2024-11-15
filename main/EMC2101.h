@@ -3,20 +3,35 @@
 
 #include "i2c_bitaxe.h"
 
-#define EMC2101_CPU_BETA_11         0x00
-#define EMC2101_CPU_BETA_18         0x01
-#define EMC2101_CPU_BETA_25         0x02
-#define EMC2101_CPU_BETA_33         0x03
-#define EMC2101_CPU_BETA_43         0x04
-#define EMC2101_CPU_BETA_100        0x05
-#define EMC2101_CPU_BETA_233        0x06
-#define EMC2101_CPU_BETA_DISABLED   0x07
-#define EMC2101_CPU_BETA_AUTO       0x08
+#define EMC2101_BETA_11         0x00
+#define EMC2101_BETA_18         0x01
+#define EMC2101_BETA_25         0x02
+#define EMC2101_BETA_33         0x03
+#define EMC2101_BETA_43         0x04
+#define EMC2101_BETA_100        0x05
+#define EMC2101_BETA_233        0x06
+#define EMC2101_BETA_DISABLED   0x07
+#define EMC2101_BETA_AUTO       0x08
+
+#define EMC2101_FILTER_DISABLED 0x00
+#define EMC2101_FILTER_1        0x01
+#define EMC2101_FILTER_2        0x02
+
+#define EMC2101_DATARATE_1_16_HZ 0x00
+#define EMC2101_DATARATE_1_8_HZ  0x01
+#define EMC2101_DATARATE_1_4_HZ  0x02
+#define EMC2101_DATARATE_1_2_HZ  0x03
+#define EMC2101_DATARATE_1_HZ    0x04
+#define EMC2101_DATARATE_2_HZ    0x05
+#define EMC2101_DATARATE_4_HZ    0x06
+#define EMC2101_DATARATE_8_HZ    0x07
+#define EMC2101_DATARATE_16_HZ   0x08 //default
+#define EMC2101_DATARATE_32_HZ   0x09
 
 #define EMC2101_DEFAULT_IDEALITY 0x12                   ///< Default ideality factor [1.008 -> 0x12]
-#define EMC2101_DEFAULT_BETA EMC2101_CPU_BETA_AUTO      ///< Default beta compensation
-#define EMC2101_DEFAULT_FILTER 0x06                     ///< Default temp filter setting
-#define EMC2101_DEFAULT_DATARATE 0x09                   ///< Default temp conversion rate
+#define EMC2101_DEFAULT_BETA EMC2101_BETA_AUTO          ///< Default beta compensation
+#define EMC2101_DEFAULT_FILTER EMC2101_FILTER_DISABLED  ///< Default temp filter setting
+#define EMC2101_DEFAULT_DATARATE EMC2101_DATARATE_16_HZ ///< Default temp conversion rate
 
 #define EMC2101_I2CADDR_DEFAULT 0x4C ///< EMC2101 default i2c address
 #define EMC2101_CHIP_ID 0x16         ///< EMC2101 default device id from part id
