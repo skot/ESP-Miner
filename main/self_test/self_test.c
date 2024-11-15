@@ -238,7 +238,7 @@ void self_test(void * pvParameters)
     // vTaskDelay(1000 / portTICK_PERIOD_MS);
 
 
-    //run_temp_cal();
+    run_temp_cal();
     
 
     int baud = (*GLOBAL_STATE->ASIC_functions.set_max_baud_fn)();
