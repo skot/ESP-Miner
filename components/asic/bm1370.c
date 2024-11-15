@@ -242,7 +242,7 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     _send_simple(init5, 11);
 
     //Misc Control
-    //**TX: 55 AA 51 09 00 18 F0 00 C1 00 04 //command all chips, write chip address 00, register 18, data F0 00 C1 00 - Misc Control
+    //TX: 55 AA 51 09 00 18 F0 00 C1 00 04 //command all chips, write chip address 00, register 18, data F0 00 C1 00 - Misc Control
     unsigned char init6[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x18, 0xF0, 0x00, 0xC1, 0x00, 0x04}; //from S21Pro dump
     //unsigned char init6[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x18, 0xFF, 0x0F, 0xC1, 0x00, 0x00};
     _send_simple(init6, 11);
@@ -265,7 +265,7 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     _send_simple(init9, 11);
 
     //Core Register Control
-    //**TX: 55 AA 51 09 00 3C 80 00 80 0C 11  //command all chips, write chip address 00, register 3C, data 80 00 80 0C - Core Register Control
+    //TX: 55 AA 51 09 00 3C 80 00 80 0C 11  //command all chips, write chip address 00, register 3C, data 80 00 80 0C - Core Register Control
     unsigned char init10[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x3C, 0x80, 0x00, 0x80, 0x0C, 0x11}; //from S21Pro dump
     //unsigned char init10[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x3C, 0x80, 0x00, 0x80, 0x18, 0x1F};
     _send_simple(init10, 11);
@@ -304,17 +304,14 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     }
 
     //Some misc settings?
-    // TX: 55 AA 51 09 00 B9 00 00 44 80 0D    //command all chips, write chip address 00, register B9, data 00 00 44 80
-    unsigned char init14[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0xB9, 0x00, 0x00, 0x44, 0x80, 0x0D};
-    _send_simple(init14, 11);
-    // TX: 55 AA 51 09 00 [54 00 00 00 02] 18    //command all chips, write chip address 00, register 54, data 00 00 00 02 - Analog Mux Control - S21 does this earlier on
-    _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_WRITE), (uint8_t[]){0x54, 0x00, 0x00, 0x00, 0x02}, 6, BM1370_SERIALTX_DEBUG);
-    // TX: 55 AA 51 09 00 B9 00 00 44 80 0D    //command all chips, write chip address 00, register B9, data 00 00 44 80 -- duplicate of first command in series
-    unsigned char init16[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0xB9, 0x00, 0x00, 0x44, 0x80, 0x0D};
-    _send_simple(init16, 11);
-    // TX: 55 AA 51 09 00 3C 80 00 8D EE 1B    //command all chips, write chip address 00, register 3C, data 80 00 8D EE
-    unsigned char init17[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x3C, 0x80, 0x00, 0x8D, 0xEE, 0x1B};
-    _send_simple(init17, 11);
+    // TX: 55 AA 51 09 [00 B9 00 00 44 80] 0D    //command all chips, write chip address 00, register B9, data 00 00 44 80
+    _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_WRITE), (uint8_t[]){0x00, 0xB9, 0x00, 0x00, 0x44, 0x80}, 6, BM1370_SERIALTX_DEBUG);
+    // TX: 55 AA 51 09 [00 54 00 00 00 02] 18    //command all chips, write chip address 00, register 54, data 00 00 00 02 - Analog Mux Control - S21 does this earlier on
+    _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_WRITE), (uint8_t[]){0x00, 0x54, 0x00, 0x00, 0x00, 0x02}, 6, BM1370_SERIALTX_DEBUG);
+    // TX: 55 AA 51 09 [00 B9 00 00 44 80] 0D    //command all chips, write chip address 00, register B9, data 00 00 44 80 -- duplicate of first command in series
+    _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_WRITE), (uint8_t[]){0x00, 0xB9, 0x00, 0x00, 0x44, 0x80}, 6, BM1370_SERIALTX_DEBUG);
+    // TX: 55 AA 51 09 [00 3C 80 00 8D EE] 1B    //command all chips, write chip address 00, register 3C, data 80 00 8D EE
+    _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_WRITE), (uint8_t[]){0x00, 0x3C, 0x80, 0x00, 0x8D, 0xEE}, 6, BM1370_SERIALTX_DEBUG);
 
     do_frequency_ramp_up(frequency);
 
