@@ -39,6 +39,7 @@ void ASIC_task(void *pvParameters)
         if (next_bm_job->pool_diff != GLOBAL_STATE->stratum_difficulty)
         {
             ESP_LOGI(TAG, "New pool difficulty %lu", next_bm_job->pool_diff);
+            (*GLOBAL_STATE->ASIC_functions.set_difficulty_mask_fn)(next_bm_job->pool_diff);
             GLOBAL_STATE->stratum_difficulty = next_bm_job->pool_diff;
         }
 
