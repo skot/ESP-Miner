@@ -232,13 +232,12 @@ void self_test(void * pvParameters)
     chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE->asic_count);
     ESP_LOGI(TAG, "%u chips detected, %u expected", chips_detected, GLOBAL_STATE->asic_count);
 
+    //The following is used for temp testing
     // //turn off vcore
     // VCORE_set_voltage(0, GLOBAL_STATE);
     // //delay 1 second to stabilize
     // vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-
-    run_temp_cal();
+    // run_temp_cal();
     
 
     int baud = (*GLOBAL_STATE->ASIC_functions.set_max_baud_fn)();
@@ -389,14 +388,14 @@ void self_test(void * pvParameters)
     }
 }
 
-static void run_temp_cal(void) {
-    float external = 0, internal = 0;
+// static void run_temp_cal(void) {
+//     float external = 0, internal = 0;
 
-    while (1) {
-        external = EMC2101_get_external_temp();
-        internal = EMC2101_get_internal_temp();
-        ESP_LOGI(TAG, "ASIC: %.3f, AIR: %.3f [%.3f]", external, internal, external - internal);
-        vTaskDelay(500 / portTICK_PERIOD_MS);
-    }
+//     while (1) {
+//         external = EMC2101_get_external_temp();
+//         internal = EMC2101_get_internal_temp();
+//         ESP_LOGI(TAG, "ASIC: %.3f, AIR: %.3f [%.3f]", external, internal, external - internal);
+//         vTaskDelay(500 / portTICK_PERIOD_MS);
+//     }
 
-}
+// }
