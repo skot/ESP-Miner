@@ -224,16 +224,21 @@ void self_test(void * pvParameters)
         default:
     }
 
+    uint8_t chips_detected = 0;
+
 
     SERIAL_init();
-    uint8_t chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(0, GLOBAL_STATE->asic_count);
+    //chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(0, GLOBAL_STATE->asic_count);
+    chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE->asic_count);
     ESP_LOGI(TAG, "%u chips detected, %u expected", chips_detected, GLOBAL_STATE->asic_count);
 
-    //turn off vcore
-    VCORE_set_voltage(0, GLOBAL_STATE);
-    //delay 1 second to stabilize
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-    run_temp_cal();
+    // //turn off vcore
+    // VCORE_set_voltage(0, GLOBAL_STATE);
+    // //delay 1 second to stabilize
+    // vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+
+    //run_temp_cal();
     
 
     int baud = (*GLOBAL_STATE->ASIC_functions.set_max_baud_fn)();
