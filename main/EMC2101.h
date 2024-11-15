@@ -30,7 +30,7 @@
 
 #define EMC2101_DEFAULT_IDEALITY 0x12                   ///< Default ideality factor [1.008 -> 0x12]
 #define EMC2101_DEFAULT_BETA EMC2101_BETA_AUTO          ///< Default beta compensation
-#define EMC2101_DEFAULT_FILTER EMC2101_FILTER_DISABLED  ///< Default temp filter setting
+#define EMC2101_DEFAULT_FILTER EMC2101_FILTER_DISABLED         ///< Default temp filter setting
 #define EMC2101_DEFAULT_DATARATE EMC2101_DATARATE_16_HZ ///< Default temp conversion rate
 
 #define EMC2101_I2CADDR_DEFAULT 0x4C ///< EMC2101 default i2c address
