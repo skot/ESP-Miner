@@ -77,8 +77,8 @@
 #define EMC2101_IDEALITY_1_0553	0x36
 #define EMC2101_IDEALITY_1_0566	0x37
 
-#define EMC2101_DEFAULT_IDEALITY EMC2101_IDEALITY_1_0566    ///< Default ideality factor
-#define EMC2101_DEFAULT_BETA EMC2101_BETA_AUTO              ///< Default beta compensation
+#define EMC2101_DEFAULT_IDEALITY EMC2101_IDEALITY_1_0319    ///< Default ideality factor
+#define EMC2101_DEFAULT_BETA EMC2101_BETA_11              ///< Default beta compensation
 #define EMC2101_DEFAULT_FILTER EMC2101_FILTER_1      ///< Default temp filter setting
 #define EMC2101_DEFAULT_DATARATE EMC2101_DATARATE_32_HZ     ///< Default temp conversion rate
 
