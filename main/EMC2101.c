@@ -29,6 +29,18 @@ esp_err_t EMC2101_init(bool invertPolarity) {
         ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_FAN_CONFIG, 0b00100011));
     }
 
+    //set Ideality Factor
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_IDEALITY_FACTOR, EMC2101_DEFAULT_IDEALITY));
+
+    //set Beta Compensation
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_BETA_COMPENSATION, EMC2101_DEFAULT_BETA));
+
+    //set filtering
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_TEMP_FILTER, EMC2101_DEFAULT_FILTER));
+
+    //set conversion rate
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_REG_DATA_RATE, EMC2101_DEFAULT_DATARATE));
+
     return ESP_OK;
 
 }
@@ -86,8 +98,10 @@ float EMC2101_get_external_temp(void)
 
     // Greater than 200C is probably an erroneous reading...
     if (result > 200){
-        return EMC2101_get_internal_temp();
+        ESP_LOGE(TAG, "EMC2101 Invalid result: %04X", reading);
+        result = 0;
     }
+
     return result;
 }
 
