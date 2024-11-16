@@ -29,19 +29,27 @@ esp_err_t EMC2101_init(bool invertPolarity) {
         ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_FAN_CONFIG, 0b00100011));
     }
 
-    //set Ideality Factor
-    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_IDEALITY_FACTOR, EMC2101_DEFAULT_IDEALITY));
 
-    //set Beta Compensation
-    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_BETA_COMPENSATION, EMC2101_DEFAULT_BETA));
 
-    //set filtering
-    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_TEMP_FILTER, EMC2101_DEFAULT_FILTER));
+    // We're using default filtering and conversion, no need to set them again.
+    // //set filtering
+    // ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_TEMP_FILTER, EMC2101_DEFAULT_FILTER));
 
-    //set conversion rate
-    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_REG_DATA_RATE, EMC2101_DEFAULT_DATARATE));
+    // //set conversion rate
+    // ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_REG_DATA_RATE, EMC2101_DEFAULT_DATARATE));
 
     return ESP_OK;
+
+}
+
+void EMC2101_set_ideality_factor(uint8_t ideality){
+    //set Ideality Factor
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_IDEALITY_FACTOR, ideality));
+}
+
+void EMC2101_set_beta_compensation(uint8_t beta){
+    //set Beta Compensation
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(emc2101_dev_handle, EMC2101_BETA_COMPENSATION, beta));
 
 }
 

@@ -11,9 +11,9 @@
 #define EMC2101_BETA_100        0x05
 #define EMC2101_BETA_233        0x06
 #define EMC2101_BETA_DISABLED   0x07
-#define EMC2101_BETA_AUTO       0x08
+#define EMC2101_BETA_AUTO       0x08 //default
 
-#define EMC2101_FILTER_DISABLED 0x00
+#define EMC2101_FILTER_DISABLED 0x00 //default
 #define EMC2101_FILTER_1        0x01
 #define EMC2101_FILTER_2        0x02
 
@@ -77,11 +77,6 @@
 #define EMC2101_IDEALITY_1_0553	0x36
 #define EMC2101_IDEALITY_1_0566	0x37
 
-#define EMC2101_DEFAULT_IDEALITY EMC2101_IDEALITY_1_0319    ///< Default ideality factor
-#define EMC2101_DEFAULT_BETA EMC2101_BETA_11                ///< Default beta compensation
-#define EMC2101_DEFAULT_FILTER EMC2101_FILTER_1             ///< Default temp filter setting
-#define EMC2101_DEFAULT_DATARATE EMC2101_DATARATE_32_HZ     ///< Default temp conversion rate
-
 #define EMC2101_I2CADDR_DEFAULT 0x4C ///< EMC2101 default i2c address
 #define EMC2101_CHIP_ID 0x16         ///< EMC2101 default device id from part id
 #define EMC2101_ALT_CHIP_ID 0x28     ///< EMC2101 alternate device id from part id
@@ -112,7 +107,6 @@
 
 #define EMC2101_LUT_START 0x50 ///< The first temp threshold register
 
-#define EMC2101_TEMP_FILTER 0xBF ///< The external temperature sensor filtering behavior
 #define EMC2101_REG_PARTID 0xFD  ///< 0x16
 #define EMC2101_REG_MFGID 0xFE   ///< 0xFF16
 
@@ -172,4 +166,6 @@ uint16_t EMC2101_get_fan_speed(void);
 esp_err_t EMC2101_init(bool);
 float EMC2101_get_external_temp(void);
 uint8_t EMC2101_get_internal_temp(void);
+void EMC2101_set_ideality_factor(uint8_t);
+void EMC2101_set_beta_compensation(uint8_t);
 #endif /* EMC2101_H_ */
