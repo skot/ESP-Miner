@@ -84,23 +84,27 @@ float EMC2101_get_external_temp(void)
     ESP_ERROR_CHECK(i2c_bitaxe_register_read(emc2101_dev_handle, EMC2101_EXTERNAL_TEMP_MSB, &temp_msb, 1));
     ESP_ERROR_CHECK(i2c_bitaxe_register_read(emc2101_dev_handle, EMC2101_EXTERNAL_TEMP_LSB, &temp_lsb, 1));
     
-    reading = temp_lsb | (temp_msb << 8);
-    reading >>= 5;
+    // Combine MSB and LSB, and then right shift to get 11 bits
+    reading = (temp_msb << 8) | temp_lsb;
+    reading >>= 5;  // Now, `reading` contains an 11-bit signed value
 
-    if (reading == EMC2101_TEMP_FAULT_OPEN_CIRCUIT) {
-        ESP_LOGE(TAG, "EMC2101 TEMP_FAULT_OPEN_CIRCUIT: %04X", reading);
-    }
-    if (reading == EMC2101_TEMP_FAULT_SHORT) {
-        ESP_LOGE(TAG, "EMC2101 TEMP_FAULT_SHORT: %04X", reading);
+    // Cast `reading` to a signed 16-bit integer
+    int16_t signed_reading = (int16_t)reading;
+
+    // If the 11th bit (sign bit in 11-bit data) is set, extend the sign
+    if (signed_reading & 0x0400) {
+        signed_reading |= 0xF800;  // Set upper bits to extend the sign
     }
 
-    float result = (float) reading / 8.0;
-
-    // Greater than 200C is probably an erroneous reading...
-    if (result > 200){
-        ESP_LOGE(TAG, "EMC2101 Invalid result: %04X", reading);
-        result = 0;
+    if (signed_reading == EMC2101_TEMP_FAULT_OPEN_CIRCUIT) {
+        ESP_LOGE(TAG, "EMC2101 TEMP_FAULT_OPEN_CIRCUIT: %04X", signed_reading);
     }
+    if (signed_reading == EMC2101_TEMP_FAULT_SHORT) {
+        ESP_LOGE(TAG, "EMC2101 TEMP_FAULT_SHORT: %04X", signed_reading);
+    }
+
+    // Convert the signed reading to temperature in Celsius
+    float result = (float)signed_reading / 8.0;
 
     return result;
 }
