@@ -310,6 +310,7 @@ void self_test(void * pvParameters)
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
+            break;
         case DEVICE_SUPRA:
             if(hash_rate < 500){
                 display_msg("HASHRATE:FAIL", GLOBAL_STATE);
