@@ -71,7 +71,18 @@
                 <td>{{axe.uptimeSeconds | dateAgo}}</td>
                 <td>{{axe.sharesAccepted | number: '1.0-0'}}</td>
                 <td>{{axe.power | number: '1.1-1'}} <small>W</small> </td>
-                <td [ngClass]="{'text-orange-500': axe.temp > 68}">{{axe.temp | number: '1.0-1'}}°<small>C</small></td>
+                <td>
+                    <div [ngClass]="{'text-orange-500': axe.temp > 68}">
+                        {{axe.temp | number: '1.0-1'}}°<small>C</small>
+                    </div>
+                    <div class="text-xs w-min" 
+                         [ngClass]="{'text-orange-500': axe.vrTemp > 90}" 
+                         *ngIf="axe.vrTemp"
+                         pTooltip="Voltage Regulator Temperature"
+                         tooltipPosition="top">
+                        {{axe.vrTemp | number: '1.0-1'}}°C
+                    </div>
+                </td>
                 <td>{{axe.bestDiff}}</td>
                 <td>{{axe.version}}</td>
              <td><p-button icon="pi pi-pencil" pp-button (click)="edit(axe)"></p-button></td>
