@@ -65,7 +65,7 @@
             <tr>
                 <td>
                     <a class="text-primary" [href]="'http://'+axe.IP" target="_blank">{{axe.IP}}</a>
-                    <div class="text-xs">{{axe.hostname}}</div>
+                    <div class="text-sm">{{axe.hostname}}</div>
                 </td>
                 <td>{{axe.hashRate * 1000000000 | hashSuffix}}</td>
                 <td>{{axe.uptimeSeconds | dateAgo}}</td>
@@ -75,15 +75,22 @@
                     <div [ngClass]="{'text-orange-500': axe.temp > 68}">
                         {{axe.temp | number: '1.0-1'}}°<small>C</small>
                     </div>
-                    <div class="text-xs w-min" 
+                    <div class="text-sm w-min" 
                          [ngClass]="{'text-orange-500': axe.vrTemp > 90}" 
                          *ngIf="axe.vrTemp"
                          pTooltip="Voltage Regulator Temperature"
                          tooltipPosition="top">
-                        {{axe.vrTemp | number: '1.0-1'}}°C
+                        {{axe.vrTemp | number: '1.0-1'}}°<small>C</small>
                     </div>
                 </td>
-                <td>{{axe.bestDiff}}</td>
+                <td>
+                    <div>{{axe.bestDiff}}</div>
+                    <div class="text-sm w-min" 
+                         pTooltip="Best Session Diff"
+                         tooltipPosition="top">
+                        {{axe.bestSessionDiff}}
+                    </div>
+                </td>
                 <td>{{axe.version}}</td>
              <td><p-button icon="pi pi-pencil" pp-button (click)="edit(axe)"></p-button></td>
                 <td><p-button icon="pi pi-sync" pp-button severity="danger" (click)="restart(axe)"></p-button></td>
