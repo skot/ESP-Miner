@@ -14,13 +14,27 @@
 
     </form>
 </div>
-<div class="flex gap-3 justify-content-between">
+<div class="flex flex-column sm:flex-row gap-4 justify-content-between">
     <div class="flex gap-1 sm:gap-3 text-sm md:text-base">
         <button pButton (click)="scanNetwork()" [disabled]="scanning">{{scanning ? 'Scanning...' : 'Automatic Scan'}}</button>
         <button pButton severity="secondary" (click)="refreshList()" [disabled]="scanning || isRefreshing">
             {{isRefreshing ? 'Refreshing...' : 'Refresh List (' + refreshIntervalTime + ')'}}
         </button>
     </div>
+    <div class="flex align-items-center gap-2">
+        <label for="refresh-interval" class="text-sm md:text-base">Refresh Interval:</label>
+        <p-slider id="refresh-interval" class="pl-2 pr-2"
+                 [min]="5" 
+                 [max]="30" 
+                 [(ngModel)]="refreshTimeSet" 
+                 [style]="{'width': '150px'}"
+                 [formControl]="refreshIntervalControl">
+        </p-slider>
+        <span class="text-sm md:text-base">{{refreshTimeSet}}s</span>
+    </div>
+</div>
+
+<div class="flex justify-content-between mt-4 mb-4">
     <div class="text-sm md:text-base">
         Total Hash Rate: <span class="text-primary">{{totalHashRate * 1000000000 | hashSuffix}}</span>
     </div>

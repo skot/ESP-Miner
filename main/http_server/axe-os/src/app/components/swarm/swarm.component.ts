@@ -1,12 +1,12 @@
 import { HttpClient } from '@angular/common/http';
 import { Component, OnDestroy, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, FormControl } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
 import { catchError, from, map, mergeMap, of, take, timeout, toArray } from 'rxjs';
 import { LocalStorageService } from 'src/app/local-storage.service';
 import { SystemService } from 'src/app/services/system.service';
-const REFRESH_TIME_SECONDS = 30;
 const SWARM_DATA = 'SWARM_DATA'
+const SWARM_REFRESH_TIME = 'SWARM_REFRESH_TIME';
 @Component({
   selector: 'app-swarm',
   templateUrl: './swarm.component.html',
@@ -24,11 +24,14 @@ export class SwarmComponent implements OnInit, OnDestroy {
   public scanning = false;
 
   public refreshIntervalRef!: number;
-  public refreshIntervalTime = REFRESH_TIME_SECONDS;
+  public refreshIntervalTime = 30;
+  public refreshTimeSet = 30;
 
   public totalHashRate: number = 0;
 
   public isRefreshing = false;
+
+  public refreshIntervalControl: FormControl;
 
   constructor(
     private fb: FormBuilder,
@@ -40,7 +43,18 @@ export class SwarmComponent implements OnInit, OnDestroy {
 
     this.form = this.fb.group({
       manualAddIp: [null, [Validators.required, Validators.pattern('(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)')]]
-    })
+    });
+
+    const storedRefreshTime = this.localStorageService.getNumber(SWARM_REFRESH_TIME) ?? 30;
+    this.refreshIntervalTime = storedRefreshTime;
+    this.refreshTimeSet = storedRefreshTime;
+    this.refreshIntervalControl = new FormControl(storedRefreshTime);
+    
+    this.refreshIntervalControl.valueChanges.subscribe(value => {
+      this.refreshIntervalTime = value;
+      this.refreshTimeSet = value;
+      this.localStorageService.setNumber(SWARM_REFRESH_TIME, value);
+    });
 
   }
 
@@ -170,7 +184,7 @@ export class SwarmComponent implements OnInit, OnDestroy {
   }
 
   public refreshList() {
-    this.refreshIntervalTime = REFRESH_TIME_SECONDS;
+    this.refreshIntervalTime = this.refreshTimeSet;
     const ips = this.swarm.map(axeOs => axeOs.IP);
     this.isRefreshing = true;
 
