@@ -27,7 +27,7 @@ export class SwarmComponent implements OnInit, OnDestroy {
   public refreshIntervalTime = 30;
   public refreshTimeSet = 30;
 
-  public totalHashRate: number = 0;
+  public totals: { hashRate: number, power: number, bestDiff: string } = { hashRate: 0, power: 0, bestDiff: '0' };
 
   public isRefreshing = false;
 
@@ -132,7 +132,7 @@ export class SwarmComponent implements OnInit, OnDestroy {
         const newItems = result.filter(item => !existingIps.has(item.IP));
         this.swarm = [...this.swarm, ...newItems].sort(this.sortByIp.bind(this));
         this.localStorageService.setObject(SWARM_DATA, this.swarm);
-        this.calculateTotalHashRate();
+        this.calculateTotals();
       },
       complete: () => {
         this.scanning = false;
@@ -154,7 +154,7 @@ export class SwarmComponent implements OnInit, OnDestroy {
         this.swarm.push({ IP: newIp, ...res });
         this.swarm = this.swarm.sort(this.sortByIp.bind(this));
         this.localStorageService.setObject(SWARM_DATA, this.swarm);
-        this.calculateTotalHashRate();
+        this.calculateTotals();
       }
     });
   }
@@ -180,7 +180,7 @@ export class SwarmComponent implements OnInit, OnDestroy {
   public remove(axeOs: any) {
     this.swarm = this.swarm.filter(axe => axe.IP != axeOs.IP);
     this.localStorageService.setObject(SWARM_DATA, this.swarm);
-    this.calculateTotalHashRate();
+    this.calculateTotals();
   }
 
   public refreshList() {
@@ -223,7 +223,7 @@ export class SwarmComponent implements OnInit, OnDestroy {
       next: (result) => {
         this.swarm = result.sort(this.sortByIp.bind(this));
         this.localStorageService.setObject(SWARM_DATA, this.swarm);
-        this.calculateTotalHashRate();
+        this.calculateTotals();
         this.isRefreshing = false;
       },
       complete: () => {
@@ -236,8 +236,32 @@ export class SwarmComponent implements OnInit, OnDestroy {
     return this.ipToInt(a.IP) - this.ipToInt(b.IP);
   }
 
-  private calculateTotalHashRate() {
-    this.totalHashRate = this.swarm.reduce((sum, axe) => sum + (axe.hashRate || 0), 0);
+  private convertBestDiffToNumber(bestDiff: string): number {
+    if (!bestDiff) return 0;
+    const value = parseFloat(bestDiff);
+    const unit = bestDiff.slice(-1).toUpperCase();
+    switch (unit) {
+      case 'T': return value * 1000000000000;
+      case 'G': return value * 1000000000;
+      case 'M': return value * 1000000;
+      case 'K': return value * 1000;
+      default: return value;
+    }
+  }
+
+  private formatBestDiff(value: number): string {
+    if (value >= 1000000000000) return `${(value / 1000000000000).toFixed(2)}T`;
+    if (value >= 1000000000) return `${(value / 1000000000).toFixed(2)}G`;
+    if (value >= 1000000) return `${(value / 1000000).toFixed(2)}M`;
+    if (value >= 1000) return `${(value / 1000).toFixed(2)}K`;
+    return value.toFixed(2);
+  }
+
+  private calculateTotals() {
+    this.totals.hashRate = this.swarm.reduce((sum, axe) => sum + (axe.hashRate || 0), 0);
+    this.totals.power = this.swarm.reduce((sum, axe) => sum + (axe.power || 0), 0);
+    const maxDiff = Math.max(...this.swarm.map(axe => this.convertBestDiffToNumber(axe.bestDiff)));
+    this.totals.bestDiff = this.formatBestDiff(maxDiff);
   }
 
 }
