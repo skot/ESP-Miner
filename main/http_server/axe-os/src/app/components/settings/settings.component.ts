@@ -135,6 +135,7 @@ export class SettingsComponent {
 
     if (file.name != 'esp-miner.bin') {
       this.toastrService.error('Incorrect file, looking for esp-miner.bin.', 'Error');
+      event.files = [];
       return;
     }
 
@@ -170,6 +171,7 @@ export class SettingsComponent {
     const file = event.files[0];
     if (file.name != 'www.bin') {
       this.toastrService.error('Incorrect file, looking for www.bin.', 'Error');
+      event.files = [];
       return;
     }
 
