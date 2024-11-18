@@ -52,7 +52,7 @@ export class SwarmComponent implements OnInit, OnDestroy {
       //this.swarm$ = this.scanNetwork('192.168.1.23', '255.255.255.0').pipe(take(1));
     } else {
       this.swarm = swarmData;
-      this.calculateTotalHashRate();
+      this.refreshList();
     }
 
     this.refreshIntervalRef = window.setInterval(() => {
