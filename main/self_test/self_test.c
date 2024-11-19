@@ -295,7 +295,15 @@ void self_test(void * pvParameters)
     (*GLOBAL_STATE->ASIC_functions.send_work_fn)(GLOBAL_STATE, &job);
 
     // Warm up the chip
-    vTaskDelay(2000 / portTICK_PERIOD_MS);
+    EMC2101_set_fan_speed(0.3);
+    double temp = 0;
+    double target_temp = 40;
+    while(temp < 40){
+        vTaskDelay(500 / portTICK_PERIOD_MS);
+        temp = EMC2101_get_external_temp();
+        ESP_LOGI(TAG, "Warming up... %fC => %f", temp, target_temp);
+    }
+    EMC2101_set_fan_speed(0.6);
 
     double start = esp_timer_get_time();
     double sum = 0;
