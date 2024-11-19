@@ -52,6 +52,7 @@ export class SwarmComponent implements OnInit, OnDestroy {
       //this.swarm$ = this.scanNetwork('192.168.1.23', '255.255.255.0').pipe(take(1));
     } else {
       this.swarm = swarmData;
+      this.refreshList();
       this.calculateTotalHashRate();
     }
 
@@ -128,7 +129,7 @@ export class SwarmComponent implements OnInit, OnDestroy {
 
   public add() {
     const newIp = this.form.value.manualAddIp;
-    
+
     // Check if IP already exists
     if (this.swarm.some(item => item.IP === newIp)) {
       this.toastr.warning('This IP address already exists in the swarm', 'Duplicate Entry');
