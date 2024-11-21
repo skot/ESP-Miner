@@ -235,9 +235,16 @@ export class EditComponent implements OnInit {
   }
 
   public restart() {
-    this.systemService.restart().subscribe(res => {
-      this.toastr.success('Success!', 'Bitaxe restarted');
-    });
-}
+    this.systemService.restart()
+      .pipe(this.loadingService.lockUIUntilComplete())
+      .subscribe({
+        next: () => {
+          this.toastr.success('Success!', 'Bitaxe restarted');
+        },
+        error: (err: HttpErrorResponse) => {
+          this.toastr.error('Error', `Could not restart. ${err.message}`);
+        }
+      });
+  }
 
 }
