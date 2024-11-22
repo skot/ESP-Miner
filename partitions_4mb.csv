@@ -1,0 +1,9 @@
+# Name,      Type, SubType,   Offset,    Size, Flags
+# Updated for 4MB flash with 2MB factory and 1MB www
+nvs,         data, nvs,       0x9000,    0x4000
+phy_init,    data, phy,       0xd000,    0x1000
+factory,     app,  factory,   0x10000,   2M
+ota_0,       app,  ota_0,     0x210000,  512K
+otadata,     data, ota,       0x290000,  8K
+www,         data, spiffs,    0x292000,  1M
+coredump,    data, coredump,  0x392000,  64K
