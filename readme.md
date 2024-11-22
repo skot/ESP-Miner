@@ -8,7 +8,46 @@
 # ESP-Miner
 esp-miner is open source ESP32 firmware for the [Bitaxe](https://github.com/skot/bitaxe)
 
-If you are looking for premade images to load on your Bitaxe, check out the [releases](https://github.com/skot/ESP-Miner/releases) page. Maybe you want [instructions](https://github.com/skot/ESP-Miner/blob/master/flashing.md) for loading factory images.
+You should compile this firmware yourself. 
+ 
+ 1. Clone this repo locally
+ 2. Follow steps 1 - 4 from here: https://docs.espressif.com/projects/esp-idf/en/v5.3.1/esp32/get-started/linux-macos-setup.html
+ 3. If you don't know your chip's flash size look up the specs or try getting info on it using esptool (see below).
+ 4. From inside this project's directory  run
+ ```
+ idf.py menuconfig
+ ```
+ 5. Choose `Serial flasher config` and select the correct flash size (return to menu)
+ 6. If your flash is 16MB you can skip step 7 as the default partition table settings will work
+ 7. Choose  `Partition Table` and replace the default with the correct filename depending on your flash size:
+ - partitions_4mb.csv
+ - partitions_16mb.csv
+ 8. Save and Exit
+ 9. If you've attempted to build this firmware before run 
+ ```
+ idf.py fullclean
+ ```
+ 10. Build the firmware
+ ```
+ idf.py build
+ ```
+ 11. Flash the firmware
+ ```
+ idf.py flash
+ ```
+ 12. Connect to your board to see how you did:
+ ```
+ idf.py monitor
+ ```
+
+ # ESP Device Help
+ Depending on your familiarity with esp devices you might have trouble connecting with it and/or be unaware of the specifications you need to know.  Here is how to connect and get some data.
+
+ 1. Plug in your device
+ 2. Find the port of your device run `ls /dev/tty*` and look for something like `/dev/ttyUSB0` or `/dev/ttyACM0` (if you're not sure - unplug > run list > plug back in > run list > find diff)
+ 3. See if you can detect the board with esptool by running `esptool.py chip_id`
+ 4. If you get an error about permisions try adding yourself to the dialout group `sudo usermod -aG dialout $USER` and/or changing the permissions of the drive temporarily `sudo chmod 666 /dev/ttyACM0` (replace ttyAMCO with the correct port on your system)
+ 5. Try #3 again
 
 # Bitaxetool
 We also have a command line python tool for flashing Bitaxe and updating the config called Bitaxetool 
