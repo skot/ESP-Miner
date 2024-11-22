@@ -1,9 +1,12 @@
 ## IDF Component Manager Manifest File
 dependencies:
-  espressif/esp_lvgl_port: "=2.4.1"
+  espressif/esp_lvgl_port:
+    git: https://github.com/espressif/esp-bsp.git
+    path: components/esp_lvgl_port
+    version: fix/lvgl_port_monochromatic_v9
   ## LVGL 9 is blocked by https://github.com/espressif/esp-idf/issues/14784
   lvgl/lvgl: 
-    version: "^8"
+    version: "^9"
     public: true
   ## Required IDF version
   idf:

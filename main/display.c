@@ -56,7 +56,6 @@ esp_err_t display_init(void)
     esp_lcd_panel_dev_config_t panel_config = {
         .bits_per_pixel = 1,
         .reset_gpio_num = -1,
-        .color_space = ESP_LCD_COLOR_SPACE_MONOCHROME,
     };
 
     esp_lcd_panel_ssd1306_config_t ssd1306_config = {
@@ -84,16 +83,28 @@ esp_err_t display_init(void)
         .hres = LCD_H_RES,
         .vres = LCD_V_RES,
         .monochrome = true,
+        .color_format = LV_COLOR_FORMAT_RGB565,
         .rotation = {
             .swap_xy = false,
             .mirror_x = !flip_screen, // The screen is not flipped, this is for backwards compatibility
             .mirror_y = !flip_screen,
         },
+        .flags = {
+            .swap_bytes = false,
+            .sw_rotate = false,
+        }
     };
     lvgl_port_add_disp(&disp_cfg);
 
     lv_style_init(&style);
     lv_style_set_text_font(&style, &lv_font_portfolio_6x8);
+    lv_style_set_bg_opa(&style, LV_OPA_COVER);
+
+    if (lvgl_port_lock(0)) {
+        lv_obj_t *scr = lv_scr_act();
+        lv_obj_add_style(scr, &style, LV_PART_MAIN);
+        lvgl_port_unlock();
+    }
 
     is_display_active = true;
 
@@ -131,7 +142,6 @@ void display_show_status(const char *messages[], size_t message_count)
         {
             lv_obj_t *label = lv_label_create(container);
             lv_label_set_text(label, messages[i]);
-            lv_obj_add_style(label, &style, LV_PART_MAIN);
             lv_label_set_long_mode(label, LV_LABEL_LONG_SCROLL_CIRCULAR);
             lv_obj_set_width(label, LCD_H_RES);
         }
