@@ -11,7 +11,63 @@ menu "Bitaxe Configuration"
         range 50 800
         default 250
         help
-            The BM1397 hash frequency
+            The asic chip hash frequency
+
+    config ASIC_MODEL
+        string "ASIC Model bm****"
+        default "bm1397"
+        help
+            The chip model to use. bm1397 is typical.
+
+    config DEVICE_MODEL
+        string "Device Name"
+        default "ultra"
+        help
+            The name of the device.
+
+    config BOARD_VERSION
+        string "Board Version"
+        default "102"
+        help
+            The board version to use.
+
+    config FLIP_SCREEN
+        bool "Flip Screen"
+        default y
+        help
+            Flip the screen orientation.
+
+    config INVERT_FAN_POLARITY
+        bool "Invert Fan Polarity"
+        default y
+        help
+            Invert the fan polarity.
+    
+    config AUTO_FAN_SPEED
+        bool "Auto Fan Speed"
+        default y
+        help
+            Automatically adjust the fan speed.
+
+    config FAN_SPEED
+        int "Fan Speed (%)"
+        range 0 100
+        default 100
+        help
+            The fan speed to set the fan to.
+
+    config SELF_TEST
+        bool "Self Test"
+        default n
+        help
+            Run a self test on the device.
+    
+    config OVERHEAT_MODE
+        bool "Overheat Mode"
+        default n
+        help
+            Enable overheat mode.
+            
 endmenu
 
 menu "Stratum Configuration"

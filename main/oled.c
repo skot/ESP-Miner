@@ -74,8 +74,8 @@ esp_err_t OLED_init(void)
                                 0xaf}; // cmd: display on
     uint8_t uc[4];
 
-    uint8_t bFlip = nvs_config_get_u16(NVS_CONFIG_FLIP_SCREEN, 1);
-    uint8_t bInvert = nvs_config_get_u16(NVS_CONFIG_INVERT_SCREEN, 0);
+    uint8_t bFlip = nvs_config_get_u16(NVS_CONFIG_FLIP_SCREEN, CONFIG_FLIP_SCREEN);
+    uint8_t bInvert = nvs_config_get_u16(NVS_CONFIG_INVERT_SCREEN, CONFIG_INVERT_SCREEN);
     oled_active = false;
 
     // //enable the module

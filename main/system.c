@@ -62,7 +62,7 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     module->screen_page = 0;
     module->shares_accepted = 0;
     module->shares_rejected = 0;
-    module->best_nonce_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF, 0);
+    module->best_nonce_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF, CONFIG_BEST_DIFF);
     module->best_session_nonce_diff = 0;
     module->start_time = esp_timer_get_time();
     module->lastClockSync = 0;
@@ -81,7 +81,7 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     module->is_using_fallback = false;
 
     // Initialize overheat_mode
-    module->overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
+    module->overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, CONFIG_OVERHEAT_MODE);
     ESP_LOGI(TAG, "Initial overheat_mode value: %d", module->overheat_mode);
 
     // set the best diff string
@@ -106,10 +106,10 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
-            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, CONFIG_INVERT_FAN_POLARITY));
             break;
         case DEVICE_GAMMA:
-            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, CONFIG_INVERT_FAN_POLARITY));
             EMC2101_set_ideality_factor(EMC2101_IDEALITY_1_0319);
             EMC2101_set_beta_compensation(EMC2101_BETA_11);
             break;
@@ -282,7 +282,7 @@ void SYSTEM_task(void * pvParameters)
 void SYSTEM_update_overheat_mode(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
-    uint16_t new_overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
+    uint16_t new_overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, CONFIG_OVERHEAT_MODE);
     
     if (new_overheat_mode != module->overheat_mode) {
         module->overheat_mode = new_overheat_mode;
@@ -672,7 +672,7 @@ static esp_err_t ensure_overheat_mode_config() {
 
     if (overheat_mode == UINT16_MAX) {
         // Key doesn't exist or couldn't be read, set the default value
-        nvs_config_set_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
+        nvs_config_set_u16(NVS_CONFIG_OVERHEAT_MODE, CONFIG_OVERHEAT_MODE);
         ESP_LOGI(TAG, "Default value for overheat_mode set to 0");
     } else {
         // Key exists, log the current value

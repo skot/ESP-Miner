@@ -86,7 +86,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     //int last_frequency_increase = 0;
     //uint16_t frequency_target = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
 
-    uint16_t auto_fan_speed = nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1);
+    uint16_t auto_fan_speed = nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, CONFIG_AUTO_FAN_SPEED);
 
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
@@ -253,7 +253,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 case DEVICE_SUPRA:
                 case DEVICE_GAMMA:
 
-                    float fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
+                    float fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, CONFIG_FAN_SPEED);
                     power_management->fan_perc = fs;
                     EMC2101_set_fan_speed((float) fs / 100);
 

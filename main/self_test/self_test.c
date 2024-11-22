@@ -23,8 +23,8 @@ static const char * TAG = "self_test";
 
 bool should_test(GlobalState * GLOBAL_STATE) {
     bool is_max = GLOBAL_STATE->asic_model == ASIC_BM1397;
-    uint64_t best_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF, 0);
-    uint16_t should_self_test = nvs_config_get_u16(NVS_CONFIG_SELF_TEST, 0);
+    uint64_t best_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF, CONFIG_BEST_DIFF);
+    uint16_t should_self_test = nvs_config_get_u16(NVS_CONFIG_SELF_TEST, CONFIG_SELF_TEST);
     if (should_self_test == 1 && !is_max && best_diff < 1) {
         return true;
     }
@@ -168,11 +168,11 @@ void self_test(void * pvParameters)
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
-            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, CONFIG_INVERT_FAN_POLARITY));
             EMC2101_set_fan_speed(1);
             break;
         case DEVICE_GAMMA:
-            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, CONFIG_INVERT_FAN_POLARITY));
             EMC2101_set_fan_speed(1);
             EMC2101_set_ideality_factor(EMC2101_IDEALITY_1_0319);
             EMC2101_set_beta_compensation(EMC2101_BETA_11);
@@ -378,7 +378,7 @@ void self_test(void * pvParameters)
 
     ESP_LOGI(TAG, "SELF TESTS PASS -- Press RESET to continue");
     display_end_screen(GLOBAL_STATE);
-    nvs_config_set_u16(NVS_CONFIG_SELF_TEST, 0);
+    nvs_config_set_u16(NVS_CONFIG_SELF_TEST, CONFIG_SELF_TEST);
 
     //blink tests pass screen
     while (1) {

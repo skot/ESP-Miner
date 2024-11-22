@@ -39,7 +39,7 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
     GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
     ESP_LOGI(TAG, "NVS_CONFIG_ASIC_FREQ %f", (float)GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value);
 
-    GLOBAL_STATE->device_model_str = nvs_config_get_string(NVS_CONFIG_DEVICE_MODEL, "");
+    GLOBAL_STATE->device_model_str = nvs_config_get_string(NVS_CONFIG_DEVICE_MODEL, CONFIG_DEVICE_MODEL);
     if (strcmp(GLOBAL_STATE->device_model_str, "max") == 0) {
         ESP_LOGI(TAG, "DEVICE: Max");
         GLOBAL_STATE->device_model = DEVICE_MAX;
@@ -55,9 +55,15 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
         GLOBAL_STATE->device_model = DEVICE_SUPRA;
         GLOBAL_STATE->asic_count = 1;
         GLOBAL_STATE->voltage_domain = 1;
-        } else if (strcmp(GLOBAL_STATE->device_model_str, "gamma") == 0) {
+    } else if (strcmp(GLOBAL_STATE->device_model_str, "gamma") == 0) {
         ESP_LOGI(TAG, "DEVICE: Gamma");
         GLOBAL_STATE->device_model = DEVICE_GAMMA;
+        GLOBAL_STATE->asic_count = 1;
+        GLOBAL_STATE->voltage_domain = 1;
+    } else if (strcmp(GLOBAL_STATE->device_model_str, "custom") == 0) {
+        ESP_LOGI(TAG, "DEVICE: Custom");
+        // since we're using bm1366 we'll use ultra's default configs for now
+        GLOBAL_STATE->device_model = DEVICE_ULTRA;
         GLOBAL_STATE->asic_count = 1;
         GLOBAL_STATE->voltage_domain = 1;
     } else {
@@ -71,11 +77,12 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
         return ESP_FAIL;
     }
 
-    GLOBAL_STATE->board_version = atoi(nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "000"));
+    GLOBAL_STATE->board_version = atoi(nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, CONFIG_BOARD_VERSION));
     ESP_LOGI(TAG, "Found Device Model: %s", GLOBAL_STATE->device_model_str);
     ESP_LOGI(TAG, "Found Board Version: %d", GLOBAL_STATE->board_version);
 
-    GLOBAL_STATE->asic_model_str = nvs_config_get_string(NVS_CONFIG_ASIC_MODEL, "");
+    GLOBAL_STATE->asic_model_str = nvs_config_get_string(NVS_CONFIG_ASIC_MODEL, CONFIG_ASIC_MODEL);
+    ESP_LOGI(TAG, "Found ASIC Model: %s", GLOBAL_STATE->asic_model_str);
     if (strcmp(GLOBAL_STATE->asic_model_str, "BM1366") == 0) {
         ESP_LOGI(TAG, "ASIC: %dx BM1366 (%" PRIu64 " cores)", GLOBAL_STATE->asic_count, BM1366_CORE_COUNT);
         GLOBAL_STATE->asic_model = ASIC_BM1366;
