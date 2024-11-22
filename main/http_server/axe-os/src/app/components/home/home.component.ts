@@ -233,6 +233,8 @@ export class HomeComponent {
       return `https://solostats.ckpool.org/users/${address}`;
     } else if (stratumURL.includes('pool.noderunners.network')) {
       return `https://noderunners.network/en/pool/user/${address}`;
+    } else if (stratumURL.includes('satoshiradio.nl')) {
+      return `https://pool.satoshiradio.nl/user/${address}`;
     }
     return stratumURL.startsWith('http') ? stratumURL : `http://${stratumURL}`;
   }
