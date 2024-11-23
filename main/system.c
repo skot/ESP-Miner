@@ -254,6 +254,7 @@ void SYSTEM_task(void * pvParameters)
         vTaskSuspend(NULL);
     }
 
+    _clear_display(GLOBAL_STATE);
     _update_screen_one(GLOBAL_STATE);
 
     configure_button_boot_interrupt();
