@@ -21,7 +21,6 @@ SRCS
     "./tasks/create_jobs_task.c"
     "./tasks/asic_task.c"
     "./tasks/asic_result_task.c"
-    "./tasks/user_input_task.c"
     "./tasks/power_management_task.c"
 
 INCLUDE_DIRS

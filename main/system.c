@@ -7,11 +7,11 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "freertos/queue.h"
+#include "freertos/event_groups.h"
+#include "freertos/timers.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
 
-#include "driver/gpio.h"
 #include "esp_app_desc.h"
 #include "esp_netif.h"
 #include "esp_timer.h"
@@ -36,7 +36,21 @@ static void _suffix_string(uint64_t, char *, size_t, int);
 
 static esp_netif_t * netif;
 
-QueueHandle_t user_input_queue;
+// Define event bits
+#define EVENT_SHORT_PRESS   1
+#define EVENT_LONG_PRESS    2
+
+#define BUTTON_BOOT GPIO_NUM_0
+// #define SHORT_PRESS_DURATION_MS 100 // Define what constitutes a short press
+#define LONG_PRESS_DURATION_MS 2000 // Define what constitutes a long press
+#define DEFAULT_SCREEN_UPDATE_MS 10000 // Default screen update interval
+
+#define ESP_INTR_FLAG_DEFAULT 0 //wtf is this for esp-idf?
+
+// Create an event group
+EventGroupHandle_t xSystemEventGroup;
+TimerHandle_t xButtonTimer;
+bool button_pressed = false;
 
 //local function prototypes
 static esp_err_t ensure_overheat_mode_config();
@@ -50,6 +64,8 @@ static void show_ap_information(const char * error, GlobalState * GLOBAL_STATE);
 
 static void _check_for_best_diff(GlobalState * GLOBAL_STATE, double diff, uint8_t job_id);
 static void _suffix_string(uint64_t val, char * buf, size_t bufsiz, int sigdigits);
+
+static void configure_button_boot_interrupt(void);
 
 void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
 {
@@ -158,8 +174,6 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
 
     netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF");
 
-    user_input_queue = xQueueCreate(10, sizeof(char[10])); // Create a queue to handle user input events
-
     _clear_display(GLOBAL_STATE);
     _init_connection(GLOBAL_STATE);
 }
@@ -199,14 +213,23 @@ static const uint8_t bitaxe_splash[] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00
 };
 
+void vButtonTimerCallback(TimerHandle_t xTimer) {
+    // Timer callback, set the long press event bit
+    xEventGroupSetBits(xSystemEventGroup, EVENT_LONG_PRESS);
+}
+
 void SYSTEM_task(void * pvParameters)
 {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
+    // Create event group for the System task
+    xSystemEventGroup = xEventGroupCreate();
+    //create the button timer for long press detection
+    xButtonTimer = xTimerCreate("ButtonTimer", pdMS_TO_TICKS(LONG_PRESS_DURATION_MS), pdFALSE, (void*)0, vButtonTimerCallback);
+
     //_init_system(GLOBAL_STATE);
 
-    char input_event[10];
     ESP_LOGI(TAG, "SYSTEM_task started");
 
     while (GLOBAL_STATE->ASIC_functions.init_fn == NULL) {
@@ -222,17 +245,39 @@ void SYSTEM_task(void * pvParameters)
     
     OLED_showBitmap(0, 0, bitaxe_splash, 128, 32);
     vTaskDelay(5000 / portTICK_PERIOD_MS);
+
+    //check for overheat_mode -- we never come out of this.
+    if (module->overheat_mode == 1) {
+        ESP_LOGI(TAG, "Overheat mode, suspending System Task");
+        _show_overheat_screen(GLOBAL_STATE);
+        //suspend task forever
+        vTaskSuspend(NULL);
+    }
+
+    _update_screen_one(GLOBAL_STATE);
+
+    configure_button_boot_interrupt();
     
     int current_screen = 0;
-    TickType_t last_update_time = xTaskGetTickCount();
 
     while (1) {
-        // Check for overheat mode
-        if (module->overheat_mode == 1) {
-            _show_overheat_screen(GLOBAL_STATE);
-            vTaskDelay(5000 / portTICK_PERIOD_MS);  // Update every 5 seconds
-            SYSTEM_update_overheat_mode(GLOBAL_STATE);  // Check for changes
-            continue;  // Skip the normal screen cycle
+        // Wait for events or 
+        EventBits_t uxBits = xEventGroupWaitBits(
+            xSystemEventGroup,
+            EVENT_SHORT_PRESS | EVENT_LONG_PRESS,
+            pdTRUE,  // Clear bits on exit
+            pdFALSE, // Wait for any bit
+            pdMS_TO_TICKS(DEFAULT_SCREEN_UPDATE_MS)
+        );
+
+        if (uxBits & EVENT_SHORT_PRESS) {
+            ESP_LOGI(TAG, "Short button press detected, switching to next screen");
+            current_screen = (current_screen + 1) % 2;
+        } else if (uxBits & EVENT_LONG_PRESS) {
+            ESP_LOGI(TAG, "Long button press detected, toggling WiFi SoftAP");
+            toggle_wifi_softap();
+        } else {
+            current_screen = (current_screen + 1) % 2;
         }
 
         // Update the current screen
@@ -247,33 +292,6 @@ void SYSTEM_task(void * pvParameters)
                 _update_screen_two(GLOBAL_STATE);
                 break;
         }
-
-        // Wait for user input or timeout
-        bool input_received = false;
-        TickType_t current_time = xTaskGetTickCount();
-        TickType_t wait_time = pdMS_TO_TICKS(10000) - (current_time - last_update_time);
-
-        if (wait_time > 0) {
-            if (xQueueReceive(user_input_queue, &input_event, wait_time) == pdTRUE) {
-                input_received = true;
-                if (strcmp(input_event, "SHORT") == 0) {
-                    ESP_LOGI(TAG, "Short button press detected, switching to next screen");
-                    current_screen = (current_screen + 1) % 2;
-                } else if (strcmp(input_event, "LONG") == 0) {
-                    ESP_LOGI(TAG, "Long button press detected, toggling WiFi SoftAP");
-                    toggle_wifi_softap();
-                }
-            }
-        }
-
-        // If no input received and 10 seconds have passed, switch to the next screen
-        if (!input_received && (xTaskGetTickCount() - last_update_time) >= pdMS_TO_TICKS(10000)) {
-            current_screen = (current_screen + 1) % 2;
-        }
-
-        last_update_time = xTaskGetTickCount();
-    
-        
     }
 }
 
@@ -681,3 +699,47 @@ static esp_err_t ensure_overheat_mode_config() {
 
     return ESP_OK;
 }
+
+// Interrupt handler for BUTTON_BOOT
+void IRAM_ATTR button_boot_isr_handler(void* arg) {
+    if (gpio_get_level(BUTTON_BOOT) == 0) {
+        // Button pressed, start the timer
+        if (!button_pressed) {
+            button_pressed = true;
+            xTimerStartFromISR(xButtonTimer, NULL);
+        }
+    } else {
+        // Button released, stop the timer and check the duration
+        if (button_pressed) {
+            button_pressed = false;
+            if (xTimerIsTimerActive(xButtonTimer)) {
+                xTimerStopFromISR(xButtonTimer, NULL);
+                xEventGroupSetBitsFromISR(xSystemEventGroup, EVENT_SHORT_PRESS, NULL);
+            }
+        }
+    }
+}
+
+static void configure_button_boot_interrupt(void) {
+    // Configure the GPIO pin as input
+    gpio_config_t io_conf = {
+        .intr_type = GPIO_INTR_ANYEDGE,  // Interrupt on both edges
+        .mode = GPIO_MODE_INPUT,         // Set as input mode
+        .pin_bit_mask = (1ULL << BUTTON_BOOT),  // Bit mask of the pin to configure
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,  // Disable pull-down mode
+        .pull_up_en = GPIO_PULLUP_ENABLE,       // Enable pull-up mode
+    };
+    gpio_config(&io_conf);
+
+    // Install the ISR service
+    gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
+
+    // Attach the interrupt handler
+    gpio_isr_handler_add(BUTTON_BOOT, button_boot_isr_handler, NULL);
+
+    ESP_LOGI(TAG, "BUTTON_BOOT interrupt configured");
+}
+
+
+
+

@@ -15,7 +15,7 @@
 #include "nvs_config.h"
 #include "serial.h"
 #include "stratum_task.h"
-#include "user_input_task.h"
+//#include "user_input_task.h"
 #include "i2c_bitaxe.h"
 #include "adc.h"
 #include "nvs_device.h"
@@ -116,7 +116,7 @@ void app_main(void)
     GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
     GLOBAL_STATE.new_stratum_version_rolling_msg = false;
 
-    xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
+    //xTaskCreate(USER_INPUT_task, "user input", 8192, (void *) &GLOBAL_STATE, 5, NULL);
 
     if (GLOBAL_STATE.ASIC_functions.init_fn != NULL) {
         wifi_softap_off();
