@@ -257,8 +257,13 @@ void SYSTEM_task(void * pvParameters)
             if (xQueueReceive(user_input_queue, &input_event, wait_time) == pdTRUE) {
                 input_received = true;
                 if (strcmp(input_event, "SHORT") == 0) {
-                    ESP_LOGI(TAG, "Short button press detected, switching to next screen");
-                    current_screen = (current_screen + 1) % 2;
+                    if (OLED_status()) {
+                        ESP_LOGI(TAG, "Short button press detected, switching to next screen");
+                        current_screen = (current_screen + 1) % 2;
+                    } else {
+                        ESP_LOGI(TAG, "Short button press detected, turning screen on");
+                        OLED_activate();
+                    }
                 } else if (strcmp(input_event, "LONG") == 0) {
                     ESP_LOGI(TAG, "Long button press detected, toggling WiFi SoftAP");
                     toggle_wifi_softap();
@@ -266,9 +271,12 @@ void SYSTEM_task(void * pvParameters)
             }
         }
 
-        // If no input received and 10 seconds have passed, switch to the next screen
+        // If no input received and 10 seconds have passed, turn off the screen
         if (!input_received && (xTaskGetTickCount() - last_update_time) >= pdMS_TO_TICKS(10000)) {
-            current_screen = (current_screen + 1) % 2;
+            if (OLED_status()) {
+                ESP_LOGI(TAG, "Turning screen off");
+                OLED_shutdown();
+            }
         }
 
         last_update_time = xTaskGetTickCount();

@@ -32,6 +32,9 @@ esp_err_t OLED_init(void);
 // Turns off the display and closes the I2C handle
 void OLED_shutdown(void);
 
+// Turns on the display
+void OLED_activate(void);
+
 // Fills the display with the byte pattern
 int OLED_fill(uint8_t ucPattern);
 
