@@ -177,16 +177,21 @@ export class SettingsComponent {
       .pipe(
         this.loadingService.lockUIUntilComplete(),
       ).subscribe({
-        next: (event: any) => {
-          console.log(event);
-          if (event?.type === HttpEventType.UploadProgress) {
+        next: (event) => {
+          if (event.type === HttpEventType.UploadProgress) {
             this.websiteUpdateProgress = Math.round((event.loaded / (event.total as number)) * 100);
-          } else if (event?.type === HttpEventType.Response || event?.ok) {
-            this.toastrService.success('Website updated', 'Success!');
-            setTimeout(() => {
-              window.location.reload();
-            }, 2000);
-          } else if (event instanceof HttpErrorResponse) {
+          } else if (event.type === HttpEventType.Response) {
+            if (event.ok) {
+              this.toastrService.success('Website updated', 'Success!');
+              setTimeout(() => {
+                window.location.reload();
+              }, 2000);
+            } else {
+              this.toastrService.error(event.statusText, 'Error');
+            }
+          }
+          else if (event instanceof HttpErrorResponse)
+          {
             const errorMessage = event.error?.message || event.message || 'Unknown error occurred';
             this.toastrService.error(errorMessage, 'Error');
           }
