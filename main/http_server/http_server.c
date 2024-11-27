@@ -496,7 +496,11 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
         remaining -= recv_len;
     }
 
-    httpd_resp_sendstr(req, "WWW update complete\n");
+    httpd_resp_sendstr(req, "WWW update complete, rebooting now!\n");
+    ESP_LOGI(TAG, "Restarting system after WWW update complete");
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+    esp_restart();
+
     return ESP_OK;
 }
 
