@@ -177,27 +177,23 @@ export class SettingsComponent {
       .pipe(
         this.loadingService.lockUIUntilComplete(),
       ).subscribe({
-        next: (event) => {
-          if (event.type === HttpEventType.UploadProgress) {
+        next: (event: any) => {
+          console.log(event);
+          if (event?.type === HttpEventType.UploadProgress) {
             this.websiteUpdateProgress = Math.round((event.loaded / (event.total as number)) * 100);
-          } else if (event.type === HttpEventType.Response) {
-            if (event.ok) {
-              setTimeout(() => {
-                this.toastrService.success('Website updated', 'Success!');
-                window.location.reload();
-              }, 1000);
-
-            } else {
-              this.toastrService.error(event.statusText, 'Error');
-            }
-          }
-          else if (event instanceof HttpErrorResponse)
-          {
-            this.toastrService.error(event.error, 'Error');
+          } else if (event?.type === HttpEventType.Response || event?.ok) {
+            this.toastrService.success('Website updated', 'Success!');
+            setTimeout(() => {
+              window.location.reload();
+            }, 2000);
+          } else if (event instanceof HttpErrorResponse) {
+            const errorMessage = event.error?.message || event.message || 'Unknown error occurred';
+            this.toastrService.error(errorMessage, 'Error');
           }
         },
         error: (err) => {
-          this.toastrService.error(err.error, 'Error');
+          const errorMessage = err.error?.message || err.message || 'Unknown error occurred';
+          this.toastrService.error(errorMessage, 'Error');
         },
         complete: () => {
           this.websiteUpdateProgress = null;
