@@ -14,12 +14,22 @@
 #include "TPS546.h"
 #include "esp_timer.h"
 
+//Test Fan Speed
+#define FAN_SPEED_TARGET_MIN 1000 //RPM
+
+//Test Core Voltage
+#define CORE_VOLTAGE_TARGET_MIN 1000 //mV
+#define CORE_VOLTAGE_TARGET_MAX 1300 //mV
+
 #define POWER_CONSUMPTION_TARGET_SUB_402 12     //watts
 #define POWER_CONSUMPTION_TARGET_402 5          //watts
 #define POWER_CONSUMPTION_TARGET_GAMMA 11       //watts
 #define POWER_CONSUMPTION_MARGIN 3              //+/- watts
 
 static const char * TAG = "self_test";
+
+static void tests_fail(GlobalState * GLOBAL_STATE);
+static void tests_pass(GlobalState * GLOBAL_STATE);
 
 bool should_test(GlobalState * GLOBAL_STATE) {
     bool is_max = GLOBAL_STATE->asic_model == ASIC_BM1397;
@@ -49,24 +59,6 @@ static void display_msg(char * msg, GlobalState * GLOBAL_STATE) {
     }
 }
 
-static void display_end_screen(GlobalState * GLOBAL_STATE) {
-
-    switch (GLOBAL_STATE->device_model) {
-        case DEVICE_MAX:
-        case DEVICE_ULTRA:
-        case DEVICE_SUPRA:
-        case DEVICE_GAMMA:
-            if (OLED_status()) {
-                OLED_clearLine(2);
-                OLED_writeString(0, 2, "TESTS PASS!");
-                OLED_clearLine(3);
-                OLED_writeString(0, 3, "     PRESS RESET");
-            }
-            break;
-        default:
-    }
-}
-
 static bool fan_sense_pass(GlobalState * GLOBAL_STATE)
 {
     uint16_t fan_speed = 0;
@@ -80,7 +72,7 @@ static bool fan_sense_pass(GlobalState * GLOBAL_STATE)
         default:
     }
     ESP_LOGI(TAG, "fanSpeed: %d", fan_speed);
-    if (fan_speed > 1000) {
+    if (fan_speed > FAN_SPEED_TARGET_MIN) {
         return true;
     }
     return false;
@@ -113,7 +105,7 @@ static bool core_voltage_pass(GlobalState * GLOBAL_STATE)
     uint16_t core_voltage = VCORE_get_voltage_mv(GLOBAL_STATE);
     ESP_LOGI(TAG, "Voltage: %u", core_voltage);
 
-    if (core_voltage > 1000 && core_voltage < 1300) {
+    if (core_voltage > CORE_VOLTAGE_TARGET_MIN && core_voltage < CORE_VOLTAGE_TARGET_MAX) {
         return true;
     }
     return false;
@@ -133,6 +125,7 @@ void self_test(void * pvParameters)
         case DEVICE_GAMMA:
             if (!OLED_init()) {
                 ESP_LOGE(TAG, "OLED init failed!");
+                tests_fail(GLOBAL_STATE);
             } else {
                 ESP_LOGI(TAG, "OLED init success!");
                 // clear the oled screen
@@ -192,13 +185,13 @@ void self_test(void * pvParameters)
                 if (result != 0) {
                     ESP_LOGE(TAG, "TPS546 test failed!");
                     display_msg("TPS546:FAIL", GLOBAL_STATE);
-                    return;
+                    tests_fail(GLOBAL_STATE);
                 }
             } else {
                 if(!DS4432U_test()) {
                     ESP_LOGE(TAG, "DS4432 test failed!");
                     display_msg("DS4432U:FAIL", GLOBAL_STATE);
-                    return;
+                    tests_fail(GLOBAL_STATE);
                 }
             }
             break;
@@ -206,7 +199,7 @@ void self_test(void * pvParameters)
                 if (result != 0) {
                     ESP_LOGE(TAG, "TPS546 test failed!");
                     display_msg("TPS546:FAIL", GLOBAL_STATE);
-                    return;
+                    tests_fail(GLOBAL_STATE);
                 }
             break;
         default:
@@ -231,12 +224,12 @@ void self_test(void * pvParameters)
     uint8_t chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE->asic_count);
     ESP_LOGI(TAG, "%u chips detected, %u expected", chips_detected, GLOBAL_STATE->asic_count);
 
-    
-    if (chips_detected < 1) {
-        ESP_LOGE(TAG, "SELF TEST FAIL, NO CHIPS DETECTED");
-        // ESP_LOGE(TAG, "SELF TEST FAIL, INCORRECT NONCE DIFF");
-        display_msg("ASIC:FAIL 0 CHIPS", GLOBAL_STATE);
-        return;
+    if (chips_detected != GLOBAL_STATE->asic_count) {
+        ESP_LOGE(TAG, "SELF TEST FAIL, %d of %d CHIPS DETECTED", chips_detected, GLOBAL_STATE->asic_count);
+        char error_buf[20];
+        snprintf(error_buf, 20, "ASIC:FAIL %d CHIPS", chips_detected);
+        display_msg(error_buf, GLOBAL_STATE);
+        tests_fail(GLOBAL_STATE);
     }
 
     int baud = (*GLOBAL_STATE->ASIC_functions.set_max_baud_fn)();
@@ -319,13 +312,13 @@ void self_test(void * pvParameters)
         case DEVICE_SUPRA:
             if(hash_rate < 500){
                 display_msg("HASHRATE:FAIL", GLOBAL_STATE);
-                return;
+                tests_fail(GLOBAL_STATE);
             }
             break;
         case DEVICE_GAMMA:
             if(hash_rate < 900){
                 display_msg("HASHRATE:FAIL", GLOBAL_STATE);
-                return;
+                tests_fail(GLOBAL_STATE);
             }
             break;
         default:
@@ -339,7 +332,7 @@ void self_test(void * pvParameters)
     if (!core_voltage_pass(GLOBAL_STATE)) {
         ESP_LOGE(TAG, "SELF TEST FAIL, INCORRECT CORE VOLTAGE");
         display_msg("VCORE:FAIL", GLOBAL_STATE);
-        return;
+        tests_fail(GLOBAL_STATE);
     }
 
     switch (GLOBAL_STATE->device_model) {
@@ -350,13 +343,13 @@ void self_test(void * pvParameters)
                 if (!TPS546_power_consumption_pass(POWER_CONSUMPTION_TARGET_402, POWER_CONSUMPTION_MARGIN)) {
                     ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %.2f", (float)POWER_CONSUMPTION_TARGET_402);
                     display_msg("POWER:FAIL", GLOBAL_STATE);
-                    return;
+                    tests_fail(GLOBAL_STATE);
                 }
             } else {
                 if (!INA260_power_consumption_pass(POWER_CONSUMPTION_TARGET_SUB_402, POWER_CONSUMPTION_MARGIN)) {
                     ESP_LOGE(TAG, "INA260 Power Draw Failed, target %.2f", (float)POWER_CONSUMPTION_TARGET_SUB_402);
                     display_msg("POWER:FAIL", GLOBAL_STATE);
-                    return;
+                    tests_fail(GLOBAL_STATE);
                 }
             }
             break;
@@ -364,7 +357,7 @@ void self_test(void * pvParameters)
                 if (!TPS546_power_consumption_pass(POWER_CONSUMPTION_TARGET_GAMMA, POWER_CONSUMPTION_MARGIN)) {
                     ESP_LOGE(TAG, "TPS546 Power Draw Failed, target %.2f", (float)POWER_CONSUMPTION_TARGET_GAMMA);
                     display_msg("POWER:FAIL", GLOBAL_STATE);
-                    return;
+                    tests_fail(GLOBAL_STATE);
                 }
             break;
         default:
@@ -372,12 +365,34 @@ void self_test(void * pvParameters)
 
     if (!fan_sense_pass(GLOBAL_STATE)) {
         ESP_LOGE(TAG, "FAN test failed!");
-        display_msg("FAN:WARN", GLOBAL_STATE);
+        display_msg("FAN:WARN", GLOBAL_STATE);        
+        tests_fail(GLOBAL_STATE);
     }
 
+    tests_pass(GLOBAL_STATE);
+    return;
+    
+}
 
+static void tests_pass(GlobalState * GLOBAL_STATE) {
     ESP_LOGI(TAG, "SELF TESTS PASS -- Press RESET to continue");
-    display_end_screen(GLOBAL_STATE);
+
+    switch (GLOBAL_STATE->device_model) {
+        case DEVICE_MAX:
+        case DEVICE_ULTRA:
+        case DEVICE_SUPRA:
+        case DEVICE_GAMMA:
+            if (OLED_status()) {
+                OLED_clearLine(2);
+                OLED_writeString(0, 2, "TESTS PASS!");
+                OLED_clearLine(3);
+                OLED_writeString(0, 3, "     PRESS RESET");
+            }
+            break;
+        default:
+    }
+
+    //clear the selftest bit in nvs
     nvs_config_set_u16(NVS_CONFIG_SELF_TEST, 0);
 
     //blink tests pass screen
@@ -407,5 +422,56 @@ void self_test(void * pvParameters)
             default:
         }
         vTaskDelay(500 / portTICK_PERIOD_MS);
+    }
+}
+
+
+static void tests_fail(GlobalState * GLOBAL_STATE) {
+    ESP_LOGI(TAG, "SELF TESTS FAIL -- Press RESET to continue");
+
+    switch (GLOBAL_STATE->device_model) {
+        case DEVICE_MAX:
+        case DEVICE_ULTRA:
+        case DEVICE_SUPRA:
+        case DEVICE_GAMMA:
+            if (OLED_status()) {
+                // OLED_clearLine(2);
+                // OLED_writeString(0, 2, "TESTS FAIL!");
+                OLED_clearLine(3);
+                OLED_writeString(0, 3, "     PRESS RESET");
+            }
+            break;
+        default:
+    }
+
+    nvs_config_set_u16(NVS_CONFIG_SELF_TEST, 0);
+
+    //blink tests pass screen
+    while (1) {
+        switch (GLOBAL_STATE->device_model) {
+            case DEVICE_MAX:
+            case DEVICE_ULTRA:
+            case DEVICE_SUPRA:
+            case DEVICE_GAMMA:
+                if (OLED_status()) {
+                    OLED_clearLine(3);
+                    OLED_writeString(0, 3, "     PRESS RESET");
+                }
+                break;
+            default:
+        }
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+        switch (GLOBAL_STATE->device_model) {
+            case DEVICE_MAX:
+            case DEVICE_ULTRA:
+            case DEVICE_SUPRA:
+            case DEVICE_GAMMA:
+                if (OLED_status()) {
+                    OLED_clearLine(3);
+                }
+                break;
+            default:
+        }
+        vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 }
