@@ -10,8 +10,6 @@
 
 static const char *TAG = "create_jobs_task";
 
-#define MAX_EXTRANONCE_2 UINT_MAX
-#define TASK_YIELD_THRESHOLD 100 // Yield after this many iterations
 #define QUEUE_LOW_WATER_MARK 10 // Adjust based on your requirements
 
 static bool should_generate_more_work(GlobalState *GLOBAL_STATE);
@@ -26,16 +24,18 @@ void create_jobs_task(void *pvParameters)
         mining_notify *mining_notification = (mining_notify *)queue_dequeue(&GLOBAL_STATE->stratum_queue);
         if (mining_notification == NULL) {
             ESP_LOGE(TAG, "Failed to dequeue mining notification");
-            vTaskDelay(pdMS_TO_TICKS(100)); // Wait a bit before trying again
+            vTaskDelay(100 / portTICK_PERIOD_MS); // Wait a bit before trying again
             continue;
         }
+
+        ESP_LOGI(TAG, "New Work Dequeued %s", mining_notification->job_id);
+
         if (GLOBAL_STATE->new_stratum_version_rolling_msg) {
             ESP_LOGI(TAG, "Set chip version rolls %i", (int)(GLOBAL_STATE->version_mask >> 13));
             (GLOBAL_STATE->ASIC_functions.set_version_mask)(GLOBAL_STATE->version_mask);
             GLOBAL_STATE->new_stratum_version_rolling_msg = false;
         }
 
-        ESP_LOGI(TAG, "New Work Dequeued %s", mining_notification->job_id);
         uint32_t extranonce_2 = 0;
         while (GLOBAL_STATE->stratum_queue.count < 1 && GLOBAL_STATE->abandon_work == 0)
         {
@@ -45,13 +45,6 @@ void create_jobs_task(void *pvParameters)
 
                 // Increase extranonce_2 for the next job.
                 extranonce_2++;
-
-                if (extranonce_2 % TASK_YIELD_THRESHOLD == 0) {
-                    taskYIELD();
-                }
-                if (extranonce_2 >= MAX_EXTRANONCE_2) {
-                    extranonce_2 = 0; // Reset to 0 if we've reached the maximum
-                }
             }
             else
             {
