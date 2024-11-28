@@ -58,6 +58,7 @@ export class SettingsComponent {
         this.form = this.fb.group({
           flipscreen: [info.flipscreen == 1],
           invertscreen: [info.invertscreen == 1],
+          screenTimeout: [info.screenTimeout, [Validators.required]],
           stratumURL: [info.stratumURL, [
             Validators.required,
             Validators.pattern(/^(?!.*stratum\+tcp:\/\/).*$/),
