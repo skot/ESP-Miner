@@ -126,7 +126,10 @@ void app_main(void)
 
         SERIAL_init();
         (*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE.asic_count);
-        SERIAL_set_baud((*GLOBAL_STATE.ASIC_functions.set_max_baud_fn)(), GLOBAL_STATE.board_version >= 300);
+
+        // Temporary work around for older boards.
+        bool wait_for_tx = GLOBAL_STATE.board_version >= 300;
+        SERIAL_set_baud((*GLOBAL_STATE.ASIC_functions.set_max_baud_fn)(), wait_for_tx);
         SERIAL_clear_buffer();
 
         GLOBAL_STATE.ASIC_initalized = true;
