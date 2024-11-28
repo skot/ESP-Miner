@@ -196,21 +196,19 @@ esp_err_t test_voltage_regulator(GlobalState * GLOBAL_STATE) {
         default:
     }
 
+    if (init_voltage_regulator(GLOBAL_STATE) != ESP_OK) {
+        ESP_LOGE(TAG, "VCORE init failed!");
+        display_msg("VCORE:FAIL", GLOBAL_STATE);
+        //tests_done(GLOBAL_STATE, TESTS_FAILED);
+        return ESP_FAIL;
+    }
+
     // VCore regulator testing
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
-            if (GLOBAL_STATE->board_version >= 402 && GLOBAL_STATE->board_version <= 499){
-                if (init_voltage_regulator(GLOBAL_STATE) != ESP_OK) {
-                    ESP_LOGE(TAG, "VCORE init failed!");
-                    display_msg("VCORE:FAIL", GLOBAL_STATE);
-                    //tests_done(GLOBAL_STATE, TESTS_FAILED);
-                    return ESP_FAIL;
-                }
-            } else {
-                ESP_RETURN_ON_ERROR(DS4432U_init(), TAG, "DS4432 init failed!");
-                ESP_RETURN_ON_ERROR(VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE), TAG, "VCORE set voltage failed!");
+            if (GLOBAL_STATE->board_version < 402){
                 if (DS4432U_test() != ESP_OK) {
                     ESP_LOGE(TAG, "DS4432 test failed!");
                     display_msg("DS4432U:FAIL", GLOBAL_STATE);
@@ -220,12 +218,6 @@ esp_err_t test_voltage_regulator(GlobalState * GLOBAL_STATE) {
             }
             break;
         case DEVICE_GAMMA:
-                if (init_voltage_regulator(GLOBAL_STATE) != ESP_OK) {
-                    ESP_LOGE(TAG, "VCORE init failed!");
-                    display_msg("VCORE:FAIL", GLOBAL_STATE);
-                    //tests_done(GLOBAL_STATE, TESTS_FAILED);
-                    return ESP_FAIL;
-                }
             break;
         default:
     }

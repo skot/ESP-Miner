@@ -31,6 +31,8 @@ esp_err_t VCORE_init(GlobalState * global_state) {
                     ESP_LOGE(TAG, "TPS546 init failed!");
                     return ESP_FAIL;
                 }
+            } else {
+                ESP_RETURN_ON_ERROR(DS4432U_init(), TAG, "DS4432 init failed!");
             }
             break;
         case DEVICE_GAMMA:
