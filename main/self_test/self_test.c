@@ -241,7 +241,7 @@ void self_test(void * pvParameters)
 
     int baud = (*GLOBAL_STATE->ASIC_functions.set_max_baud_fn)();
     vTaskDelay(10 / portTICK_PERIOD_MS);
-    SERIAL_set_baud(baud);
+    SERIAL_set_baud(baud, GLOBAL_STATE->board_version >= 300);
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 

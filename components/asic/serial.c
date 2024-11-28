@@ -43,12 +43,14 @@ void SERIAL_init(void)
     uart_driver_install(UART_NUM_1, BUF_SIZE * 2, BUF_SIZE * 2, 0, NULL, 0);
 }
 
-void SERIAL_set_baud(int baud)
+void SERIAL_set_baud(int baud, bool wait)
 {
     ESP_LOGI(TAG, "Changing UART baud to %i", baud);
 
-    // Make sure that we are done writing before setting a new baudrate.
-    uart_wait_tx_done(UART_NUM_1, 1000 / portTICK_PERIOD_MS);
+    if (wait) {
+        // Make sure that we are done writing before setting a new baudrate.
+        uart_wait_tx_done(UART_NUM_1, 1000 / portTICK_PERIOD_MS);
+    }
 
     uart_set_baudrate(UART_NUM_1, baud);
 }
