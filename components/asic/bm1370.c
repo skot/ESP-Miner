@@ -9,6 +9,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
+#include "driver/uart.h"
+
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -381,6 +383,10 @@ int BM1370_set_max_baud(void)
 
     unsigned char init8[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0x28, 0x11, 0x30, 0x02, 0x00, 0x03};
     _send_simple(init8, 11);
+
+    // Make sure that we are done writing before setting a new baudrate on the ESP32 controller side.
+    uart_wait_tx_done(UART_NUM_1, 1000 / portTICK_PERIOD_MS);
+
     return 1000000;
 }
 

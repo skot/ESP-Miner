@@ -6,6 +6,7 @@
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "driver/uart.h"
 #include "esp_log.h"
 
 #include "serial.h"
@@ -322,6 +323,10 @@ int BM1397_set_max_baud(void)
     unsigned char baudrate[9] = {0x00, MISC_CONTROL, 0x00, 0x00, 0b01100000, 0b00110001};
     ; // baudrate - misc_control
     _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), baudrate, 6, BM1937_SERIALTX_DEBUG);
+
+    // Make sure that we are done writing before setting a new baudrate on the ESP32 controller side.
+    uart_wait_tx_done(UART_NUM_1, 1000 / portTICK_PERIOD_MS);
+
     return 3125000;
 }
 
