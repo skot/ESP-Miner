@@ -8,6 +8,7 @@
 #include "nvs_config.h"
 #include "nvs_flash.h"
 #include "display.h"
+#include "input.h"
 #include "vcore.h"
 #include "utils.h"
 #include "string.h"
@@ -136,6 +137,10 @@ void self_test(void * pvParameters)
             }
             break;
         default:
+    }
+
+    if (input_init() != ESP_OK) {
+        ESP_LOGW(TAG, "Input init failed!");
     }
 
     GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs = malloc(sizeof(bm_job *) * 128);

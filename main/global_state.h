@@ -68,6 +68,7 @@ typedef struct
     bool startup_done;
     char ssid[32];
     char wifi_status[20];
+    char ap_ssid[32];
     char * pool_url;
     char * fallback_pool_url;
     uint16_t pool_port;
@@ -76,6 +77,13 @@ typedef struct
     uint16_t overheat_mode;
     uint32_t lastClockSync;
 } SystemModule;
+
+typedef struct
+{
+    bool running;
+    char *message;
+    bool result;
+} SelfTestModule;
 
 typedef struct
 {
@@ -97,6 +105,7 @@ typedef struct
     SystemModule SYSTEM_MODULE;
     AsicTaskModule ASIC_TASK_MODULE;
     PowerManagementModule POWER_MANAGEMENT_MODULE;
+    SelfTestModule SELF_TEST_MODULE;
 
     char * extranonce_str;
     int extranonce_2_len;
