@@ -6,7 +6,7 @@
 
 
 # ESP-Miner
-esp-miner is open source ESP32 firmware for the [Bitaxe](https://github.com/skot/bitaxe)
+esp-miner is open source ESP32 firmware for the [Bitaxe](https://github.com/skot/bitaxe) test
 
 If you are looking for premade images to load on your Bitaxe, check out the [releases](https://github.com/skot/ESP-Miner/releases) page. Maybe you want [instructions](https://github.com/skot/ESP-Miner/blob/master/flashing.md) for loading factory images.
 
