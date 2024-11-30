@@ -8,6 +8,7 @@
 #include "nvs_config.h"
 #include "nvs_flash.h"
 #include "display.h"
+#include "screen.h"
 #include "input.h"
 #include "vcore.h"
 #include "utils.h"
