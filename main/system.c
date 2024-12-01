@@ -128,23 +128,25 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
         ESP_LOGE(TAG, "Failed to ensure overheat_mode config");
     }
 
-    //Init the OLED
+    //Init the DISPLAY
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            // oled
-            if (display_init() != ESP_OK) {
+            // display
+            if (display_init(GLOBAL_STATE) != ESP_OK) {
                 ESP_LOGW(TAG, "OLED init failed!");
             } else {
                 ESP_LOGI(TAG, "OLED init success!");
+
+                GLOBAL_STATE->SYSTEM_MODULE.is_screen_active = true;
             }
             break;
         default:
     }
 
-    if (input_init() != ESP_OK) {
+    if (input_init(toggle_wifi_softap) != ESP_OK) {
         ESP_LOGW(TAG, "Input init failed!");
     }
 

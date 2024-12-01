@@ -68,6 +68,7 @@ typedef struct
     bool startup_done;
     char ssid[32];
     char wifi_status[20];
+    char ip_addr_str[16]; // IP4ADDR_STRLEN_MAX
     char ap_ssid[32];
     char * pool_url;
     char * fallback_pool_url;
@@ -76,13 +77,15 @@ typedef struct
     bool is_using_fallback;
     uint16_t overheat_mode;
     uint32_t lastClockSync;
+    bool is_screen_active;
 } SystemModule;
 
 typedef struct
 {
-    bool running;
+    bool active;
     char *message;
     bool result;
+    bool finished;
 } SelfTestModule;
 
 typedef struct

@@ -22,17 +22,8 @@
 #include "utils.h"
 #include "TPS546.h"
 
-
-#define BUTTON_BOOT GPIO_NUM_0
-#define LONG_PRESS_DURATION_MS 2000 // Define what constitutes a long press
-#define ESP_INTR_FLAG_DEFAULT 0 //wtf is this for esp-idf?
-
 #define TESTS_FAILED 0
 #define TESTS_PASSED 1
-
-// Define event bits
-#define EVENT_SHORT_PRESS   1
-#define EVENT_LONG_PRESS    2
 
 /////Test Constants/////
 //Test Fan Speed
@@ -54,19 +45,10 @@
 // #define HASHRATE_TARGET_ULTRA 1000 //GH/s
 // #define HASHRATE_TARGET_MAX 2000 //GH/s
 
-
 static const char * TAG = "self_test";
-const char *messages[] = {"", "", "", ""};
-
-// Create an event group
-EventGroupHandle_t xTestsEventGroup;
-TimerHandle_t xButtonTimer;
-bool button_pressed = false;
 
 //local function prototypes
 static void tests_done(GlobalState * GLOBAL_STATE, bool test_result);
-static void configure_button_boot_interrupt(void);
-void vButtonTimerCallback(TimerHandle_t xTimer);
 
 bool should_test(GlobalState * GLOBAL_STATE) {
     bool is_max = GLOBAL_STATE->asic_model == ASIC_BM1397;
@@ -78,20 +60,15 @@ bool should_test(GlobalState * GLOBAL_STATE) {
     return false;
 }
 
+static void reset_self_test() {
+    ESP_LOGI(TAG, "Long press detected, resetting self test flag and rebooting...");
+    nvs_config_set_u16(NVS_CONFIG_SELF_TEST, 0);
+    esp_restart();
+}
+
 static void display_msg(char * msg, GlobalState * GLOBAL_STATE) 
 {
-    switch (GLOBAL_STATE->device_model) {
-        case DEVICE_MAX:
-        case DEVICE_ULTRA:
-        case DEVICE_SUPRA:
-        case DEVICE_GAMMA:
-            if (display_active()) {
-                messages[1] = msg;
-                display_show_status(messages, 4);
-            }
-            break;
-        default:
-    }
+    GLOBAL_STATE->SELF_TEST_MODULE.message = msg;
 }
 
 static esp_err_t test_fan_sense(GlobalState * GLOBAL_STATE)
@@ -160,19 +137,19 @@ esp_err_t test_display(GlobalState * GLOBAL_STATE) {
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            ESP_RETURN_ON_ERROR(display_init(), TAG, "DISPLAY init failed!");
+            if (display_init(GLOBAL_STATE) != ESP_OK) {
+                display_msg("DISPLAY:FAIL", GLOBAL_STATE);
+                return ESP_FAIL;
+            }
 
             ESP_LOGI(TAG, "DISPLAY init success!");
-
-            messages[0] = "BITAXE SELF TESTING";
-            display_show_status(messages, 4);
-
             break;
         default:
     }
 
     return ESP_OK;
 }
+
 esp_err_t test_input(GlobalState * GLOBAL_STATE) {
     // Input testing
     switch (GLOBAL_STATE->device_model) {
@@ -180,13 +157,33 @@ esp_err_t test_input(GlobalState * GLOBAL_STATE) {
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            ESP_RETURN_ON_ERROR(input_init(), TAG, "INPUT init failed!");
+            if (input_init(reset_self_test) != ESP_OK) {
+                display_msg("INPUT:FAIL", GLOBAL_STATE);
+                return ESP_FAIL;
+            }
             
             ESP_LOGI(TAG, "INPUT init success!");
+            break;
+        default:
+    }
 
-            messages[0] = "BITAXE SELF TESTING";
-            display_show_status(messages, 4);
+    return ESP_OK;
+}
 
+esp_err_t test_screen(GlobalState * GLOBAL_STATE) {
+    // Screen testing
+    switch (GLOBAL_STATE->device_model) {
+        case DEVICE_MAX:
+        case DEVICE_ULTRA:
+        case DEVICE_SUPRA:
+        case DEVICE_GAMMA:
+            if (screen_start(GLOBAL_STATE) != ESP_OK) {
+                display_msg("SCREEN:FAIL", GLOBAL_STATE);
+                return ESP_FAIL;
+            }
+
+            ESP_LOGI(TAG, "SCREEN start success!");
+            
             break;
         default:
     }
@@ -284,8 +281,6 @@ esp_err_t test_init_peripherals(GlobalState * GLOBAL_STATE) {
     return ESP_OK;
 }
 
-
-
 /**
  * @brief Perform a self-test of the system.
  *
@@ -300,10 +295,7 @@ void self_test(void * pvParameters)
 
     ESP_LOGI(TAG, "Running Self Tests");
 
-    //create the button timer for long press detection
-    xButtonTimer = xTimerCreate("ButtonTimer", pdMS_TO_TICKS(LONG_PRESS_DURATION_MS), pdFALSE, (void*)0, vButtonTimerCallback);
-
-    configure_button_boot_interrupt();
+    GLOBAL_STATE->SELF_TEST_MODULE.active = true;
 
     //Run display tests
     if (test_display(GLOBAL_STATE) != ESP_OK) {
@@ -311,9 +303,15 @@ void self_test(void * pvParameters)
         tests_done(GLOBAL_STATE, TESTS_FAILED);
     }
 
-    //Run display tests
+    //Run input tests
     if (test_input(GLOBAL_STATE) != ESP_OK) {
         ESP_LOGE(TAG, "Input test failed!");
+        tests_done(GLOBAL_STATE, TESTS_FAILED);
+    }
+
+    //Run screen tests
+    if (test_screen(GLOBAL_STATE) != ESP_OK) {
+        ESP_LOGE(TAG, "Screen test failed!");
         tests_done(GLOBAL_STATE, TESTS_FAILED);
     }
 
@@ -359,7 +357,6 @@ void self_test(void * pvParameters)
     GLOBAL_STATE->valid_jobs = malloc(sizeof(uint8_t) * 128);
 
     for (int i = 0; i < 128; i++) {
-
         GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[i] = NULL;
         GLOBAL_STATE->valid_jobs[i] = 0;
     }
@@ -494,15 +491,11 @@ void self_test(void * pvParameters)
 
     tests_done(GLOBAL_STATE, TESTS_PASSED);
     ESP_LOGI(TAG, "Self Tests Passed!!!");
-    return;
-    
+    return;  
 }
 
-static void tests_done(GlobalState * GLOBAL_STATE, bool test_result) {
-
-    // Create event group for the System task
-    xTestsEventGroup = xEventGroupCreate();
-
+static void tests_done(GlobalState * GLOBAL_STATE, bool test_result) 
+{
     if (test_result == TESTS_PASSED) {
         ESP_LOGI(TAG, "SELF TESTS PASS -- Press RESET to continue");
     } else {
@@ -514,80 +507,12 @@ static void tests_done(GlobalState * GLOBAL_STATE, bool test_result) {
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            if (display_active()) {
-                if (test_result == TESTS_PASSED) {
-                    messages[2] = "TESTS PASS!";
-                } else {
-                    messages[2] = "TESTS FAIL!";
-                }
-                messages[3] = "LONG PRESS BOOT";
-                display_show_status(messages, 4);
-            }
+            GLOBAL_STATE->SELF_TEST_MODULE.result = test_result;
+            GLOBAL_STATE->SELF_TEST_MODULE.finished = true;
             break;
         default:
     }
 
     //wait here for a long press to reboot
-    while (1) {
-
-        EventBits_t uxBits = xEventGroupWaitBits(
-            xTestsEventGroup,
-            EVENT_LONG_PRESS,
-            pdTRUE,  // Clear bits on exit
-            pdFALSE, // Wait for any bit
-            portMAX_DELAY //wait forever
-        );
-
-        if (uxBits & EVENT_LONG_PRESS) {
-            ESP_LOGI(TAG, "Long press detected, rebooting");
-            nvs_config_set_u16(NVS_CONFIG_SELF_TEST, 0);
-            esp_restart();
-        }
-
-    }
-}
-
-void vButtonTimerCallback(TimerHandle_t xTimer) {
-    // Timer callback, set the long press event bit
-    xEventGroupSetBits(xTestsEventGroup, EVENT_LONG_PRESS);
-}
-
-// Interrupt handler for BUTTON_BOOT
-void IRAM_ATTR button_boot_isr_handler(void* arg) {
-    if (gpio_get_level(BUTTON_BOOT) == 0) {
-        // Button pressed, start the timer
-        if (!button_pressed) {
-            button_pressed = true;
-            xTimerStartFromISR(xButtonTimer, NULL);
-        }
-    } else {
-        // Button released, stop the timer and check the duration
-        if (button_pressed) {
-            button_pressed = false;
-            if (xTimerIsTimerActive(xButtonTimer)) {
-                xTimerStopFromISR(xButtonTimer, NULL);
-                //xEventGroupSetBitsFromISR(xTestsEventGroup, EVENT_SHORT_PRESS, NULL); //we don't care about a short press
-            }
-        }
-    }
-}
-
-static void configure_button_boot_interrupt(void) {
-    // Configure the GPIO pin as input
-    gpio_config_t io_conf = {
-        .intr_type = GPIO_INTR_ANYEDGE,  // Interrupt on both edges
-        .mode = GPIO_MODE_INPUT,         // Set as input mode
-        .pin_bit_mask = (1ULL << BUTTON_BOOT),  // Bit mask of the pin to configure
-        .pull_down_en = GPIO_PULLDOWN_DISABLE,  // Disable pull-down mode
-        .pull_up_en = GPIO_PULLUP_ENABLE,       // Enable pull-up mode
-    };
-    gpio_config(&io_conf);
-
-    // Install the ISR service
-    gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
-
-    // Attach the interrupt handler
-    gpio_isr_handler_add(BUTTON_BOOT, button_boot_isr_handler, NULL);
-
-    ESP_LOGI(TAG, "BUTTON_BOOT interrupt configured");
+    vTaskDelay(portMAX_DELAY);
 }

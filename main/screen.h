@@ -17,6 +17,5 @@ typedef enum {
 
 esp_err_t screen_start(void * pvParameters);
 void screen_next(void);
-void display_show_status(const char *messages[], size_t message_count);
 
 #endif /* SCREEN_H_ */

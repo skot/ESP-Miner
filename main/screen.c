@@ -1,16 +1,12 @@
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_check.h"
-#include "esp_event.h"
-#include "esp_netif.h"
 #include "lvgl.h"
 #include "esp_lvgl_port.h"
 #include "global_state.h"
-#include "display.h"
 #include "screen.h"
-#include "lwip/lwip_napt.h"
 
-static const char * TAG = "screen";
+// static const char * TAG = "screen";
 
 extern const lv_img_dsc_t logo;
 
@@ -21,14 +17,14 @@ static TickType_t current_screen_counter;
 
 static GlobalState * GLOBAL_STATE;
 
-static char ip_address_str[IP4ADDR_STRLEN_MAX];
-
 static lv_obj_t *hashrate_label;
 static lv_obj_t *efficiency_label;
 static lv_obj_t *difficulty_label;
 static lv_obj_t *chip_temp_label;
 
-static lv_obj_t *self_test_labels[2];
+static lv_obj_t *self_test_message_label;
+static lv_obj_t *self_test_result_label;
+static lv_obj_t *self_test_finished_label;
 
 static double current_hashrate;
 static float current_power;
@@ -36,18 +32,27 @@ static uint64_t current_difficulty;
 static float curreny_chip_temp;
 
 #define SCREEN_UPDATE_MS 500
-#define LOGO_DELAY_COUNT 5000/SCREEN_UPDATE_MS
+#define LOGO_DELAY_COUNT 5000 / SCREEN_UPDATE_MS
 #define CAROUSEL_DELAY_COUNT 10000 / SCREEN_UPDATE_MS
 
-static lv_obj_t * create_scr_self_test(SystemModule * module) {
+static lv_obj_t * create_scr_self_test() {
     lv_obj_t * scr = lv_obj_create(NULL);
 
     lv_obj_set_flex_flow(scr, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+
     lv_obj_t *label1 = lv_label_create(scr);
     lv_label_set_text(label1, "BITAXE SELF TEST");
-    self_test_labels[0] = lv_label_create(scr);
-    self_test_labels[1] = lv_label_create(scr);
+
+    self_test_message_label = lv_label_create(scr);
+
+    self_test_result_label = lv_label_create(scr);
+
+    self_test_finished_label = lv_label_create(scr);
+    lv_obj_set_width(self_test_finished_label, LV_HOR_RES);
+    lv_obj_add_flag(self_test_finished_label, LV_OBJ_FLAG_HIDDEN);
+    lv_label_set_long_mode(self_test_finished_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_label_set_text(self_test_finished_label, "Self test finished. Press BOOT button for 2 seconds to reset self test status and reboot the device.");
 
     return scr;
 }
@@ -57,15 +62,20 @@ static lv_obj_t * create_scr_overheat(SystemModule * module) {
 
     lv_obj_set_flex_flow(scr, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+
     lv_obj_t *label1 = lv_label_create(scr);
     lv_label_set_text(label1, "DEVICE OVERHEAT!");
+
     lv_obj_t *label2 = lv_label_create(scr);
-    lv_label_set_text(label2, "Power, frequency and fan configurations have been reset. Go to AxeOS to reconfigure device.");
+    lv_obj_set_width(label2, LV_HOR_RES);
     lv_label_set_long_mode(label2, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_label_set_text(label2, "Power, frequency and fan configurations have been reset. Go to AxeOS to reconfigure device.");
+
     lv_obj_t *label3 = lv_label_create(scr);
     lv_label_set_text(label3, "Device IP:");
+
     lv_obj_t *label4 = lv_label_create(scr);
-    lv_label_set_text_static(label4, ip_address_str);
+    lv_label_set_text_static(label4, module->ip_addr_str);
 
     return scr;
 }
@@ -75,11 +85,15 @@ static lv_obj_t * create_scr_configure(SystemModule * module) {
 
     lv_obj_set_flex_flow(scr, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+
     lv_obj_t *label1 = lv_label_create(scr);
-    lv_label_set_text(label1, "Welcome to your new BitAxe! Connect to the configuration Wifi and connect the BitAxe to your network.");
+    lv_obj_set_width(label1, LV_HOR_RES);
     lv_label_set_long_mode(label1, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_label_set_text(label1, "Welcome to your new BitAxe! Connect to the configuration Wifi and connect the BitAxe to your network.");
+
     lv_obj_t *label2 = lv_label_create(scr);
     lv_label_set_text(label2, "Configuration SSID:");
+
     lv_obj_t *label3 = lv_label_create(scr);
     lv_label_set_text(label3, module->ap_ssid);
 
@@ -118,19 +132,25 @@ static lv_obj_t * create_scr_urls(SystemModule * module) {
 
     lv_obj_set_flex_flow(scr, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+
     lv_obj_t *label1 = lv_label_create(scr);
     lv_label_set_text(label1, "Mining URL:");
+
     lv_obj_t *label2 = lv_label_create(scr);
+    lv_obj_set_width(label2, LV_HOR_RES);
+    lv_label_set_long_mode(label2, LV_LABEL_LONG_SCROLL_CIRCULAR);    
     lv_label_set_text(label2, module->is_using_fallback ? module->fallback_pool_url : module->pool_url);
+
     lv_obj_t *label3 = lv_label_create(scr);
     lv_label_set_text(label3, "Bitaxe IP:");
+
     lv_obj_t *label4 = lv_label_create(scr);
-    lv_label_set_text_static(label4, ip_address_str);
+    lv_label_set_text_static(label4, module->ip_addr_str);
 
     return scr;
 }
 
-static lv_obj_t * create_scr_stats(SystemModule * module, PowerManagementModule * power_management) {
+static lv_obj_t * create_scr_stats() {
     lv_obj_t * scr = lv_obj_create(NULL);
 
     lv_obj_set_flex_flow(scr, LV_FLEX_FLOW_COLUMN);
@@ -138,10 +158,13 @@ static lv_obj_t * create_scr_stats(SystemModule * module, PowerManagementModule 
 
     hashrate_label = lv_label_create(scr);
     lv_label_set_text(hashrate_label, "Gh/s: n/a");
+
     efficiency_label = lv_label_create(scr);
     lv_label_set_text(efficiency_label, "J/Th: n/a");
+
     difficulty_label = lv_label_create(scr);
     lv_label_set_text(difficulty_label, "Best: n/a");
+
     chip_temp_label = lv_label_create(scr);
     lv_label_set_text(chip_temp_label, "Temp: n/a");
 
@@ -165,20 +188,19 @@ static void screen_show(screen_t screen)
 
 static void screen_update_cb(lv_timer_t * timer) 
 {
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
-    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+    if (GLOBAL_STATE->SELF_TEST_MODULE.active) {
 
-    if (module->overheat_mode == 1) {
-        screen_show(SCR_OVERHEAT);
-        return;
-    }
-
-    if (GLOBAL_STATE->SELF_TEST_MODULE.running) {
         screen_show(SCR_SELF_TEST);
-        return;
-    }
 
-    if (current_screen == SCR_SELF_TEST) {
+        SelfTestModule * self_test = &GLOBAL_STATE->SELF_TEST_MODULE;
+
+        lv_label_set_text(self_test_message_label, self_test->message);
+
+        if (self_test->finished) {
+            lv_label_set_text(self_test_result_label, self_test->result ? "TESTS PASS!" : "TESTS FAIL!");
+
+            lv_obj_remove_flag(self_test_finished_label, LV_OBJ_FLAG_HIDDEN);
+        }
 
         return;
     }
@@ -186,6 +208,14 @@ static void screen_update_cb(lv_timer_t * timer)
     if (GLOBAL_STATE->ASIC_functions.init_fn == NULL) {
         // Invalid model
         // TODO Not sure what should be done here?
+        return;
+    }
+
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+
+    if (module->overheat_mode == 1) {
+        screen_show(SCR_OVERHEAT);
+
         return;
     }
 
@@ -222,6 +252,8 @@ static void screen_update_cb(lv_timer_t * timer)
 
     // Carousel
 
+    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+
     if (current_hashrate != module->current_hashrate) {
         lv_label_set_text_fmt(hashrate_label, "Gh/s: %.2f", module->current_hashrate);
     }
@@ -257,49 +289,24 @@ void screen_next()
     }
 }
 
-static void ip_event_handler(void * arg, esp_event_base_t event_base, int32_t event_id, void * event_data)
-{
-    if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t * event = (ip_event_got_ip_t *) event_data;
-        esp_ip4addr_ntoa(&event->ip_info.ip, ip_address_str, IP4ADDR_STRLEN_MAX);
-    }
-}
-
 esp_err_t screen_start(void * pvParameters)
 {
     GLOBAL_STATE = (GlobalState *) pvParameters;
 
-    if (display_active()) {
+    if (GLOBAL_STATE->SYSTEM_MODULE.is_screen_active) {
         SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
-        PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
 
-        screens[SCR_SELF_TEST] = create_scr_self_test(module);
+        screens[SCR_SELF_TEST] = create_scr_self_test();
         screens[SCR_OVERHEAT] = create_scr_overheat(module);
         screens[SCR_CONFIGURE] = create_scr_configure(module);
         screens[SCR_CONNECTION] = create_scr_connection(module);
         screens[SCR_LOGO] = create_scr_logo();
         screens[SCR_URLS] = create_scr_urls(module);
-        screens[SCR_STATS] = create_scr_stats(module, power_management);
+        screens[SCR_STATS] = create_scr_stats();
 
         lv_timer_create(screen_update_cb, SCREEN_UPDATE_MS, NULL);
-
-        esp_event_handler_instance_t instance_got_ip;
-        ESP_RETURN_ON_ERROR(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &ip_event_handler, NULL, &instance_got_ip), TAG, "Error registering IP event handler");
     }
 
     return ESP_OK;
-}
-
-// TODO: Transition code until self test code is revamped
-void display_show_status(const char *messages[], size_t message_count)
-{
-    if (lvgl_port_lock(0)) {
-
-        screen_show(SCR_SELF_TEST);
-        // messages[0] is ignored, it's already on the screen
-        lv_label_set_text(self_test_labels[0], messages[1]);
-        lv_label_set_text(self_test_labels[1], messages[2]);
-        lvgl_port_unlock();
-    }
 }
 

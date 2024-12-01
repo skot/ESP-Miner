@@ -53,6 +53,8 @@ static const char * TAG = "wifi_station";
 
 static int s_retry_num = 0;
 
+static char * _ip_addr_str;
+
 static void event_handler(void * arg, esp_event_base_t event_base, int32_t event_id, void * event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
@@ -75,8 +77,11 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
         MINER_set_wifi_status(WIFI_RETRYING, s_retry_num);
 
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+
         ip_event_got_ip_t * event = (ip_event_got_ip_t *) event_data;
-        ESP_LOGI(TAG, "Bitaxe ip:" IPSTR, IP2STR(&event->ip_info.ip));
+        snprintf(_ip_addr_str, IP4ADDR_STRLEN_MAX, IPSTR, IP2STR(&event->ip_info.ip));
+
+        ESP_LOGI(TAG, "Bitaxe ip: %s", _ip_addr_str);
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         MINER_set_wifi_status(WIFI_CONNECTED, 0);
@@ -194,8 +199,10 @@ esp_netif_t * wifi_init_sta(const char * wifi_ssid, const char * wifi_pass)
     return esp_netif_sta;
 }
 
-void wifi_init(const char * wifi_ssid, const char * wifi_pass, const char * hostname)
+void wifi_init(const char * wifi_ssid, const char * wifi_pass, const char * hostname, char * ip_addr_str)
 {
+    _ip_addr_str = ip_addr_str;
+
     s_wifi_event_group = xEventGroupCreate();
 
     ESP_ERROR_CHECK(esp_netif_init());

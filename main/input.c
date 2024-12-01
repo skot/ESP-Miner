@@ -16,6 +16,8 @@ static const char * TAG = "input";
 static lv_indev_state_t button_state = LV_INDEV_STATE_RELEASED;
 static lv_point_t points[] = { {0, 0} }; // must be static
 
+static void (*button_long_pressed)(void) = NULL;
+
 static void button_read(lv_indev_t *indev, lv_indev_data_t *data) 
 {
     data->key = LV_KEY_ENTER;
@@ -28,20 +30,24 @@ static void IRAM_ATTR button_isr_handler(void *arg)
     button_state = pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
 }
 
-static void button_short_clicked(lv_event_t *e)
+static void button_short_clicked_event_cb(lv_event_t *e)
 {
     ESP_LOGI(TAG, "Short button press detected, switching to next screen");
     screen_next();
 }
 
-static void button_long_pressed(lv_event_t *e)
+static void button_long_pressed_event_cb(lv_event_t *e)
 {
-    ESP_LOGI(TAG, "Long button press detected, toggling WiFi SoftAP");
-    toggle_wifi_softap();
+    if (button_long_pressed != NULL) {
+        ESP_LOGI(TAG, "Long button press detected");
+        button_long_pressed();
+    }
 }
 
-esp_err_t input_init(void)
+esp_err_t input_init(void (*button_long_pressed_cb)(void))
 {
+    button_long_pressed = button_long_pressed_cb;
+
     // Button handling
     gpio_config_t io_conf = {
         .pin_bit_mask = (1ULL << BUTTON_BOOT_GPIO),
@@ -61,8 +67,8 @@ esp_err_t input_init(void)
     lv_indev_set_long_press_time(indev, LONG_PRESS_DURATION_MS);
     lv_indev_set_read_cb(indev, button_read);
     lv_indev_set_button_points(indev, points);
-    lv_indev_add_event_cb(indev, button_short_clicked, LV_EVENT_SHORT_CLICKED, NULL);
-    lv_indev_add_event_cb(indev, button_long_pressed, LV_EVENT_LONG_PRESSED, NULL);
+    lv_indev_add_event_cb(indev, button_short_clicked_event_cb, LV_EVENT_SHORT_CLICKED, NULL);
+    lv_indev_add_event_cb(indev, button_long_pressed_event_cb, LV_EVENT_LONG_PRESSED, NULL);
 
     return ESP_OK;
 }

@@ -10,6 +10,7 @@
 #include "lvgl.h"
 #include "lvgl__lvgl/src/themes/lv_theme_private.h"
 #include "esp_lvgl_port.h"
+#include "global_state.h"
 #include "nvs_config.h"
 #include "i2c_bitaxe.h"
 #include "driver/i2c_master.h"
@@ -22,8 +23,6 @@
 #define LCD_V_RES              32
 #define LCD_CMD_BITS           8
 #define LCD_PARAM_BITS         8
-
-static bool is_display_active = false;
 
 static const char * TAG = "display";
 
@@ -38,8 +37,10 @@ static void theme_apply(lv_theme_t *theme, lv_obj_t *obj) {
     }
 }
 
-esp_err_t display_init(void)
+esp_err_t display_init(void * pvParameters)
 {
+    GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
+
     uint8_t flip_screen = nvs_config_get_u16(NVS_CONFIG_FLIP_SCREEN, 1);
     uint8_t invert_screen = nvs_config_get_u16(NVS_CONFIG_INVERT_SCREEN, 0);
 
@@ -116,12 +117,7 @@ esp_err_t display_init(void)
     // Only turn on the screen when it has been cleared
     ESP_RETURN_ON_ERROR(esp_lcd_panel_disp_on_off(panel_handle, true), TAG, "Panel display on failed");
 
-    is_display_active = true;
+    GLOBAL_STATE->SYSTEM_MODULE.is_screen_active = true;
 
     return ESP_OK;
-}
-
-bool display_active(void)
-{
-    return is_display_active;
 }
