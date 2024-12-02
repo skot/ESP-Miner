@@ -81,7 +81,7 @@ static lv_obj_t * create_scr_overheat(SystemModule * module) {
     return scr;
 }
 
-static lv_obj_t * create_scr_invalid_asic() {
+static lv_obj_t * create_scr_invalid_asic(SystemModule * module) {
     lv_obj_t * scr = lv_obj_create(NULL);
 
     lv_obj_set_flex_flow(scr, LV_FLEX_FLOW_COLUMN);
