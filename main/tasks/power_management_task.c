@@ -74,6 +74,8 @@ static double automatic_fan_speed(float chip_temp, GlobalState * GLOBAL_STATE)
 
 void POWER_MANAGEMENT_task(void * pvParameters)
 {
+    ESP_LOGI(TAG, "Starting");
+
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
     PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;

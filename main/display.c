@@ -74,9 +74,13 @@ esp_err_t display_init(void * pvParameters)
 
     ESP_RETURN_ON_ERROR(esp_lcd_new_panel_ssd1306(io_handle, &panel_config, &panel_handle), TAG, "No display found");
     ESP_RETURN_ON_ERROR(esp_lcd_panel_reset(panel_handle), TAG, "Panel reset failed");
-    ESP_RETURN_ON_ERROR(esp_lcd_panel_init(panel_handle), TAG, "Panel init failed");
-    // ESP_RETURN_ON_ERROR(esp_lcd_panel_mirror(panel_handle, false, false), TAG, "Panel mirror failed");
-    ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(panel_handle, invert_screen), TAG, "Panel invert failed");
+    esp_err_t esp_lcd_panel_init_err = esp_lcd_panel_init(panel_handle);
+    if (esp_lcd_panel_init_err != ESP_OK) {
+        ESP_LOGE(TAG, "Panel init failed, no display connected?");
+    }  else {
+        ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(panel_handle, invert_screen), TAG, "Panel invert failed");
+        // ESP_RETURN_ON_ERROR(esp_lcd_panel_mirror(panel_handle, false, false), TAG, "Panel mirror failed");
+    }
     
     ESP_LOGI(TAG, "Initialize LVGL");
     const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
@@ -102,22 +106,26 @@ esp_err_t display_init(void * pvParameters)
         }
     };
 
-    lv_style_init(&scr_style);
-    lv_style_set_text_font(&scr_style, &lv_font_portfolio_6x8);
-    lv_style_set_bg_opa(&scr_style, LV_OPA_COVER);
-
-    lv_theme_set_apply_cb(&theme, theme_apply);
-
     lv_disp_t * disp = lvgl_port_add_disp(&disp_cfg);
     if (lvgl_port_lock(0)) {
         lv_display_set_theme(disp, &theme);
         lvgl_port_unlock();
     }
 
-    // Only turn on the screen when it has been cleared
-    ESP_RETURN_ON_ERROR(esp_lcd_panel_disp_on_off(panel_handle, true), TAG, "Panel display on failed");
+    lv_style_init(&scr_style);
+    lv_style_set_text_font(&scr_style, &lv_font_portfolio_6x8);
+    lv_style_set_bg_opa(&scr_style, LV_OPA_COVER);
 
-    GLOBAL_STATE->SYSTEM_MODULE.is_screen_active = true;
+    lv_theme_set_apply_cb(&theme, theme_apply);
+
+    if (esp_lcd_panel_init_err == ESP_OK) {
+        // Only turn on the screen when it has been cleared
+        ESP_RETURN_ON_ERROR(esp_lcd_panel_disp_on_off(panel_handle, true), TAG, "Panel display on failed");   
+
+        GLOBAL_STATE->SYSTEM_MODULE.is_screen_active = true;
+    } else {
+        ESP_LOGW(TAG, "No display found.");
+    }
 
     return ESP_OK;
 }

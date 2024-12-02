@@ -14,7 +14,6 @@
 static const char * TAG = "input";
 
 static lv_indev_state_t button_state = LV_INDEV_STATE_RELEASED;
-static lv_point_t points[] = { {0, 0} }; // must be static
 
 static void (*button_long_pressed)(void) = NULL;
 
@@ -46,6 +45,8 @@ static void button_long_pressed_event_cb(lv_event_t *e)
 
 esp_err_t input_init(void (*button_long_pressed_cb)(void))
 {
+    ESP_LOGI(TAG, "Install button driver");
+
     button_long_pressed = button_long_pressed_cb;
 
     // Button handling
@@ -61,12 +62,16 @@ esp_err_t input_init(void (*button_long_pressed_cb)(void))
     ESP_RETURN_ON_ERROR(gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT), TAG, "Error installing ISR service");
     ESP_RETURN_ON_ERROR(gpio_isr_handler_add(BUTTON_BOOT_GPIO, button_isr_handler, NULL), TAG, "Error adding ISR handler");
 
+    lv_group_t * group = lv_group_create();
+    lv_group_set_default(group);
+    lv_group_add_obj(group, lv_obj_create(NULL)); // dummy screen for event handling, in case no display is attached
+
     // Create input device
     lv_indev_t * indev = lv_indev_create();
-    lv_indev_set_type(indev, LV_INDEV_TYPE_BUTTON);
+    lv_indev_set_type(indev, LV_INDEV_TYPE_KEYPAD);
     lv_indev_set_long_press_time(indev, LONG_PRESS_DURATION_MS);
     lv_indev_set_read_cb(indev, button_read);
-    lv_indev_set_button_points(indev, points);
+    lv_indev_set_group(indev, group);
     lv_indev_add_event_cb(indev, button_short_clicked_event_cb, LV_EVENT_SHORT_CLICKED, NULL);
     lv_indev_add_event_cb(indev, button_long_pressed_event_cb, LV_EVENT_LONG_PRESSED, NULL);
 

@@ -135,12 +135,10 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
             // display
-            if (display_init(GLOBAL_STATE) != ESP_OK) {
+            if (display_init(GLOBAL_STATE) != ESP_OK || !GLOBAL_STATE->SYSTEM_MODULE.is_screen_active) {
                 ESP_LOGW(TAG, "OLED init failed!");
             } else {
                 ESP_LOGI(TAG, "OLED init success!");
-
-                GLOBAL_STATE->SYSTEM_MODULE.is_screen_active = true;
             }
             break;
         default:
@@ -163,6 +161,7 @@ void SYSTEM_notify_accepted_share(GlobalState * GLOBAL_STATE)
 
     module->shares_accepted++;
 }
+
 void SYSTEM_notify_rejected_share(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
