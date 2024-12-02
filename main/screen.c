@@ -319,4 +319,3 @@ esp_err_t screen_start(void * pvParameters)
 
     return ESP_OK;
 }
-
