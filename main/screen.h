@@ -4,6 +4,7 @@
 typedef enum {
     SCR_SELF_TEST,
     SCR_OVERHEAT,
+    SCR_INVALID_ASIC,
     SCR_CONFIGURE,
     SCR_CONNECTION,
     SCR_LOGO,

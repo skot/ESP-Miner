@@ -81,6 +81,24 @@ static lv_obj_t * create_scr_overheat(SystemModule * module) {
     return scr;
 }
 
+static lv_obj_t * create_scr_invalid_asic() {
+    lv_obj_t * scr = lv_obj_create(NULL);
+
+    lv_obj_set_flex_flow(scr, LV_FLEX_FLOW_COLUMN);
+    lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+
+    lv_obj_t *label1 = lv_label_create(scr);
+    lv_label_set_text(hashrate_label, "ASIC MODEL INVALID");
+
+    lv_obj_t *label2 = lv_label_create(scr);
+    lv_label_set_text(label2, "Configuration SSID:");
+
+    lv_obj_t *label3 = lv_label_create(scr);
+    lv_label_set_text(label3, module->ap_ssid);
+
+    return scr;
+}
+
 static lv_obj_t * create_scr_configure(SystemModule * module) {
     lv_obj_t * scr = lv_obj_create(NULL);
 
@@ -207,8 +225,7 @@ static void screen_update_cb(lv_timer_t * timer)
     }
 
     if (GLOBAL_STATE->ASIC_functions.init_fn == NULL) {
-        // Invalid model
-        // TODO Not sure what should be done here?
+        screen_show(SCR_INVALID_ASIC);
         return;
     }
 
@@ -216,7 +233,6 @@ static void screen_update_cb(lv_timer_t * timer)
 
     if (module->overheat_mode == 1) {
         screen_show(SCR_OVERHEAT);
-
         return;
     }
 
@@ -308,6 +324,7 @@ esp_err_t screen_start(void * pvParameters)
 
         screens[SCR_SELF_TEST] = create_scr_self_test();
         screens[SCR_OVERHEAT] = create_scr_overheat(module);
+        screens[SCR_INVALID_ASIC] = create_scr_invalid_asic(module);
         screens[SCR_CONFIGURE] = create_scr_configure(module);
         screens[SCR_CONNECTION] = create_scr_connection(module);
         screens[SCR_LOGO] = create_scr_logo();
