@@ -83,6 +83,7 @@ esp_err_t display_init(void * pvParameters)
     }
     
     ESP_LOGI(TAG, "Initialize LVGL");
+
     const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
     ESP_RETURN_ON_ERROR(lvgl_port_init(&lvgl_cfg), TAG, "LVGL init failed");
 
@@ -107,16 +108,17 @@ esp_err_t display_init(void * pvParameters)
     };
 
     lv_disp_t * disp = lvgl_port_add_disp(&disp_cfg);
+
     if (lvgl_port_lock(0)) {
+        lv_style_init(&scr_style);
+        lv_style_set_text_font(&scr_style, &lv_font_portfolio_6x8);
+        lv_style_set_bg_opa(&scr_style, LV_OPA_COVER);
+
+        lv_theme_set_apply_cb(&theme, theme_apply);
+
         lv_display_set_theme(disp, &theme);
         lvgl_port_unlock();
     }
-
-    lv_style_init(&scr_style);
-    lv_style_set_text_font(&scr_style, &lv_font_portfolio_6x8);
-    lv_style_set_bg_opa(&scr_style, LV_OPA_COVER);
-
-    lv_theme_set_apply_cb(&theme, theme_apply);
 
     if (esp_lcd_panel_init_err == ESP_OK) {
         // Only turn on the screen when it has been cleared
