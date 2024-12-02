@@ -88,7 +88,7 @@ static lv_obj_t * create_scr_invalid_asic() {
     lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 
     lv_obj_t *label1 = lv_label_create(scr);
-    lv_label_set_text(hashrate_label, "ASIC MODEL INVALID");
+    lv_label_set_text(label1, "ASIC MODEL INVALID");
 
     lv_obj_t *label2 = lv_label_create(scr);
     lv_label_set_text(label2, "Configuration SSID:");
