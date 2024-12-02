@@ -162,7 +162,7 @@ esp_err_t test_input(GlobalState * GLOBAL_STATE) {
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            if (input_init(reset_self_test) != ESP_OK) {
+            if (input_init(NULL, reset_self_test) != ESP_OK) {
                 display_msg("INPUT:FAIL", GLOBAL_STATE);
                 return ESP_FAIL;
             }

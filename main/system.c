@@ -144,7 +144,7 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
         default:
     }
 
-    if (input_init(toggle_wifi_softap) != ESP_OK) {
+    if (input_init(screen_next, toggle_wifi_softap) != ESP_OK) {
         ESP_LOGW(TAG, "Input init failed!");
     }
 

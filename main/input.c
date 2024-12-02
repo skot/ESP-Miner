@@ -4,8 +4,6 @@
 #include "lvgl.h"
 #include "esp_lvgl_port.h"
 #include "driver/gpio.h"
-#include "screen.h"
-#include "connect.h"
 
 #define BUTTON_BOOT_GPIO       GPIO_NUM_0
 #define ESP_INTR_FLAG_DEFAULT  0
@@ -15,7 +13,8 @@ static const char * TAG = "input";
 
 static lv_indev_state_t button_state = LV_INDEV_STATE_RELEASED;
 
-static void (*button_long_pressed)(void) = NULL;
+static void (*button_short_clicked_fn)(void) = NULL;
+static void (*button_long_pressed_fn)(void) = NULL;
 
 static void button_read(lv_indev_t *indev, lv_indev_data_t *data) 
 {
@@ -31,23 +30,19 @@ static void IRAM_ATTR button_isr_handler(void *arg)
 
 static void button_short_clicked_event_cb(lv_event_t *e)
 {
-    ESP_LOGI(TAG, "Short button press detected, switching to next screen");
-    screen_next();
+    ESP_LOGI(TAG, "Short button click detected");
+    button_short_clicked_fn();
 }
 
 static void button_long_pressed_event_cb(lv_event_t *e)
 {
-    if (button_long_pressed != NULL) {
-        ESP_LOGI(TAG, "Long button press detected");
-        button_long_pressed();
-    }
+    ESP_LOGI(TAG, "Long button press detected");
+    button_long_pressed_fn();
 }
 
-esp_err_t input_init(void (*button_long_pressed_cb)(void))
+esp_err_t input_init(void (*button_short_clicked_cb)(void), void (*button_long_pressed_cb)(void))
 {
     ESP_LOGI(TAG, "Install button driver");
-
-    button_long_pressed = button_long_pressed_cb;
 
     // Button handling
     gpio_config_t io_conf = {
@@ -72,8 +67,14 @@ esp_err_t input_init(void (*button_long_pressed_cb)(void))
     lv_indev_set_long_press_time(indev, LONG_PRESS_DURATION_MS);
     lv_indev_set_read_cb(indev, button_read);
     lv_indev_set_group(indev, group);
-    lv_indev_add_event_cb(indev, button_short_clicked_event_cb, LV_EVENT_SHORT_CLICKED, NULL);
-    lv_indev_add_event_cb(indev, button_long_pressed_event_cb, LV_EVENT_LONG_PRESSED, NULL);
+    if (button_short_clicked_cb != NULL) {
+        button_short_clicked_fn = button_short_clicked_cb;
+        lv_indev_add_event_cb(indev, button_short_clicked_event_cb, LV_EVENT_SHORT_CLICKED, NULL);
+    }
+    if (button_long_pressed_cb != NULL) {
+        button_long_pressed_fn = button_long_pressed_cb;
+        lv_indev_add_event_cb(indev, button_long_pressed_event_cb, LV_EVENT_LONG_PRESSED, NULL);
+    }
 
     return ESP_OK;
 }
