@@ -30,6 +30,7 @@ static double current_hashrate;
 static float current_power;
 static uint64_t current_difficulty;
 static float curreny_chip_temp;
+static bool found_block;
 
 #define SCREEN_UPDATE_MS 500
 #define LOGO_DELAY_COUNT 5000 / SCREEN_UPDATE_MS
@@ -246,10 +247,6 @@ static void screen_update_cb(lv_timer_t * timer)
         return;
     }
 
-    if (module->FOUND_BLOCK) {
-        // TODO make special screen for this
-    }
-
     // Carousel
 
     PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
@@ -265,8 +262,18 @@ static void screen_update_cb(lv_timer_t * timer)
         }
     }
 
-    if (current_difficulty != module->best_session_nonce_diff) {
-        lv_label_set_text_fmt(difficulty_label, "Best: %s/%s", module->best_session_diff_string, module->best_diff_string);
+    if (module->FOUND_BLOCK && !found_block) {
+        found_block = true;
+
+        lv_obj_set_width(difficulty_label, LV_HOR_RES);
+        lv_label_set_long_mode(difficulty_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
+        lv_label_set_text_fmt(difficulty_label, "Best: %s   !!! BLOCK FOUND !!!", module->best_session_diff_string);
+
+        screen_show(SCR_STATS);
+    } else {
+        if (current_difficulty != module->best_session_nonce_diff) {
+            lv_label_set_text_fmt(difficulty_label, "Best: %s/%s", module->best_session_diff_string, module->best_diff_string);
+        }
     }
 
     if (curreny_chip_temp != power_management->chip_temp_avg) {
@@ -278,7 +285,7 @@ static void screen_update_cb(lv_timer_t * timer)
     current_difficulty = module->best_session_nonce_diff;
     curreny_chip_temp = power_management->chip_temp_avg;
 
-    if (CAROUSEL_DELAY_COUNT > current_screen_counter) {
+    if (CAROUSEL_DELAY_COUNT > current_screen_counter || found_block) {
         return;
     }
 
