@@ -89,7 +89,7 @@ static lv_obj_t * create_scr_configure(SystemModule * module) {
     lv_obj_t *label1 = lv_label_create(scr);
     lv_obj_set_width(label1, LV_HOR_RES);
     lv_label_set_long_mode(label1, LV_LABEL_LONG_SCROLL_CIRCULAR);
-    lv_label_set_text(label1, "Welcome to your new BitAxe! Connect to the configuration Wifi and connect the BitAxe to your network.");
+    lv_label_set_text(label1, "Welcome to your new Bitaxe! Connect to the configuration Wifi and connect the Bitaxe to your network.");
 
     lv_obj_t *label2 = lv_label_create(scr);
     lv_label_set_text(label2, "Configuration SSID:");
