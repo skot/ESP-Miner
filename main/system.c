@@ -29,6 +29,9 @@
 #include "oled.h"
 #include "vcore.h"
 
+#define SCREEN_TIMER_DISABLED 0
+#define SCREEN_TIMER_EXPIRED 1
+#define CYCLE_TIME 10000 // 10 seconds
 
 static const char * TAG = "SystemModule";
 
@@ -44,6 +47,7 @@ static void _show_overheat_screen(GlobalState * GLOBAL_STATE);
 static void _clear_display(GlobalState * GLOBAL_STATE);
 static void _init_connection(GlobalState * GLOBAL_STATE);
 static void _update_connection(GlobalState * GLOBAL_STATE);
+static uint64_t _update_screen_timeout();
 static void _update_screen_one(GlobalState * GLOBAL_STATE);
 static void _update_screen_two(GlobalState * GLOBAL_STATE);
 static void show_ap_information(const char * error, GlobalState * GLOBAL_STATE);
@@ -225,6 +229,7 @@ void SYSTEM_task(void * pvParameters)
     
     int current_screen = 0;
     TickType_t last_update_time = xTaskGetTickCount();
+    uint64_t screen_timeout_counter = _update_screen_timeout();
 
     while (1) {
         // Check for overheat mode
@@ -251,14 +256,20 @@ void SYSTEM_task(void * pvParameters)
         // Wait for user input or timeout
         bool input_received = false;
         TickType_t current_time = xTaskGetTickCount();
-        TickType_t wait_time = pdMS_TO_TICKS(10000) - (current_time - last_update_time);
+        TickType_t wait_time = pdMS_TO_TICKS(CYCLE_TIME) - (current_time - last_update_time);
 
         if (wait_time > 0) {
             if (xQueueReceive(user_input_queue, &input_event, wait_time) == pdTRUE) {
                 input_received = true;
                 if (strcmp(input_event, "SHORT") == 0) {
-                    ESP_LOGI(TAG, "Short button press detected, switching to next screen");
-                    current_screen = (current_screen + 1) % 2;
+                    if (OLED_status()) {
+                        ESP_LOGI(TAG, "Short button press detected, switching to next screen");
+                        current_screen = (current_screen + 1) % 2;
+                    } else {
+                        ESP_LOGI(TAG, "Short button press detected, turning screen on");
+                        OLED_activate();
+                    }
+                    screen_timeout_counter = _update_screen_timeout();
                 } else if (strcmp(input_event, "LONG") == 0) {
                     ESP_LOGI(TAG, "Long button press detected, toggling WiFi SoftAP");
                     toggle_wifi_softap();
@@ -266,14 +277,23 @@ void SYSTEM_task(void * pvParameters)
             }
         }
 
-        // If no input received and 10 seconds have passed, switch to the next screen
-        if (!input_received && (xTaskGetTickCount() - last_update_time) >= pdMS_TO_TICKS(10000)) {
-            current_screen = (current_screen + 1) % 2;
+        // If no input received and 'CYCLE_TIME' have passed, switch to the next screen or
+        // turn off the screen after timeout
+        if (!input_received && (xTaskGetTickCount() - last_update_time) >= pdMS_TO_TICKS(CYCLE_TIME)) {
+            if (OLED_status()) {
+                if (SCREEN_TIMER_EXPIRED == screen_timeout_counter) {
+                    ESP_LOGI(TAG, "Turning screen off");
+                    OLED_shutdown();
+                } else {
+                    current_screen = (current_screen + 1) % 2;
+                    if (SCREEN_TIMER_EXPIRED < screen_timeout_counter) {
+                        screen_timeout_counter--;
+                    }
+                }
+            }
         }
 
         last_update_time = xTaskGetTickCount();
-    
-        
     }
 }
 
@@ -402,6 +422,12 @@ static void _show_overheat_screen(GlobalState * GLOBAL_STATE)
         default:
             break;
     }
+}
+
+static uint64_t _update_screen_timeout()
+{
+    // update screen timeout (minutes -> msec)
+    return (nvs_config_get_u16(NVS_CONFIG_SCREEN_TIMEOUT, 0) * 60 * 1000) / CYCLE_TIME;
 }
 
 static void _update_screen_one(GlobalState * GLOBAL_STATE)
