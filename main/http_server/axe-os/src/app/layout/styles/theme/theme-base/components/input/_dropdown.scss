@@ -165,3 +165,36 @@
 p-dropdown.ng-dirty.ng-invalid > .p-dropdown {
     @include invalid-input();
 }
+
+@media (prefers-color-scheme: light) {
+    .p-dropdown {
+        background: $inputTextColor;
+        border: $inputTextColor;
+        color: $inputBg;
+        .p-dropdown-trigger {
+            color: $inputBg;
+        }
+    }
+    .p-dropdown-panel {
+        background: #E6EEF6;
+        border: #BCC7DE;
+        .p-dropdown-items {
+            .p-dropdown-item {
+                color: $inputBg;
+                &.p-highlight {
+                    color: $highlightTextColorLight;
+                }
+    
+                &:not(.p-highlight):not(.p-disabled) {
+                    &.p-focus {
+                        color: $inputBg;
+                    }
+    
+                    &:hover {
+                        color: $inputListItemTextHoverColorLight;
+                    }
+                }
+            }
+        }
+    }
+}
