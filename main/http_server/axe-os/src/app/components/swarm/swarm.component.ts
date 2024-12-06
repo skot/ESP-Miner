@@ -63,14 +63,13 @@ export class SwarmComponent implements OnInit, OnDestroy {
 
     if (swarmData == null) {
       this.scanNetwork();
-      //this.swarm$ = this.scanNetwork('192.168.1.23', '255.255.255.0').pipe(take(1));
     } else {
       this.swarm = swarmData;
       this.refreshList();
     }
 
     this.refreshIntervalRef = window.setInterval(() => {
-      if (!this.isRefreshing) {
+      if (!this.scanning && !this.isRefreshing) {
         this.refreshIntervalTime--;
         if (this.refreshIntervalTime <= 0) {
           this.refreshList();
@@ -83,8 +82,6 @@ export class SwarmComponent implements OnInit, OnDestroy {
     window.clearInterval(this.refreshIntervalRef);
     this.form.reset();
   }
-
-
 
   private ipToInt(ip: string): number {
     return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
@@ -189,6 +186,10 @@ export class SwarmComponent implements OnInit, OnDestroy {
   }
 
   public refreshList() {
+    if (this.scanning) {
+      return;
+    }
+    
     this.refreshIntervalTime = this.refreshTimeSet;
     const ips = this.swarm.map(axeOs => axeOs.IP);
     this.isRefreshing = true;
