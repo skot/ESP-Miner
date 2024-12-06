@@ -111,12 +111,15 @@ export class SwarmComponent implements OnInit, OnDestroy {
       mergeMap(ipAddr =>
         this.httpClient.get(`http://${ipAddr}/api/system/info`).pipe(
           map(result => {
-            return {
-              IP: ipAddr,
-              ...result
+            if ('hashRate' in result) {
+              return {
+                IP: ipAddr,
+                ...result
+              };
             }
+            return null;
           }),
-          timeout(5000), // Set the timeout to 1 second
+          timeout(5000), // Set the timeout to 5 seconds
           catchError(error => {
             //console.error(`Request to ${ipAddr}/api/system/info failed or timed out`, error);
             return []; // Return an empty result or handle as desired
@@ -127,9 +130,11 @@ export class SwarmComponent implements OnInit, OnDestroy {
       toArray() // Collect all results into a single array
     ).pipe(take(1)).subscribe({
       next: (result) => {
+        // Filter out null items first
+        const validResults = result.filter((item): item is NonNullable<typeof item> => item !== null);
         // Merge new results with existing swarm entries
         const existingIps = new Set(this.swarm.map(item => item.IP));
-        const newItems = result.filter(item => !existingIps.has(item.IP));
+        const newItems = validResults.filter(item => !existingIps.has(item.IP));
         this.swarm = [...this.swarm, ...newItems].sort(this.sortByIp.bind(this));
         this.localStorageService.setObject(SWARM_DATA, this.swarm);
         this.calculateTotals();
