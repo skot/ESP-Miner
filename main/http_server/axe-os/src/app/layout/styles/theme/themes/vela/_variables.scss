@@ -76,6 +76,7 @@ $inputBg: $shade900 !default;
 $inputTextColor: $shade000 !default;
 $inputIconColor: $shade100 !default;
 $inputBorder: 1px solid $shade600 !default;
+$inputBorderLight: 1px solid $shade100 !default;
 $inputHoverBorderColor: $primaryColor !default;
 $inputFocusBorderColor: $primaryColor !default;
 $inputErrorBorderColor: $errorColor !default;
@@ -335,12 +336,14 @@ $ratingStarIconHoverColor: $primaryColor !default;
 
 //slider
 $sliderBg: $shade600 !default;
+$sliderBgLight: #F2F2F2 !default;
 $sliderBorder: 0 none !default;
 $sliderHorizontalHeight: 0.286rem !default;
 $sliderVerticalWidth: 0.286rem !default;
 $sliderHandleWidth: 1.143rem !default;
 $sliderHandleHeight: 1.143rem !default;
 $sliderHandleBg: $shade600 !default;
+$sliderHandleBgLight: #FFF !default;
 $sliderHandleBorder: 2px solid $primaryColor !default;
 $sliderHandleBorderRadius: 50% !default;
 $sliderHandleHoverBorderColor: $primaryColor !default;
@@ -701,6 +704,7 @@ $stepsItemActiveFontWeight: 600 !default;
 $progressBarHeight: 1.5rem !default;
 $progressBarBorder: 0 none !default;
 $progressBarBg: $shade600 !default;
+$progressBarBgLight: #E9EEF4 !default;
 $progressBarValueBg: $primaryColor !default;
 $progressBarValueTextColor: $primaryTextColor !default;
 
@@ -952,4 +956,16 @@ $imagePreviewActionIconBorderRadius: 50% !default;
     --highlight-text-color: #{$highlightTextColor};
     --focus-ring: #{$focusShadow};
     color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --surface-ground: #FFF;
+    --surface-border: #EDF4F7;
+    --surface-card: #F3F6FA;
+    --surface-900: #000;
+    --surface-overlay: #E9EEF4;
+    --text-color: #222;
+    --text-color-secondary: #888;
+  }
 }
