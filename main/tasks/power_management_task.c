@@ -16,6 +16,7 @@
 #define POLL_RATE 2000
 #define MAX_TEMP 90.0
 #define THROTTLE_TEMP 75.0
+#define HOT_TEMP 70.0
 #define THROTTLE_TEMP_RANGE (MAX_TEMP - THROTTLE_TEMP)
 
 #define VOLTAGE_START_THROTTLE 4900
@@ -255,6 +256,11 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 case DEVICE_GAMMA:
 
                     float fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
+                    if ((HOT_TEMP < power_management->chip_temp_avg) && (90.0 > fs)) {
+                        // (non-persistent) fall back to automatic fan speed if the manual speed is below 90%
+                        auto_fan_speed = 1;
+                        fs = 90.0;
+                    }
                     power_management->fan_perc = fs;
                     EMC2101_set_fan_speed((float) fs / 100);
 
