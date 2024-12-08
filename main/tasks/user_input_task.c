@@ -5,8 +5,8 @@
 #include "driver/gpio.h"
 #include "esp_log.h"
 #include "connect.h"
+#include "gpio_bitaxe.h"
 
-#define BUTTON_BOOT GPIO_NUM_0
 #define SHORT_PRESS_DURATION_MS 100 // Define what constitutes a short press
 #define LONG_PRESS_DURATION_MS 2000 // Define what constitutes a long press
 
@@ -18,16 +18,16 @@ extern QueueHandle_t user_input_queue; // Declare the queue as external
 
 void USER_INPUT_task(void *pvParameters)
 {
-    gpio_set_direction(BUTTON_BOOT, GPIO_MODE_INPUT);
+    gpio_set_direction(GPIO_BUTTON_BOOT, GPIO_MODE_INPUT);
 
     while (1)
     {
-        if (gpio_get_level(BUTTON_BOOT) == 0 && button_being_pressed == false)
+        if (gpio_get_level(GPIO_BUTTON_BOOT) == 0 && button_being_pressed == false)
         { // If button is pressed
             button_being_pressed = true;
             button_press_time = esp_timer_get_time();
         }
-        else if (gpio_get_level(BUTTON_BOOT) == 1 && button_being_pressed == true)
+        else if (gpio_get_level(GPIO_BUTTON_BOOT) == 1 && button_being_pressed == true)
         {
             int64_t press_duration = esp_timer_get_time() - button_press_time;
             button_being_pressed = false;

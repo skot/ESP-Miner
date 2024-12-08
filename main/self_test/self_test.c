@@ -19,9 +19,8 @@
 #include "vcore.h"
 #include "utils.h"
 #include "TPS546.h"
+#include "gpio_bitaxe.h"
 
-
-#define BUTTON_BOOT GPIO_NUM_0
 #define LONG_PRESS_DURATION_MS 2000 // Define what constitutes a long press
 #define ESP_INTR_FLAG_DEFAULT 0 //wtf is this for esp-idf?
 
@@ -189,8 +188,8 @@ esp_err_t test_voltage_regulator(GlobalState * GLOBAL_STATE) {
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
             // turn ASIC on
-            gpio_set_direction(GPIO_NUM_10, GPIO_MODE_OUTPUT);
-            gpio_set_level(GPIO_NUM_10, 0);
+            gpio_set_direction(GPIO_ASIC_ENABLE, GPIO_MODE_OUTPUT);
+            gpio_set_level(GPIO_ASIC_ENABLE, 0);
             break;
         case DEVICE_GAMMA:
         default:
@@ -528,7 +527,7 @@ void vButtonTimerCallback(TimerHandle_t xTimer) {
 
 // Interrupt handler for BUTTON_BOOT
 void IRAM_ATTR button_boot_isr_handler(void* arg) {
-    if (gpio_get_level(BUTTON_BOOT) == 0) {
+    if (gpio_get_level(GPIO_BUTTON_BOOT) == 0) {
         // Button pressed, start the timer
         if (!button_pressed) {
             button_pressed = true;
@@ -551,7 +550,7 @@ static void configure_button_boot_interrupt(void) {
     gpio_config_t io_conf = {
         .intr_type = GPIO_INTR_ANYEDGE,  // Interrupt on both edges
         .mode = GPIO_MODE_INPUT,         // Set as input mode
-        .pin_bit_mask = (1ULL << BUTTON_BOOT),  // Bit mask of the pin to configure
+        .pin_bit_mask = (1ULL << GPIO_BUTTON_BOOT),  // Bit mask of the pin to configure
         .pull_down_en = GPIO_PULLDOWN_DISABLE,  // Disable pull-down mode
         .pull_up_en = GPIO_PULLUP_ENABLE,       // Enable pull-up mode
     };
@@ -561,7 +560,7 @@ static void configure_button_boot_interrupt(void) {
     gpio_install_isr_service(ESP_INTR_FLAG_DEFAULT);
 
     // Attach the interrupt handler
-    gpio_isr_handler_add(BUTTON_BOOT, button_boot_isr_handler, NULL);
+    gpio_isr_handler_add(GPIO_BUTTON_BOOT, button_boot_isr_handler, NULL);
 
     ESP_LOGI(TAG, "BUTTON_BOOT interrupt configured");
 }
