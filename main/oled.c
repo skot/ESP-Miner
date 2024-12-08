@@ -28,7 +28,7 @@
 
 #define OLED_I2C_ADDR 0x3C
 
-static const char * TAG = "oled";
+static const char * TAG = "SSD1306";
 
 extern unsigned char ucSmallFont[];
 static int iScreenOffset;            // current write offset of screen data
@@ -47,7 +47,7 @@ esp_err_t OLED_init(void)
 {
 
     //init the I2C device
-    ESP_RETURN_ON_ERROR(i2c_bitaxe_add_device(OLED_I2C_ADDR, &ssd1306_dev_handle), TAG, "Failed to add display i2c device");
+    ESP_RETURN_ON_ERROR(i2c_bitaxe_add_device(OLED_I2C_ADDR, &ssd1306_dev_handle, TAG), TAG, "Failed to add display i2c device");
 
     uint8_t oled32_initbuf[] = {0x00,
                                 0xae, // cmd: display off
