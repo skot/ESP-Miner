@@ -131,6 +131,13 @@ void OLED_shutdown()
     oled_active = false;
 }
 
+// Sends a command to turn on the OLED display
+void OLED_activate()
+{
+    write_command(0xaf); // turn on OLED
+    oled_active = true;
+}
+
 // Send a single byte command to the OLED controller
 static void write_command(uint8_t c)
 {
