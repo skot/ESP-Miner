@@ -67,3 +67,18 @@ a {
         }
     }
 }
+
+@media (prefers-color-scheme: light) {
+  table {
+    border: 1px solid #EDF2F9;
+  }
+
+  th {
+    background-color: #EDF2F9;
+  }
+
+  th,
+  td {
+    border-bottom: 1px solid #EDF2F9;
+  }
+}

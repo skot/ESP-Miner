@@ -122,3 +122,11 @@
         @include scaledPadding($inputPadding, $scaleLG);
     }
 }
+
+@media (prefers-color-scheme: light) {
+  .p-inputtext {
+    color: $inputBg;
+    background: $inputTextColor;
+    border: $inputBorderLight;
+  }
+}

@@ -6,3 +6,21 @@
 .card {
     min-height: 100%;
 }
+
+.five-volt-marker {
+  background: #FFF;
+}
+
+.five-volt-marker-text {
+  color: #FFF;
+}
+
+@media (prefers-color-scheme: light) {
+  .five-volt-marker {
+    background: #000;
+  }
+
+  .five-volt-marker-text {
+    color: #000;
+  }
+}
