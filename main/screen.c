@@ -1,3 +1,4 @@
+#include <string.h>
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_check.h"
@@ -21,6 +22,10 @@ static lv_obj_t *hashrate_label;
 static lv_obj_t *efficiency_label;
 static lv_obj_t *difficulty_label;
 static lv_obj_t *chip_temp_label;
+
+static lv_obj_t *ip_addr_scr_overheat_label;
+static lv_obj_t *ip_addr_scr_urls_label;
+static lv_obj_t *mining_url_scr_urls_label;
 
 static lv_obj_t *self_test_message_label;
 static lv_obj_t *self_test_result_label;
@@ -75,8 +80,8 @@ static lv_obj_t * create_scr_overheat(SystemModule * module) {
     lv_obj_t *label3 = lv_label_create(scr);
     lv_label_set_text(label3, "Device IP:");
 
-    lv_obj_t *label4 = lv_label_create(scr);
-    lv_label_set_text_static(label4, module->ip_addr_str);
+    ip_addr_scr_overheat_label = lv_label_create(scr);
+    lv_label_set_text(ip_addr_scr_overheat_label, module->ip_addr_str);
 
     return scr;
 }
@@ -155,16 +160,16 @@ static lv_obj_t * create_scr_urls(SystemModule * module) {
     lv_obj_t *label1 = lv_label_create(scr);
     lv_label_set_text(label1, "Mining URL:");
 
-    lv_obj_t *label2 = lv_label_create(scr);
-    lv_obj_set_width(label2, LV_HOR_RES);
-    lv_label_set_long_mode(label2, LV_LABEL_LONG_SCROLL_CIRCULAR);    
-    lv_label_set_text(label2, module->is_using_fallback ? module->fallback_pool_url : module->pool_url);
+    mining_url_scr_urls_label = lv_label_create(scr);
+    lv_obj_set_width(mining_url_scr_urls_label, LV_HOR_RES);
+    lv_label_set_long_mode(mining_url_scr_urls_label, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_label_set_text(mining_url_scr_urls_label, module->is_using_fallback ? module->fallback_pool_url : module->pool_url);
 
     lv_obj_t *label3 = lv_label_create(scr);
     lv_label_set_text(label3, "Bitaxe IP:");
 
-    lv_obj_t *label4 = lv_label_create(scr);
-    lv_label_set_text_static(label4, module->ip_addr_str);
+    ip_addr_scr_urls_label = lv_label_create(scr);
+    lv_label_set_text(ip_addr_scr_urls_label, module->ip_addr_str);
 
     return scr;
 }
@@ -205,7 +210,7 @@ static void screen_show(screen_t screen)
     }
 }
 
-static void screen_update_cb(lv_timer_t * timer) 
+static void screen_update_cb(lv_timer_t * timer)
 {
     if (GLOBAL_STATE->SELF_TEST_MODULE.active) {
 
@@ -232,6 +237,9 @@ static void screen_update_cb(lv_timer_t * timer)
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     if (module->overheat_mode == 1) {
+        if (strcmp(module->ip_addr_str, lv_label_get_text(ip_addr_scr_overheat_label)) != 0) {
+            lv_label_set_text(ip_addr_scr_overheat_label, module->ip_addr_str);
+        }
         screen_show(SCR_OVERHEAT);
         return;
     }
@@ -266,6 +274,15 @@ static void screen_update_cb(lv_timer_t * timer)
     // Carousel
 
     PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+
+    char *pool_url = module->is_using_fallback ? module->fallback_pool_url : module->pool_url;
+    if (strcmp(lv_label_get_text(mining_url_scr_urls_label), pool_url) != 0) {
+        lv_label_set_text(mining_url_scr_urls_label, pool_url);
+    }
+
+    if (strcmp(lv_label_get_text(ip_addr_scr_urls_label), module->ip_addr_str) != 0) {
+        lv_label_set_text(ip_addr_scr_urls_label, module->ip_addr_str);
+    }
 
     if (current_hashrate != module->current_hashrate) {
         lv_label_set_text_fmt(hashrate_label, "Gh/s: %.2f", module->current_hashrate);
@@ -308,7 +325,7 @@ static void screen_update_cb(lv_timer_t * timer)
     screen_next();
 }
 
-void screen_next() 
+void screen_next()
 {
     if (current_screen >= SCR_CAROUSEL_START) {
         screen_show(current_screen == SCR_CAROUSEL_END ? SCR_CAROUSEL_START : current_screen + 1);
