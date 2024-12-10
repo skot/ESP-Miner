@@ -112,8 +112,6 @@ void app_main(void)
     free(wifi_pass);
     free(hostname);
 
-    // set the startup_done flag
-    GLOBAL_STATE.SYSTEM_MODULE.startup_done = true;
     GLOBAL_STATE.new_stratum_version_rolling_msg = false;
 
     if (GLOBAL_STATE.ASIC_functions.init_fn != NULL) {
@@ -160,4 +158,8 @@ void MINER_set_wifi_status(wifi_status_t status, int retry_count, int reason)
             }
     }
     ESP_LOGW(TAG, "Unknown status: %d", status);
+}
+
+void MINER_set_ap_status(bool enabled) {
+    GLOBAL_STATE.SYSTEM_MODULE.ap_enabled = enabled;
 }

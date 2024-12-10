@@ -137,12 +137,14 @@ void wifi_softap_off(void)
 {
     ESP_LOGI(TAG, "ESP_WIFI Access Point Off");
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    MINER_set_ap_status(false);
 }
 
 void wifi_softap_on(void)
 {
     ESP_LOGI(TAG, "ESP_WIFI Access Point On");
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+    MINER_set_ap_status(true);
 }
 
 /* Initialize wifi station */

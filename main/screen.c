@@ -256,7 +256,7 @@ static void screen_update_cb(lv_timer_t * timer)
         return;
     }
 
-    if (!module->startup_done) {
+    if (module->ap_enabled) {
         if (strcmp(module->wifi_status, lv_label_get_text(wifi_status_label)) != 0) {
             lv_label_set_text(wifi_status_label, module->wifi_status);
         }
