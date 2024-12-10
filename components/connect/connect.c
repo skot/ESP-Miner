@@ -218,7 +218,7 @@ void wifi_init(const char * wifi_ssid, const char * wifi_pass, const char * host
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+    wifi_softap_on();
 
     /* Initialize AP */
     ESP_LOGI(TAG, "ESP_WIFI Access Point On");
