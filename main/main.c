@@ -144,6 +144,7 @@ void MINER_set_wifi_status(wifi_status_t status, int retry_count, int reason)
             snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Connected!");
             return;
         case WIFI_RETRYING:
+            // See https://github.com/espressif/esp-idf/blob/master/components/esp_wifi/include/esp_wifi_types_generic.h for codes
             switch(reason) {
                 case 201:
                     snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "No AP found (%d)", retry_count);
