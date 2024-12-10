@@ -22,10 +22,7 @@
 typedef enum
 {
     WIFI_CONNECTED,
-    WIFI_DISCONNECTED,
     WIFI_CONNECTING,
-    WIFI_DISCONNECTING,
-    WIFI_CONNECT_FAILED,
     WIFI_RETRYING,
 } wifi_status_t;
 

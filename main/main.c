@@ -136,17 +136,28 @@ void app_main(void)
     }
 }
 
-void MINER_set_wifi_status(wifi_status_t status, uint16_t retry_count)
+void MINER_set_wifi_status(wifi_status_t status, int retry_count, int reason)
 {
-    if (status == WIFI_CONNECTED) {
-        snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Connected!");
-        return;
+    switch(status) {
+        case WIFI_CONNECTING:
+            snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Connecting...");
+            return;
+        case WIFI_CONNECTED:
+            snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Connected!");
+            return;
+        case WIFI_RETRYING:
+            switch(reason) {
+                case 201:
+                    snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "No AP found (%d)", retry_count);
+                    return;
+                case 15:
+                case 205:
+                    snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Password error (%d)", retry_count);
+                    return;
+                default:
+                    snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Error %d (%d)", reason, retry_count);
+                    return;
+            }
     }
-    else if (status == WIFI_RETRYING) {
-        snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Retrying: %d", retry_count);
-        return;
-    } else if (status == WIFI_CONNECT_FAILED) {
-        snprintf(GLOBAL_STATE.SYSTEM_MODULE.wifi_status, 20, "Connect Failed!");
-        return;
-    }
+    ESP_LOGW(TAG, "Unknown status: %d", status);
 }

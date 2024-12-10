@@ -26,6 +26,7 @@ static lv_obj_t *chip_temp_label;
 static lv_obj_t *ip_addr_scr_overheat_label;
 static lv_obj_t *ip_addr_scr_urls_label;
 static lv_obj_t *mining_url_scr_urls_label;
+static lv_obj_t *wifi_status_label;
 
 static lv_obj_t *self_test_message_label;
 static lv_obj_t *self_test_result_label;
@@ -129,12 +130,18 @@ static lv_obj_t * create_scr_connection(SystemModule * module) {
 
     lv_obj_set_flex_flow(scr, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
+
     lv_obj_t *label1 = lv_label_create(scr);
-    lv_label_set_text(label1, "Connecting to SSID:");
-    lv_obj_t *label2 = lv_label_create(scr);
-    lv_label_set_text(label2, module->ssid);
+    lv_obj_set_width(label1, LV_HOR_RES);    
+    lv_label_set_long_mode(label1, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_label_set_text_fmt(label1, "SSID: %s", module->ssid);
+
+    wifi_status_label = lv_label_create(scr);
+    lv_label_set_text(wifi_status_label, module->wifi_status);
+
     lv_obj_t *label3 = lv_label_create(scr);
     lv_label_set_text(label3, "Configuration SSID:");
+
     lv_obj_t *label4 = lv_label_create(scr);
     lv_label_set_text(label4, module->ap_ssid);
 
@@ -250,6 +257,9 @@ static void screen_update_cb(lv_timer_t * timer)
     }
 
     if (!module->startup_done) {
+        if (strcmp(module->wifi_status, lv_label_get_text(wifi_status_label)) != 0) {
+            lv_label_set_text(wifi_status_label, module->wifi_status);
+        }
         screen_show(SCR_CONNECTION);
         return;
     }

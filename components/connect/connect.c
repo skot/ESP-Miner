@@ -59,6 +59,7 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
         esp_wifi_connect();
+        MINER_set_wifi_status(WIFI_CONNECTING, 0, 0);
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         //lookup the exact reason code
         wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*) event_data;
@@ -74,7 +75,7 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
         esp_wifi_connect();
         s_retry_num++;
         ESP_LOGI(TAG, "Retrying WiFi connection...");
-        MINER_set_wifi_status(WIFI_RETRYING, s_retry_num);
+        MINER_set_wifi_status(WIFI_RETRYING, s_retry_num, event->reason);
 
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
 
@@ -84,7 +85,7 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
         ESP_LOGI(TAG, "Bitaxe ip: %s", _ip_addr_str);
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-        MINER_set_wifi_status(WIFI_CONNECTED, 0);
+        MINER_set_wifi_status(WIFI_CONNECTED, 0, 0);
     }
 }
 
@@ -126,11 +127,9 @@ void toggle_wifi_softap(void)
     ESP_ERROR_CHECK(esp_wifi_get_mode(&mode));
 
     if (mode == WIFI_MODE_APSTA) {
-        ESP_LOGI(TAG, "ESP_WIFI Access Point Off");
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+        wifi_softap_off();
     } else {
-        ESP_LOGI(TAG, "ESP_WIFI Access Point On");
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+        wifi_softap_on();
     }
 }
 
