@@ -8,7 +8,6 @@
 
 #define I2C_MASTER_SCL_IO 48        /*!< GPIO number used for I2C master clock */
 #define I2C_MASTER_SDA_IO 47        /*!< GPIO number used for I2C master data  */
-#define I2C_MASTER_FREQ_HZ 100000   /*!< I2C master clock frequency */
 
 #define I2C_MASTER_NUM 0            /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
 #define I2C_MASTER_TIMEOUT_MS 1000
@@ -78,7 +77,7 @@ esp_err_t i2c_bitaxe_add_device(uint8_t device_address, i2c_master_dev_handle_t 
     i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = device_address,
-        .scl_speed_hz = I2C_MASTER_FREQ_HZ,
+        .scl_speed_hz = I2C_BUS_SPEED_HZ,
     };
 
     ESP_RETURN_ON_ERROR(i2c_master_bus_add_device(i2c_bus_handle, &dev_cfg, dev_handle), TAG, "Device 0x%02x", device_address);
@@ -89,6 +88,12 @@ esp_err_t i2c_bitaxe_add_device(uint8_t device_address, i2c_master_dev_handle_t 
     i2c_device_map[i2c_device_count].device_tag[sizeof(i2c_device_map[i2c_device_count].device_tag) - 1] = '\0';
     i2c_device_count++;
 
+    return ESP_OK;
+}
+
+esp_err_t i2c_bitaxe_get_master_bus_handle(i2c_master_bus_handle_t * dev_handle)
+{
+    *dev_handle = i2c_bus_handle;
     return ESP_OK;
 }
 
