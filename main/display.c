@@ -37,15 +37,48 @@ static void theme_apply(lv_theme_t *theme, lv_obj_t *obj) {
     }
 }
 
+// Dummy display driver callback
+static void dummy_flush_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * px_map) {
+    lv_display_flush_ready(disp);
+}
+
+static void init_styles(lv_disp_t * disp) {
+    if (lvgl_port_lock(0)) {
+        lv_style_init(&scr_style);
+        lv_style_set_text_font(&scr_style, &lv_font_portfolio_6x8);
+        lv_style_set_bg_opa(&scr_style, LV_OPA_COVER);
+
+        lv_theme_set_apply_cb(&theme, theme_apply);
+        lv_display_set_theme(disp, &theme);
+        lvgl_port_unlock();
+    }
+}
+
 esp_err_t display_init(void * pvParameters)
 {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
+    GLOBAL_STATE->SYSTEM_MODULE.is_screen_active = false;
 
-    uint8_t flip_screen = nvs_config_get_u16(NVS_CONFIG_FLIP_SCREEN, 1);
-    uint8_t invert_screen = nvs_config_get_u16(NVS_CONFIG_INVERT_SCREEN, 0);
+    // Initialize LVGL first
+    ESP_LOGI(TAG, "Initialize LVGL");
+    const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
+    ESP_RETURN_ON_ERROR(lvgl_port_init(&lvgl_cfg), TAG, "LVGL init failed");
 
+    // Create a dummy display driver immediately after LVGL init
+    static lv_display_t * dummy_disp;
+    static lv_color_t dummy_buf[LCD_H_RES * 10];  // Smaller buffer for dummy display
+    
+    dummy_disp = lv_display_create(LCD_H_RES, LCD_V_RES);
+    lv_display_set_buffers(dummy_disp, dummy_buf, NULL, sizeof(dummy_buf), LV_DISPLAY_RENDER_MODE_PARTIAL);
+    lv_display_set_flush_cb(dummy_disp, dummy_flush_cb);
+    init_styles(dummy_disp);
+
+    // Try to initialize the actual display
     i2c_master_bus_handle_t i2c_master_bus_handle;
-    ESP_RETURN_ON_ERROR(i2c_bitaxe_get_master_bus_handle(&i2c_master_bus_handle), TAG, "Failed to get i2c master bus handle");
+    if (i2c_bitaxe_get_master_bus_handle(&i2c_master_bus_handle) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to get i2c master bus handle");
+        return ESP_OK;  // Return OK since we have a dummy display
+    }
 
     ESP_LOGI(TAG, "Install panel IO");
     esp_lcd_panel_io_handle_t io_handle = NULL;
@@ -58,7 +91,10 @@ esp_err_t display_init(void * pvParameters)
         .dc_bit_offset = 6                     
     };
     
-    ESP_RETURN_ON_ERROR(esp_lcd_new_panel_io_i2c(i2c_master_bus_handle, &io_config, &io_handle), TAG, "Failed to initialise i2c panel bus");
+    if (esp_lcd_new_panel_io_i2c(i2c_master_bus_handle, &io_config, &io_handle) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to initialize panel IO, no display connected?");
+        return ESP_OK;  // Return OK since we have a dummy display
+    }
 
     ESP_LOGI(TAG, "Install SSD1306 panel driver");
     esp_lcd_panel_handle_t panel_handle = NULL;
@@ -72,21 +108,39 @@ esp_err_t display_init(void * pvParameters)
     };
     panel_config.vendor_config = &ssd1306_config;
 
-    ESP_RETURN_ON_ERROR(esp_lcd_new_panel_ssd1306(io_handle, &panel_config, &panel_handle), TAG, "No display found");
-    ESP_RETURN_ON_ERROR(esp_lcd_panel_reset(panel_handle), TAG, "Panel reset failed");
-    esp_err_t esp_lcd_panel_init_err = esp_lcd_panel_init(panel_handle);
-    if (esp_lcd_panel_init_err != ESP_OK) {
+    if (esp_lcd_new_panel_ssd1306(io_handle, &panel_config, &panel_handle) != ESP_OK) {
+        ESP_LOGW(TAG, "Failed to create panel driver");
+        esp_lcd_panel_io_del(io_handle);
+        return ESP_OK;
+    }
+
+    if (esp_lcd_panel_reset(panel_handle) != ESP_OK) {
+        ESP_LOGW(TAG, "Panel reset failed");
+        esp_lcd_panel_del(panel_handle);
+        esp_lcd_panel_io_del(io_handle);
+        return ESP_OK;
+    }
+
+    if (esp_lcd_panel_init(panel_handle) != ESP_OK) {
         ESP_LOGE(TAG, "Panel init failed, no display connected?");
-    }  else {
-        ESP_RETURN_ON_ERROR(esp_lcd_panel_invert_color(panel_handle, invert_screen), TAG, "Panel invert failed");
-        // ESP_RETURN_ON_ERROR(esp_lcd_panel_mirror(panel_handle, false, false), TAG, "Panel mirror failed");
+        esp_lcd_panel_del(panel_handle);
+        esp_lcd_panel_io_del(io_handle);
+        return ESP_OK;
+    }
+
+    uint8_t flip_screen = nvs_config_get_u16(NVS_CONFIG_FLIP_SCREEN, 1);
+    uint8_t invert_screen = nvs_config_get_u16(NVS_CONFIG_INVERT_SCREEN, 0);
+
+    if (esp_lcd_panel_invert_color(panel_handle, invert_screen) != ESP_OK) {
+        ESP_LOGW(TAG, "Panel invert failed");
+        esp_lcd_panel_del(panel_handle);
+        esp_lcd_panel_io_del(io_handle);
+        return ESP_OK;
     }
     
-    ESP_LOGI(TAG, "Initialize LVGL");
-
-    const lvgl_port_cfg_t lvgl_cfg = ESP_LVGL_PORT_INIT_CONFIG();
-    ESP_RETURN_ON_ERROR(lvgl_port_init(&lvgl_cfg), TAG, "LVGL init failed");
-
+    // Delete the dummy display before creating the real one
+    lv_disp_remove(dummy_disp);
+    
     const lvgl_port_display_cfg_t disp_cfg = {
         .io_handle = io_handle,
         .panel_handle = panel_handle,
@@ -108,26 +162,16 @@ esp_err_t display_init(void * pvParameters)
     };
 
     lv_disp_t * disp = lvgl_port_add_disp(&disp_cfg);
+    init_styles(disp);
 
-    if (lvgl_port_lock(0)) {
-        lv_style_init(&scr_style);
-        lv_style_set_text_font(&scr_style, &lv_font_portfolio_6x8);
-        lv_style_set_bg_opa(&scr_style, LV_OPA_COVER);
-
-        lv_theme_set_apply_cb(&theme, theme_apply);
-
-        lv_display_set_theme(disp, &theme);
-        lvgl_port_unlock();
+    // Turn on the screen
+    if (esp_lcd_panel_disp_on_off(panel_handle, true) != ESP_OK) {
+        ESP_LOGW(TAG, "Panel display on failed");
+        esp_lcd_panel_del(panel_handle);
+        esp_lcd_panel_io_del(io_handle);
+        return ESP_OK;
     }
 
-    if (esp_lcd_panel_init_err == ESP_OK) {
-        // Only turn on the screen when it has been cleared
-        ESP_RETURN_ON_ERROR(esp_lcd_panel_disp_on_off(panel_handle, true), TAG, "Panel display on failed");   
-
-        GLOBAL_STATE->SYSTEM_MODULE.is_screen_active = true;
-    } else {
-        ESP_LOGW(TAG, "No display found.");
-    }
-
+    GLOBAL_STATE->SYSTEM_MODULE.is_screen_active = true;
     return ESP_OK;
 }
