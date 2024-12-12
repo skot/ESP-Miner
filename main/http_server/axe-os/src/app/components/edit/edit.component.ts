@@ -120,7 +120,6 @@ export class EditComponent implements OnInit {
     private fb: FormBuilder,
     private systemService: SystemService,
     private toastr: ToastrService,
-    private toastrService: ToastrService,
     private loadingService: LoadingService
   ) {
 
@@ -245,6 +244,60 @@ export class EditComponent implements OnInit {
           this.toastr.error('Error', `Could not restart. ${err.message}`);
         }
       });
+  }
+
+  getDropdownFrequency() {
+    // Get base frequency options based on ASIC model
+    let options = [];
+    switch(this.ASICModel) {
+        case this.eASICModel.BM1366: options = [...this.BM1366DropdownFrequency]; break;
+        case this.eASICModel.BM1368: options = [...this.BM1368DropdownFrequency]; break;
+        case this.eASICModel.BM1370: options = [...this.BM1370DropdownFrequency]; break;
+        case this.eASICModel.BM1397: options = [...this.BM1397DropdownFrequency]; break;
+        default: return [];
+    }
+
+    // Get current frequency value from form
+    const currentFreq = this.form?.get('frequency')?.value;
+
+    // If current frequency exists and isn't in the options
+    if (currentFreq && !options.some(opt => opt.value === currentFreq)) {
+        options.push({
+            name: `${currentFreq} (Custom)`,
+            value: currentFreq
+        });
+        // Sort options by frequency value
+        options.sort((a, b) => a.value - b.value);
+    }
+
+    return options;
+  }
+
+  getCoreVoltage() {
+    // Get base voltage options based on ASIC model
+    let options = [];
+    switch(this.ASICModel) {
+        case this.eASICModel.BM1366: options = [...this.BM1366CoreVoltage]; break;
+        case this.eASICModel.BM1368: options = [...this.BM1368CoreVoltage]; break;
+        case this.eASICModel.BM1370: options = [...this.BM1370CoreVoltage]; break;
+        case this.eASICModel.BM1397: options = [...this.BM1397CoreVoltage]; break;
+        default: return [];
+    }
+
+    // Get current voltage value from form
+    const currentVoltage = this.form?.get('coreVoltage')?.value;
+
+    // If current voltage exists and isn't in the options
+    if (currentVoltage && !options.some(opt => opt.value === currentVoltage)) {
+        options.push({
+            name: `${currentVoltage} (Custom)`,
+            value: currentVoltage
+        });
+        // Sort options by voltage value
+        options.sort((a, b) => a.value - b.value);
+    }
+
+    return options;
   }
 
 }
