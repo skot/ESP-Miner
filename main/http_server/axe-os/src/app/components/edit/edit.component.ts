@@ -1,8 +1,8 @@
 import { HttpErrorResponse } from '@angular/common/http';
-import { Component, Input, OnInit } from '@angular/core';
+import { Component, Input, OnInit, OnDestroy } from '@angular/core';
 import { FormBuilder, FormGroup, Validators } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
-import { startWith } from 'rxjs';
+import { startWith, Subject, takeUntil } from 'rxjs';
 import { LoadingService } from 'src/app/services/loading.service';
 import { SystemService } from 'src/app/services/system.service';
 import { eASICModel } from 'src/models/enum/eASICModel';
@@ -12,7 +12,7 @@ import { eASICModel } from 'src/models/enum/eASICModel';
   templateUrl: './edit.component.html',
   styleUrls: ['./edit.component.scss']
 })
-export class EditComponent implements OnInit {
+export class EditComponent implements OnInit, OnDestroy {
 
   public form!: FormGroup;
 
@@ -116,20 +116,24 @@ export class EditComponent implements OnInit {
     { name: '1300', value: 1300 },
   ];
 
+  private destroy$ = new Subject<void>();
+
   constructor(
     private fb: FormBuilder,
     private systemService: SystemService,
     private toastr: ToastrService,
     private loadingService: LoadingService
   ) {
-
-    window.addEventListener('resize', this.checkDevTools);
+    window.addEventListener('resize', this.checkDevTools.bind(this));
     this.checkDevTools();
-
   }
+
   ngOnInit(): void {
     this.systemService.getInfo(this.uri)
-      .pipe(this.loadingService.lockUIUntilComplete())
+      .pipe(
+        this.loadingService.lockUIUntilComplete(),
+        takeUntil(this.destroy$)
+      )
       .subscribe(info => {
         this.ASICModel = info.ASICModel;
         this.form = this.fb.group({
@@ -168,7 +172,8 @@ export class EditComponent implements OnInit {
         });
 
         this.form.controls['autofanspeed'].valueChanges.pipe(
-          startWith(this.form.controls['autofanspeed'].value)
+          startWith(this.form.controls['autofanspeed'].value),
+          takeUntil(this.destroy$)
         ).subscribe(autofanspeed => {
           if (autofanspeed) {
             this.form.controls['fanspeed'].disable();
@@ -179,8 +184,13 @@ export class EditComponent implements OnInit {
       });
   }
 
+  ngOnDestroy(): void {
+    window.removeEventListener('resize', this.checkDevTools.bind(this));
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
 
-  private checkDevTools = () => {
+  private checkDevTools(): void {
     if (
       window.outerWidth - window.innerWidth > 160 ||
       window.outerHeight - window.innerHeight > 160
@@ -189,7 +199,7 @@ export class EditComponent implements OnInit {
     } else {
       this.devToolsOpen = false;
     }
-  };
+  }
 
   public updateSystem() {
 
