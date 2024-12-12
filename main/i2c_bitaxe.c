@@ -40,10 +40,16 @@ esp_err_t i2c_bitaxe_add_device(uint8_t device_address, i2c_master_dev_handle_t 
     i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = device_address,
-        .scl_speed_hz = I2C_MASTER_FREQ_HZ,
+        .scl_speed_hz = I2C_BUS_SPEED_HZ,
     };
 
     return i2c_master_bus_add_device(i2c_bus_handle, &dev_cfg, dev_handle);
+}
+
+esp_err_t i2c_bitaxe_get_master_bus_handle(i2c_master_bus_handle_t * dev_handle)
+{
+    *dev_handle = i2c_bus_handle;
+    return ESP_OK;
 }
 
 /**
