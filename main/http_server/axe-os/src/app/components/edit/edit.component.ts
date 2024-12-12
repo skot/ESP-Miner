@@ -24,6 +24,9 @@ export class EditComponent implements OnInit {
   public eASICModel = eASICModel;
   public ASICModel!: eASICModel;
 
+  private tempFrequency: number | null = null;
+  private tempVoltage: number | null = null;
+
   @Input() uri = '';
 
   public BM1397DropdownFrequency = [
@@ -116,6 +119,54 @@ export class EditComponent implements OnInit {
     { name: '1300', value: 1300 },
   ];
 
+  private updateDropdownsWithCustomValues() {
+    const frequency = this.form.get('frequency')?.value;
+    const voltage = this.form.get('coreVoltage')?.value;
+
+    // Helper function to add custom value if it doesn't exist
+    const addCustomValue = (array: any[], value: number) => {
+      if (!array.some(item => item.value === value)) {
+        array.push({ name: `${value} (custom)`, value: value });
+      }
+    };
+
+    // Add custom frequency to appropriate dropdown based on ASIC model
+    if (frequency) {
+      switch (this.ASICModel) {
+        case eASICModel.BM1397:
+          addCustomValue(this.BM1397DropdownFrequency, frequency);
+          break;
+        case eASICModel.BM1366:
+          addCustomValue(this.BM1366DropdownFrequency, frequency);
+          break;
+        case eASICModel.BM1368:
+          addCustomValue(this.BM1368DropdownFrequency, frequency);
+          break;
+        case eASICModel.BM1370:
+          addCustomValue(this.BM1370DropdownFrequency, frequency);
+          break;
+      }
+    }
+
+    // Add custom voltage to appropriate dropdown based on ASIC model
+    if (voltage) {
+      switch (this.ASICModel) {
+        case eASICModel.BM1397:
+          addCustomValue(this.BM1397CoreVoltage, voltage);
+          break;
+        case eASICModel.BM1366:
+          addCustomValue(this.BM1366CoreVoltage, voltage);
+          break;
+        case eASICModel.BM1368:
+          addCustomValue(this.BM1368CoreVoltage, voltage);
+          break;
+        case eASICModel.BM1370:
+          addCustomValue(this.BM1370CoreVoltage, voltage);
+          break;
+      }
+    }
+  }
+
   constructor(
     private fb: FormBuilder,
     private systemService: SystemService,
@@ -123,11 +174,10 @@ export class EditComponent implements OnInit {
     private toastrService: ToastrService,
     private loadingService: LoadingService
   ) {
-
     window.addEventListener('resize', this.checkDevTools);
     this.checkDevTools();
-
   }
+
   ngOnInit(): void {
     this.systemService.getInfo(this.uri)
       .pipe(this.loadingService.lockUIUntilComplete())
@@ -177,11 +227,30 @@ export class EditComponent implements OnInit {
             this.form.controls['fanspeed'].enable();
           }
         });
+
+        // Watch for frequency and voltage changes when devTools is open
+        this.form.get('frequency')?.valueChanges.subscribe((value) => {
+          if (this.devToolsOpen) {
+            this.tempFrequency = value;
+          } else {
+            this.tempFrequency = null;
+            this.updateDropdownsWithCustomValues();
+          }
+        });
+
+        this.form.get('coreVoltage')?.valueChanges.subscribe((value) => {
+          if (this.devToolsOpen) {
+            this.tempVoltage = value;
+          } else {
+            this.tempVoltage = null;
+            this.updateDropdownsWithCustomValues();
+          }
+        });
       });
   }
 
-
   private checkDevTools = () => {
+    const wasOpen = this.devToolsOpen;
     if (
       window.outerWidth - window.innerWidth > 160 ||
       window.outerHeight - window.innerHeight > 160
@@ -189,11 +258,22 @@ export class EditComponent implements OnInit {
       this.devToolsOpen = true;
     } else {
       this.devToolsOpen = false;
+      // If devTools was just closed, update dropdowns with any custom values
+      if (wasOpen) {
+        if (this.tempFrequency !== null) {
+          this.form.patchValue({ frequency: this.tempFrequency }, { emitEvent: false });
+          this.tempFrequency = null;
+        }
+        if (this.tempVoltage !== null) {
+          this.form.patchValue({ coreVoltage: this.tempVoltage }, { emitEvent: false });
+          this.tempVoltage = null;
+        }
+        this.updateDropdownsWithCustomValues();
+      }
     }
   };
 
   public updateSystem() {
-
     const form = this.form.getRawValue();
 
     if (form.stratumPassword === '*****') {
@@ -246,5 +326,4 @@ export class EditComponent implements OnInit {
         }
       });
   }
-
 }
