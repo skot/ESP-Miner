@@ -1,4 +1,5 @@
 #include "bm1368.h"
+
 #include "crc.h"
 #include "global_state.h"
 #include "serial.h"
@@ -7,13 +8,14 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "gpio_bitaxe.h"
 
 #include <math.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define GPIO_ASIC_RESET CONFIG_GPIO_ASIC_RESET
 
 #define TYPE_JOB 0x20
 #define TYPE_CMD 0x40

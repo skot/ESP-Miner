@@ -12,7 +12,10 @@
 #include "serial.h"
 #include "TPS546.h"
 #include "vcore.h"
-#include "gpio_bitaxe.h"
+
+#define GPIO_ASIC_ENABLE CONFIG_GPIO_ASIC_ENABLE
+#define GPIO_ASIC_RESET  CONFIG_GPIO_ASIC_RESET
+#define GPIO_PLUG_SENSE  CONFIG_GPIO_PLUG_SENSE
 
 #define POLL_RATE 2000
 #define MAX_TEMP 90.0

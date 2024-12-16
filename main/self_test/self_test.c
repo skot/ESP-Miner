@@ -21,7 +21,8 @@
 #include "vcore.h"
 #include "utils.h"
 #include "TPS546.h"
-#include "gpio_bitaxe.h"
+
+#define GPIO_ASIC_ENABLE CONFIG_GPIO_ASIC_ENABLE
 
 #define TESTS_FAILED 0
 #define TESTS_PASSED 1

@@ -4,7 +4,8 @@
 #include "lvgl.h"
 #include "esp_lvgl_port.h"
 #include "driver/gpio.h"
-#include "gpio_bitaxe.h"
+
+#define GPIO_BUTTON_BOOT CONFIG_GPIO_BUTTON_BOOT
 
 #define ESP_INTR_FLAG_DEFAULT  0
 #define LONG_PRESS_DURATION_MS 2000

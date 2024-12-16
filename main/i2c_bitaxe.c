@@ -1,7 +1,9 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "i2c_bitaxe.h"
-#include "gpio_bitaxe.h"
+
+#define GPIO_I2C_SDA CONFIG_GPIO_I2C_SDA
+#define GPIO_I2C_SCL CONFIG_GPIO_I2C_SCL
 
 #define I2C_MASTER_FREQ_HZ 100000   /*!< I2C master clock frequency */
 
