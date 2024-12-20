@@ -9,7 +9,7 @@
 #include <sys/time.h>
 
 static const char *TAG = "create_jobs_task";
-#define VERSION_ROLLS_MAX 65535  // 2^16 version space
+#define VERSION_ROLLS_MAX 65536  // 2^16 version space
 #define MAX_EXTRANONCE_2 UINT_MAX
 #define TASK_YIELD_THRESHOLD 1000 // Yield after this many iterations
 #define QUEUE_LOW_WATER_MARK 10 // Adjust based on your requirements
