@@ -9,7 +9,7 @@
 #include <sys/time.h>
 
 static const char *TAG = "create_jobs_task";
-
+#define VERSION_ROLLS_MAX 65535  // 2^16 version space
 #define MAX_EXTRANONCE_2 UINT_MAX
 #define TASK_YIELD_THRESHOLD 1000 // Yield after this many iterations
 #define QUEUE_LOW_WATER_MARK 10 // Adjust based on your requirements
@@ -35,7 +35,7 @@ void create_jobs_task(void *pvParameters)
             ESP_LOGI(TAG, "Set chip version rolls %i", version_rolls);
 
             //calulate update to fullscan_ms as new version rolling
-            double new_version_percent = (double)version_rolls / (double)65536.0;
+            double new_version_percent = (double)(version_rolls+1) / (double)VERSION_ROLLS_MAX;
             double prcnt_change = new_version_percent/GLOBAL_STATE->version_space_percent;
             GLOBAL_STATE->asic_job_frequency_ms *= prcnt_change;
             GLOBAL_STATE->version_space_percent = new_version_percent;
