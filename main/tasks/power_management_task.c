@@ -74,6 +74,8 @@ static double automatic_fan_speed(float chip_temp, GlobalState * GLOBAL_STATE)
 
 void POWER_MANAGEMENT_task(void * pvParameters)
 {
+    ESP_LOGI(TAG, "Starting");
+
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
     PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
@@ -85,8 +87,6 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 
     //int last_frequency_increase = 0;
     //uint16_t frequency_target = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
-
-    uint16_t auto_fan_speed = nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1);
 
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
@@ -171,6 +171,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     nvs_config_set_u16(NVS_CONFIG_ASIC_FREQ, 50);
                     nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, 100);
                     nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, 0);
+                    nvs_config_set_u16(NVS_CONFIG_OVERHEAT_MODE, 1);
                     exit(EXIT_FAILURE);
                 }
                 break;
@@ -242,7 +243,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
         }
 
 
-        if (auto_fan_speed == 1) {
+        if (nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1) == 1) {
 
             power_management->fan_perc = (float)automatic_fan_speed(power_management->chip_temp_avg, GLOBAL_STATE);
 
@@ -290,6 +291,15 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 ESP_LOGE(TAG, "Failed to transition to new ASIC frequency: %uMHz", asic_frequency);
             }
             last_asic_frequency = asic_frequency;
+        }
+
+        // Check for changing of overheat mode
+        SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+        uint16_t new_overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
+        
+        if (new_overheat_mode != module->overheat_mode) {
+            module->overheat_mode = new_overheat_mode;
+            ESP_LOGI(TAG, "Overheat mode updated to: %d", module->overheat_mode);
         }
 
         vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
