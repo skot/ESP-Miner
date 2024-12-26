@@ -1,6 +1,6 @@
 import { Injectable, effect, signal } from '@angular/core';
 import { Subject } from 'rxjs';
-import { LocalStorageService } from '../../local-storage.service';
+import { ThemeService } from '../../services/theme.service';
 
 export interface AppConfig {
     inputStyle: string;
@@ -81,31 +81,46 @@ export class LayoutService {
     };
 
     private configUpdate = new Subject<AppConfig>();
-
     private overlayOpen = new Subject<any>();
 
     configUpdate$ = this.configUpdate.asObservable();
-
     overlayOpen$ = this.overlayOpen.asObservable();
 
-    constructor(private localStorage: LocalStorageService) {
-        // Load saved theme settings or use dark theme as default
-        const savedConfig = this.localStorage.getObject('theme-config');
-        if (savedConfig) {
-            this._config = { ...this._config, ...savedConfig };
-        } else {
-            // Ensure dark theme is saved as default
-            this.localStorage.setObject('theme-config', {
-                colorScheme: 'dark',
-                theme: 'lara-dark-indigo'
-            });
-        }
-
-        // Update signal with initial config
-        this.config.set(this._config);
-
-        // Apply initial theme
-        this.changeTheme();
+    constructor(private themeService: ThemeService) {
+        // Load saved theme settings from NVS
+        this.themeService.getThemeSettings().subscribe(
+            settings => {
+                if (settings) {
+                    this._config = {
+                        ...this._config,
+                        colorScheme: settings.colorScheme,
+                        theme: settings.theme
+                    };
+                    // Apply accent colors if they exist
+                    if (settings.accentColors) {
+                        Object.entries(settings.accentColors).forEach(([key, value]) => {
+                            document.documentElement.style.setProperty(key, value);
+                        });
+                    }
+                } else {
+                    // Save default dark theme if no settings exist
+                    this.themeService.saveThemeSettings({
+                        colorScheme: 'dark',
+                        theme: 'lara-dark-indigo'
+                    }).subscribe();
+                }
+                // Update signal with config
+                this.config.set(this._config);
+                // Apply initial theme
+                this.changeTheme();
+            },
+            error => {
+                console.error('Error loading theme settings:', error);
+                // Use default theme on error
+                this.config.set(this._config);
+                this.changeTheme();
+            }
+        );
 
         effect(() => {
             const config = this.config();
@@ -162,11 +177,14 @@ export class LayoutService {
     onConfigUpdate() {
         this._config = { ...this.config() };
         this.configUpdate.next(this.config());
-        // Save theme settings
-        this.localStorage.setObject('theme-config', {
+        // Save theme settings to NVS
+        this.themeService.saveThemeSettings({
             colorScheme: this._config.colorScheme,
             theme: this._config.theme
-        });
+        }).subscribe(
+            () => {},
+            error => console.error('Error saving theme settings:', error)
+        );
         // Apply theme changes immediately
         this.changeTheme();
     }
@@ -180,13 +198,17 @@ export class LayoutService {
             document.documentElement.style.setProperty(key, value);
         });
 
-        // Load saved accent colors
-        const savedTheme = this.localStorage.getObject('theme-colors');
-        if (savedTheme && savedTheme.accentColors) {
-            Object.entries(savedTheme.accentColors).forEach(([key, value]) => {
-                document.documentElement.style.setProperty(key, value as string);
-            });
-        }
+        // Load theme settings from NVS
+        this.themeService.getThemeSettings().subscribe(
+            settings => {
+                if (settings && settings.accentColors) {
+                    Object.entries(settings.accentColors).forEach(([key, value]) => {
+                        document.documentElement.style.setProperty(key, value);
+                    });
+                }
+            },
+            error => console.error('Error loading accent colors:', error)
+        );
     }
 
     changeScale(value: number) {

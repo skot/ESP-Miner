@@ -1,6 +1,6 @@
 import { Component, OnInit } from '@angular/core';
 import { LayoutService } from '../../layout/service/app.layout.service';
-import { LocalStorageService } from '../../local-storage.service';
+import { ThemeService } from '../../services/theme.service';
 
 interface ThemeOption {
   name: string;
@@ -76,8 +76,6 @@ export class ThemeConfigComponent implements OnInit {
         '--button-bg': '#ff4032',
         '--button-hover-bg': '#e63c2e',
         '--button-focus-shadow': '0 0 0 2px #ffffff, 0 0 0 4px #ff4032',
-        // Dropdown Menu
-        '--toggledropdown-border': '#ff4032',
         // Toggle button
         '--togglebutton-bg': '#ff4032',
         '--togglebutton-border': '1px solid #ff4032',
@@ -186,22 +184,25 @@ export class ThemeConfigComponent implements OnInit {
 
   constructor(
     public layoutService: LayoutService,
-    private localStorage: LocalStorageService
+    private themeService: ThemeService
   ) {
     this.selectedScheme = this.layoutService.config().colorScheme;
   }
 
-
   ngOnInit() {
-    // Load saved theme colors
-    const savedTheme = this.localStorage.getObject('theme-colors');
-    if (savedTheme) {
-      this.applyThemeColors(savedTheme);
-    }
+    // Load saved theme settings from NVS
+    this.themeService.getThemeSettings().subscribe(
+      settings => {
+        if (settings && settings.accentColors) {
+          this.applyThemeColors(settings.accentColors);
+        }
+      },
+      error => console.error('Error loading theme settings:', error)
+    );
   }
 
-  private applyThemeColors(theme: ThemeOption) {
-    Object.entries(theme.accentColors).forEach(([key, value]) => {
+  private applyThemeColors(colors: { [key: string]: string }) {
+    Object.entries(colors).forEach(([key, value]) => {
       document.documentElement.style.setProperty(key, value);
     });
   }
@@ -215,8 +216,15 @@ export class ThemeConfigComponent implements OnInit {
 
   changeTheme(theme: ThemeOption) {
     // Update CSS variables
-    this.applyThemeColors(theme);
-    // Save theme colors
-    this.localStorage.setObject('theme-colors', theme);
+    this.applyThemeColors(theme.accentColors);
+    // Save theme settings to NVS
+    this.themeService.saveThemeSettings({
+      colorScheme: this.selectedScheme,
+      theme: this.layoutService.config().theme,
+      accentColors: theme.accentColors
+    }).subscribe(
+      () => {},
+      error => console.error('Error saving theme settings:', error)
+    );
   }
 }
