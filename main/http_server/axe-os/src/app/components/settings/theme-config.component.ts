@@ -54,31 +54,31 @@ export class ThemeConfigComponent implements OnInit {
   themes: ThemeOption[] = [
     {
       name: 'Red',
-      primaryColor: '#ff4032',
+      primaryColor: '#F80421',
       accentColors: {
-        '--primary-color': '#ff4032',
+        '--primary-color': '#F80421',
         '--primary-color-text': '#ffffff',
-        '--highlight-bg': '#ff4032',
+        '--highlight-bg': '#F80421',
         '--highlight-text-color': '#ffffff',
         '--focus-ring': '0 0 0 0.2rem rgba(255,64,50,0.2)',
         // PrimeNG Slider
         '--slider-bg': '#dee2e6',
-        '--slider-range-bg': '#ff4032',
-        '--slider-handle-bg': '#ff4032',
+        '--slider-range-bg': '#F80421',
+        '--slider-handle-bg': '#F80421',
         // Progress Bar
         '--progressbar-bg': '#dee2e6',
-        '--progressbar-value-bg': '#ff4032',
+        '--progressbar-value-bg': '#F80421',
         // PrimeNG Checkbox
-        '--checkbox-border': '#ff4032',
-        '--checkbox-bg': '#ff4032',
+        '--checkbox-border': '#F80421',
+        '--checkbox-bg': '#F80421',
         '--checkbox-hover-bg': '#e63c2e',
         // PrimeNG Button
-        '--button-bg': '#ff4032',
+        '--button-bg': '#F80421',
         '--button-hover-bg': '#e63c2e',
-        '--button-focus-shadow': '0 0 0 2px #ffffff, 0 0 0 4px #ff4032',
+        '--button-focus-shadow': '0 0 0 2px #ffffff, 0 0 0 4px #F80421',
         // Toggle button
-        '--togglebutton-bg': '#ff4032',
-        '--togglebutton-border': '1px solid #ff4032',
+        '--togglebutton-bg': '#F80421',
+        '--togglebutton-border': '1px solid #F80421',
         '--togglebutton-hover-bg': '#e63c2e',
         '--togglebutton-hover-border': '1px solid #e63c2e',
         '--togglebutton-text-color': '#ffffff'
