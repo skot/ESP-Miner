@@ -35,7 +35,7 @@ void STRATUM_V1_reset_uid()
 
 void STRATUM_V1_initialize_buffer()
 {
-    json_rpc_buffer = malloc(BUFFER_SIZE);
+    json_rpc_buffer = heap_caps_malloc(BUFFER_SIZE, MALLOC_CAP_SPIRAM);
     json_rpc_buffer_size = BUFFER_SIZE;
     if (json_rpc_buffer == NULL) {
         printf("Error: Failed to allocate memory for buffer\n");
@@ -204,7 +204,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
                 message->response_success = false;
                 goto done;
             }
-            message->extranonce_str = malloc(strlen(extranonce_json->valuestring) + 1);
+            message->extranonce_str = heap_caps_malloc(strlen(extranonce_json->valuestring) + 1, MALLOC_CAP_SPIRAM);
             strcpy(message->extranonce_str, extranonce_json->valuestring);
             message->response_success = true;
 
@@ -232,7 +232,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
 
     if (message->method == MINING_NOTIFY) {
 
-        mining_notify * new_work = malloc(sizeof(mining_notify));
+        mining_notify * new_work = heap_caps_malloc(sizeof(mining_notify), MALLOC_CAP_SPIRAM);
         // new_work->difficulty = difficulty;
         cJSON * params = cJSON_GetObjectItem(json, "params");
         new_work->job_id = strdup(cJSON_GetArrayItem(params, 0)->valuestring);
@@ -246,7 +246,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
             printf("Too many Merkle branches.\n");
             abort();
         }
-        new_work->merkle_branches = malloc(HASH_SIZE * new_work->n_merkle_branches);
+        new_work->merkle_branches = heap_caps_malloc(HASH_SIZE * new_work->n_merkle_branches, MALLOC_CAP_SPIRAM);
         for (size_t i = 0; i < new_work->n_merkle_branches; i++) {
             hex2bin(cJSON_GetArrayItem(merkle_branch, i)->valuestring, new_work->merkle_branches + HASH_SIZE * i, HASH_SIZE);
         }
@@ -311,7 +311,7 @@ int _parse_stratum_subscribe_result_message(const char * result_json_str, char *
         ESP_LOGE(TAG, "Unable parse extranonce: %s", result->valuestring);
         return -1;
     }
-    *extranonce = malloc(strlen(extranonce_json->valuestring) + 1);
+    *extranonce = heap_caps_malloc(strlen(extranonce_json->valuestring) + 1, MALLOC_CAP_SPIRAM);
     strcpy(*extranonce, extranonce_json->valuestring);
 
     cJSON_Delete(root);

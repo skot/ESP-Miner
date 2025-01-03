@@ -3,6 +3,8 @@
 #include <limits.h>
 #include "mining.h"
 #include "utils.h"
+
+#include "freertos/FreeRTOS.h"
 #include "mbedtls/sha256.h"
 
 void free_bm_job(bm_job *job)
@@ -17,7 +19,7 @@ char *construct_coinbase_tx(const char *coinbase_1, const char *coinbase_2,
 {
     int coinbase_tx_len = strlen(coinbase_1) + strlen(coinbase_2) + strlen(extranonce) + strlen(extranonce_2) + 1;
 
-    char *coinbase_tx = malloc(coinbase_tx_len);
+    char *coinbase_tx = heap_caps_malloc(coinbase_tx_len, MALLOC_CAP_SPIRAM);
     strcpy(coinbase_tx, coinbase_1);
     strcat(coinbase_tx, extranonce);
     strcat(coinbase_tx, extranonce_2);
@@ -30,7 +32,7 @@ char *construct_coinbase_tx(const char *coinbase_1, const char *coinbase_2,
 char *calculate_merkle_root_hash(const char *coinbase_tx, const uint8_t merkle_branches[][32], const int num_merkle_branches)
 {
     size_t coinbase_tx_bin_len = strlen(coinbase_tx) / 2;
-    uint8_t *coinbase_tx_bin = malloc(coinbase_tx_bin_len);
+    uint8_t *coinbase_tx_bin = heap_caps_malloc(coinbase_tx_bin_len, MALLOC_CAP_SPIRAM);
     hex2bin(coinbase_tx, coinbase_tx_bin, coinbase_tx_bin_len);
 
     uint8_t both_merkles[64];
@@ -46,7 +48,7 @@ char *calculate_merkle_root_hash(const char *coinbase_tx, const uint8_t merkle_b
         free(new_root);
     }
 
-    char *merkle_root_hash = malloc(65);
+    char *merkle_root_hash = heap_caps_malloc(65, MALLOC_CAP_SPIRAM);
     bin2hex(both_merkles, 32, merkle_root_hash, 65);
     return merkle_root_hash;
 }
@@ -112,7 +114,7 @@ bm_job construct_bm_job(mining_notify *params, const char *merkle_root, const ui
 
 char *extranonce_2_generate(uint32_t extranonce_2, uint32_t length)
 {
-    char *extranonce_2_str = malloc(length * 2 + 1);
+    char *extranonce_2_str = heap_caps_malloc(length * 2 + 1, MALLOC_CAP_SPIRAM);
     memset(extranonce_2_str, '0', length * 2);
     extranonce_2_str[length * 2] = '\0';
     bin2hex((uint8_t *)&extranonce_2, sizeof(extranonce_2), extranonce_2_str, length * 2 + 1);

@@ -74,7 +74,7 @@ static void _send_BM1397(uint8_t header, uint8_t *data, uint8_t data_len, bool d
     uint8_t total_length = (packet_type == JOB_PACKET) ? (data_len + 6) : (data_len + 5);
 
     // allocate memory for buffer
-    unsigned char *buf = malloc(total_length);
+    unsigned char *buf = heap_caps_malloc(total_length, MALLOC_CAP_SPIRAM);
 
     // add the preamble
     buf[0] = 0x55;
