@@ -7,7 +7,7 @@ RUN git clone https://github.com/bitaxeorg/bitaxe-web-flasher.git
 WORKDIR /app/bitaxe-web-flasher
 
 # Overwrite the firmware data for the dev images
-COPY build/firmware_data.json /app/bitaxe-web-flasher/src/components/firmware_data.json
+COPY build-docker/firmware_data.json /app/bitaxe-web-flasher/src/components/firmware_data.json
 
 RUN npm install
 RUN npm run build
