@@ -1,0 +1,15 @@
+FROM espressif/idf:v5.3.1
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    gnupg \
+    ca-certificates
+
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+
+RUN apt-get install -y nodejs=22.11.0-1nodesource1
+
+RUN npm install -g @angular/cli
+
+ENV IDF_TARGET="esp32s3"
+

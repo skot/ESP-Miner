@@ -1,0 +1,20 @@
+FROM node:latest
+
+WORKDIR /app
+
+RUN git clone https://github.com/bitaxeorg/bitaxe-web-flasher.git
+
+WORKDIR /app/bitaxe-web-flasher
+
+# Overwrite the firmware data for the dev images
+COPY build/firmware_data.json /app/bitaxe-web-flasher/src/components/firmware_data.json
+
+RUN npm install
+RUN npm run build
+RUN npm install --global serve
+
+# TODO: Some requests come in with prefix /bitaxe-web-flasher
+# GET /bitaxe-web-flasher/_next/static/css/d8195771658dcda0.css
+RUN ln -s /app/bitaxe-web-flasher/out out/bitaxe-web-flasher
+
+CMD [ "serve", "out" ]
