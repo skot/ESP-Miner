@@ -224,27 +224,41 @@ void wifi_init(const char * wifi_ssid, const char * wifi_pass, const char * host
     ESP_LOGI(TAG, "ESP_WIFI Access Point On");
     wifi_init_softap();
 
-    /* Initialize STA */
-    ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
-    esp_netif_t * esp_netif_sta = wifi_init_sta(wifi_ssid, wifi_pass);
 
-    /* Start WiFi */
-    ESP_ERROR_CHECK(esp_wifi_start());
+    /* Skip connection if SSID is null */
+    if (strlen(wifi_ssid) == 0) {
+        ESP_LOGI(TAG, "No WiFi SSID provided, skipping connection");
 
-    /* Disable power savings for best performance */
-    ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+        /* Start WiFi */
+        ESP_ERROR_CHECK(esp_wifi_start());
 
-    /* Set Hostname */
-    esp_err_t err = esp_netif_set_hostname(esp_netif_sta, hostname);
-    if (err != ERR_OK) {
-        ESP_LOGW(TAG, "esp_netif_set_hostname failed: %s", esp_err_to_name(err));
+        /* Disable power savings for best performance */
+        ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+
+        return;
     } else {
-        ESP_LOGI(TAG, "ESP_WIFI setting hostname to: %s", hostname);
+        /* Initialize STA */
+        ESP_LOGI(TAG, "ESP_WIFI_MODE_STA");
+        esp_netif_t * esp_netif_sta = wifi_init_sta(wifi_ssid, wifi_pass);
+
+        /* Start WiFi */
+        ESP_ERROR_CHECK(esp_wifi_start());
+
+        /* Disable power savings for best performance */
+        ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
+
+        /* Set Hostname */
+        esp_err_t err = esp_netif_set_hostname(esp_netif_sta, hostname);
+        if (err != ERR_OK) {
+            ESP_LOGW(TAG, "esp_netif_set_hostname failed: %s", esp_err_to_name(err));
+        } else {
+            ESP_LOGI(TAG, "ESP_WIFI setting hostname to: %s", hostname);
+        }
+
+        ESP_LOGI(TAG, "wifi_init_sta finished.");
+
+        return;
     }
-
-    ESP_LOGI(TAG, "wifi_init_sta finished.");
-
-    return;
 }
 
 EventBits_t wifi_connect(void)
