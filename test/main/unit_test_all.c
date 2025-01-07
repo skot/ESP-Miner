@@ -16,6 +16,8 @@ void app_main(void)
      * Make sure that task watchdog is disabled if you use this function.
      */
     // unity_run_menu();
+
+    exit(0);
 }
 
 static void print_banner(const char *text)
