@@ -289,11 +289,13 @@ esp_err_t test_init_peripherals(GlobalState * GLOBAL_STATE) {
     return ESP_OK;
 }
 
-esp_err_t test_psram(){
+esp_err_t test_psram(GlobalState * GLOBAL_STATE){
     if(!esp_psram_is_initialized()) {
         ESP_LOGE(TAG, "No PSRAM available on ESP32!");
-
+        display_msg("PSRAM:FAIL", GLOBAL_STATE);
+        return ESP_FAIL;
     }
+    return ESP_OK;
 }
 
 /**
@@ -313,7 +315,7 @@ void self_test(void * pvParameters)
     GLOBAL_STATE->SELF_TEST_MODULE.active = true;
 
     //Run PSRAM test
-    if(test_psram() != ESP_OK) {
+    if(test_psram(GLOBAL_STATE) != ESP_OK) {
         ESP_LOGE(TAG, "NO PSRAM on device!");
         tests_done(GLOBAL_STATE, TESTS_FAILED);
     }
