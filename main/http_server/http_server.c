@@ -118,6 +118,91 @@ static esp_err_t set_content_type_from_file(httpd_req_t * req, const char * file
 
 static esp_err_t set_cors_headers(httpd_req_t * req)
 {
+
+    // int sockfd = httpd_req_to_sockfd(req);
+    // char ipstr[INET6_ADDRSTRLEN];
+    // struct sockaddr_in6 addr;   // esp_http_server uses IPv6 addressing
+    // socklen_t addr_size = sizeof(addr);
+    
+    // if (getpeername(sockfd, (struct sockaddr *)&addr, &addr_size) < 0) {
+    //     ESP_LOGE(TAG, "Error getting client IP");
+    //     return ESP_FAIL;
+    // }
+    
+    // // // Convert to IPv6 string
+    // // inet_ntop(AF_INET, &addr.sin6_addr, ipstr, sizeof(ipstr));
+    // // ESP_LOGI(TAG, "Client IP => %s", ipstr);
+
+    //  // Convert to IPv4 string
+    // inet_ntop(AF_INET, &addr.sin6_addr.un.u32_addr[3], ipstr, sizeof(ipstr));
+    // ESP_LOGI(TAG, "Client IP => %s", ipstr);
+
+    char origin[128]; 
+    char ip_str[16];  // Buffer to hold the extracted IP address string
+    uint32_t ip_addr = 0;
+
+
+  // Attempt to get the Origin header
+    if (httpd_req_get_hdr_value_str(req, "Origin", origin, sizeof(origin)) == ESP_OK) {
+        ESP_LOGI("CORS", "Origin header: %s", origin);
+
+        // Find the start of the IP address in the Origin header
+        const char *prefix = "http://";
+        char *ip_start = strstr(origin, prefix);
+        if (ip_start) {
+            ip_start += strlen(prefix); // Move past "http://"
+
+            // Extract the IP address portion (up to the next '/')
+            char *ip_end = strchr(ip_start, '/');
+            size_t ip_len = ip_end ? (size_t)(ip_end - ip_start) : strlen(ip_start);
+            if (ip_len < sizeof(ip_str)) {
+                strncpy(ip_str, ip_start, ip_len);
+                ip_str[ip_len] = '\0'; // Null-terminate the string
+
+                // Convert the IP address string to uint32_t
+                ip_addr = inet_addr(ip_str);
+                if (ip_addr == INADDR_NONE) {
+                    ESP_LOGW("CORS", "Invalid IP address: %s", ip_str);
+                } else {
+                    ESP_LOGI("CORS", "Extracted IP address");
+                }
+            } else {
+                ESP_LOGW("CORS", "IP address string is too long");
+            }
+        }
+    }
+
+
+    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF"); // Use appropriate interface key
+    if (netif == NULL) {
+        ESP_LOGE(TAG, "Failed to get network interface");
+        return ESP_FAIL;
+    }
+
+    esp_netif_ip_info_t ip_info;
+    if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
+        ESP_LOGI(TAG, "IP Address: " IPSTR, IP2STR(&ip_info.ip));
+        ESP_LOGI(TAG, "Netmask:    " IPSTR, IP2STR(&ip_info.netmask));
+        ESP_LOGI(TAG, "Gateway:    " IPSTR, IP2STR(&ip_info.gw));
+    } else {
+        ESP_LOGE(TAG, "Failed to get IP address");
+    }
+
+
+    // Calculate network addresses for client and server
+    uint32_t server_network = ip_info.ip.addr & ip_info.netmask.addr;
+    uint32_t client_network = ip_addr & ip_info.netmask.addr;
+
+
+    //Check if client is in the same network as the server
+    if (server_network == client_network) {
+        ESP_LOGI(TAG, "Client is in the same network as the server.");
+    } else {
+        ESP_LOGI(TAG, "Client is NOT in the same network as the server.");
+    }
+
+
+
     esp_err_t err;
 
     err = httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
