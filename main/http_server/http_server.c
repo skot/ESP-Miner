@@ -96,6 +96,27 @@ static esp_err_t check_is_same_network(httpd_req_t * req){
         }
     }
 
+    int sockfd = httpd_req_to_sockfd(req);
+    char ipstr[INET6_ADDRSTRLEN];
+    struct sockaddr_in6 addr;   // esp_http_server uses IPv6 addressing
+    socklen_t addr_size = sizeof(addr);
+    
+    if (getpeername(sockfd, (struct sockaddr *)&addr, &addr_size) < 0) {
+        ESP_LOGE(TAG, "Error getting client IP");
+        return ESP_FAIL;
+    }
+
+
+    uint32_t request_ip_addr = addr.sin6_addr.un.u32_addr[3];
+
+    // // Convert to IPv6 string
+    // inet_ntop(AF_INET, &addr.sin6_addr, ipstr, sizeof(ipstr));
+
+    // Convert to IPv4 string
+    inet_ntop(AF_INET, &request_ip_addr, ipstr, sizeof(ipstr));
+
+   
+
     char origin[128]; 
     char ip_str[16];  // Buffer to hold the extracted IP address string
     uint32_t origin_ip_addr = 0;
@@ -129,31 +150,8 @@ static esp_err_t check_is_same_network(httpd_req_t * req){
         }
     }else {
         // Origin is sent for CSRF sensitive requests, if there is no header it's not a concern.
-        return ESP_OK;
+        origin_ip_addr = request_ip_addr;
     }
-
-
-    int sockfd = httpd_req_to_sockfd(req);
-    char ipstr[INET6_ADDRSTRLEN];
-    struct sockaddr_in6 addr;   // esp_http_server uses IPv6 addressing
-    socklen_t addr_size = sizeof(addr);
-    
-    if (getpeername(sockfd, (struct sockaddr *)&addr, &addr_size) < 0) {
-        ESP_LOGE(TAG, "Error getting client IP");
-        return ESP_FAIL;
-    }
-
-    uint32_t request_ip_addr = addr.sin6_addr.un.u32_addr[3];
-    
-    // // Convert to IPv6 string
-    // inet_ntop(AF_INET, &addr.sin6_addr, ipstr, sizeof(ipstr));
-    // ESP_LOGI(TAG, "Client IP => %s", ipstr);
-
-     // Convert to IPv4 string
-    inet_ntop(AF_INET, &request_ip_addr, ipstr, sizeof(ipstr));
-    ESP_LOGI(TAG, "Client IP => %s", ipstr);
-    ESP_LOGI(TAG, "Client IP => %lu", request_ip_addr);
-
 
 
     
