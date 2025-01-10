@@ -180,7 +180,7 @@ export class HomeComponent {
         y2: {
           type: 'linear',
           display: true,
-          position: 'right',
+          position: 'left',
           ticks: {
             color: textColorSecondary,
             callback: (value: number) => value + '°C'
