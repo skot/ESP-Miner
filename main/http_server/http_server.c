@@ -61,40 +61,7 @@ typedef struct rest_server_context
 
 #define CHECK_FILE_EXTENSION(filename, ext) (strcasecmp(&filename[strlen(filename) - strlen(ext)], ext) == 0)
 
-static uint32_t server_network = 0;
-static uint32_t server_netmask = 0;
-
-static esp_err_t get_server_network(httpd_req_t * req){
-
-    esp_netif_t *netif = esp_netif_get_handle_from_ifkey("WIFI_STA_DEF"); // Use appropriate interface key
-    if (netif == NULL) {
-        ESP_LOGE(TAG, "Failed to get network interface");
-        return ESP_FAIL;
-    }
-
-    esp_netif_ip_info_t ip_info;
-    if (esp_netif_get_ip_info(netif, &ip_info) == ESP_OK) {
-        ESP_LOGI(TAG, "IP Address: " IPSTR, IP2STR(&ip_info.ip));
-        ESP_LOGI(TAG, "Netmask:    " IPSTR, IP2STR(&ip_info.netmask));
-        ESP_LOGI(TAG, "Gateway:    " IPSTR, IP2STR(&ip_info.gw));
-    } else {
-        ESP_LOGE(TAG, "Failed to get IP address");
-    }
-
-    server_network = ip_info.ip.addr & ip_info.netmask.addr;
-    server_netmask = ip_info.netmask.addr;
-    return ESP_OK;
-}
-
-
-
 static esp_err_t check_is_same_network(httpd_req_t * req){
-
-    if(server_network == 0){
-        if(get_server_network(req) != ESP_OK){
-            return ESP_FAIL;
-        }
-    }
 
     int sockfd = httpd_req_to_sockfd(req);
     char ipstr[INET6_ADDRSTRLEN];
