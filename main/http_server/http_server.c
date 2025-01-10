@@ -159,21 +159,21 @@ static esp_err_t check_is_same_network(httpd_req_t * req){
 
     //Private IP ranges
     //192.168.0.0
-    uint32_t sixteen_bit_block = b11000000101010000000000000000000;
-    uint32_t sixteen_bit_mask = b11111111111111110000000000000000;
-    if(requestor_network & sixteen_bit_mask == sixteen_bit_block && origin_network & sixteen_bit_mask == sixteen_bit_block){
+    uint32_t sixteen_bit_block = 0b11000000101010000000000000000000;
+    uint32_t sixteen_bit_mask = 0b11111111111111110000000000000000;
+    if((requestor_network & sixteen_bit_mask) == sixteen_bit_block && (origin_network & sixteen_bit_mask) == sixteen_bit_block){
          return ESP_OK;
     }
     //172.16.0.0 
-    uint32_t twenty_bit_block = b10101100000100000000000000000000;
-    uint32_t twenty_bit_mask = b11111111111100000000000000000000;
-    if(requestor_network & twenty_bit_mask == twenty_bit_block && origin_network & twenty_bit_mask == twenty_bit_block){
+    uint32_t twenty_bit_block = 0b10101100000100000000000000000000;
+    uint32_t twenty_bit_mask = 0b11111111111100000000000000000000;
+    if((requestor_network & twenty_bit_mask) == twenty_bit_block && (origin_network & twenty_bit_mask) == twenty_bit_block){
          return ESP_OK;
     }
     //10.0.0.0
-    uint32_t twenty_four_bit_block = b00001010000000000000000000000000;
-    uint32_t twenty_four_bit_mask = b11111111000000000000000000000000;
-    if(requestor_network & twenty_four_bit_mask == twenty_four_bit_block && origin_network & twenty_four_bit_mask == twenty_four_bit_block){
+    uint32_t twenty_four_bit_block = 0b00001010000000000000000000000000;
+    uint32_t twenty_four_bit_mask = 0b11111111000000000000000000000000;
+    if((requestor_network & twenty_four_bit_mask) == twenty_four_bit_block && (origin_network & twenty_four_bit_mask) == twenty_four_bit_block){
          return ESP_OK;
     }
 
