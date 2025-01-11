@@ -61,6 +61,30 @@ typedef struct rest_server_context
 
 #define CHECK_FILE_EXTENSION(filename, ext) (strcasecmp(&filename[strlen(filename) - strlen(ext)], ext) == 0)
 
+static esp_err_t ip_in_private_range(uint32_t ip){
+        //Private IP ranges (little endian, 192.168.0.0 => 0.0.168.192)
+    //192.168.0.0
+    uint32_t sixteen_bit_block = 0b00000000000000001010100011000000;
+    uint32_t sixteen_bit_mask =  0b00000000000000001111111111111111;
+
+    if((ip & sixteen_bit_mask) == sixteen_bit_block){
+         return ESP_OK;
+    }
+    //172.16.0.0 
+    uint32_t twenty_bit_block = 0b00000000000000000001000010101100;
+    uint32_t twenty_bit_mask = 0b00000000000000001111000011111111;
+    if((ip & twenty_bit_mask) == twenty_bit_block){
+         return ESP_OK;
+    }
+    //10.0.0.0
+    uint32_t twenty_four_bit_block = 0b00000000000000000000000000001010;
+    uint32_t twenty_four_bit_mask = 0b00000000000000000000000011111111;
+    if((ip & twenty_four_bit_mask) == twenty_four_bit_block){
+         return ESP_OK;
+    }
+
+    return ESP_FAIL;
+}
 static esp_err_t check_is_same_network(httpd_req_t * req){
 
     int sockfd = httpd_req_to_sockfd(req);
@@ -121,27 +145,9 @@ static esp_err_t check_is_same_network(httpd_req_t * req){
     }
 
 
-    //Private IP ranges (little endian, 192.168.0.0 => 0.0.168.192)
-    //192.168.0.0
-    uint32_t sixteen_bit_block = 0b00000000000000001010100011000000;
-    uint32_t sixteen_bit_mask =  0b00000000000000001111111111111111;
-
-    if((request_ip_addr & sixteen_bit_mask) == sixteen_bit_block && (origin_ip_addr & sixteen_bit_mask) == sixteen_bit_block){
-         return ESP_OK;
+    if(ip_in_private_range(origin_ip_addr) == ESP_OK && ip_in_private_range(request_ip_addr) == ESP_OK){
+        return ESP_OK;
     }
-    //172.16.0.0 
-    uint32_t twenty_bit_block = 0b00000000000000000001000010101100;
-    uint32_t twenty_bit_mask = 0b00000000000000001111000011111111;
-    if((request_ip_addr & twenty_bit_mask) == twenty_bit_block && (origin_ip_addr & twenty_bit_mask) == twenty_bit_block){
-         return ESP_OK;
-    }
-    //10.0.0.0
-    uint32_t twenty_four_bit_block = 0b00000000000000000000000000001010;
-    uint32_t twenty_four_bit_mask = 0b00000000000000000000000011111111;
-    if((request_ip_addr & twenty_four_bit_mask) == twenty_four_bit_block && (origin_ip_addr & twenty_four_bit_mask) == twenty_four_bit_block){
-         return ESP_OK;
-    }
-
 
     ESP_LOGI(TAG, "Client is NOT in the private ip ranges or same range as server.");
     return ESP_FAIL;
