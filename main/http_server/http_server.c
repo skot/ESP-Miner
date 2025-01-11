@@ -120,22 +120,24 @@ static esp_err_t check_is_same_network(httpd_req_t * req){
         origin_ip_addr = request_ip_addr;
     }
 
-    //Private IP ranges
+
+    //Private IP ranges (little endian, 192.168.0.0 => 0.0.168.192)
     //192.168.0.0
-    uint32_t sixteen_bit_block = 0b11000000101010000000000000000000;
-    uint32_t sixteen_bit_mask = 0b11111111111111110000000000000000;
+    uint32_t sixteen_bit_block = 0b00000000000000001010100011000000;
+    uint32_t sixteen_bit_mask =  0b00000000000000001111111111111111;
+
     if((request_ip_addr & sixteen_bit_mask) == sixteen_bit_block && (origin_ip_addr & sixteen_bit_mask) == sixteen_bit_block){
          return ESP_OK;
     }
     //172.16.0.0 
-    uint32_t twenty_bit_block = 0b10101100000100000000000000000000;
-    uint32_t twenty_bit_mask = 0b11111111111100000000000000000000;
+    uint32_t twenty_bit_block = 0b00000000000000000001000010101100;
+    uint32_t twenty_bit_mask = 0b00000000000000001111000011111111;
     if((request_ip_addr & twenty_bit_mask) == twenty_bit_block && (origin_ip_addr & twenty_bit_mask) == twenty_bit_block){
          return ESP_OK;
     }
     //10.0.0.0
-    uint32_t twenty_four_bit_block = 0b00001010000000000000000000000000;
-    uint32_t twenty_four_bit_mask = 0b11111111000000000000000000000000;
+    uint32_t twenty_four_bit_block = 0b00000000000000000000000000001010;
+    uint32_t twenty_four_bit_mask = 0b00000000000000000000000011111111;
     if((request_ip_addr & twenty_four_bit_mask) == twenty_four_bit_block && (origin_ip_addr & twenty_four_bit_mask) == twenty_four_bit_block){
          return ESP_OK;
     }
