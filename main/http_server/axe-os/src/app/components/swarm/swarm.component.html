@@ -63,7 +63,19 @@
         <ng-container *ngFor="let axe of swarm">
             <tr>
                 <td>
-                    <a class="text-primary" [href]="'http://'+axe.IP" target="_blank">{{axe.IP}}</a>
+                    <a
+                       [ngClass]="[
+                            axe.asicCount > 1 ? 'text-orange-500' :
+                            axe.ASICModel === 'BM1397' ? 'text-red-500' :
+                            axe.ASICModel === 'BM1366' ? 'text-purple-500' :
+                            axe.ASICModel === 'BM1368' ? 'text-blue-500' :
+                            axe.ASICModel === 'BM1370' ? 'text-green-500' :
+                            ''
+                       ]"
+                       [href]="'http://'+axe.IP" 
+                       target="_blank"
+                       [pTooltip]="axe.ASICModel"
+                       tooltipPosition="top">{{axe.IP}}</a>
                     <div class="text-sm">{{axe.hostname}}</div>
                 </td>
                 <td>{{axe.hashRate * 1000000000 | hashSuffix}}</td>
