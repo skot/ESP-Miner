@@ -83,6 +83,7 @@ In the event that the admin web front end is inaccessible, for example because o
 ### Prerequisites
 
 - Install the ESP-IDF toolchain from https://docs.espressif.com/projects/esp-idf/en/stable/esp32/get-started/
+- Install nodejs/npm from https://nodejs.org/en/download
 - (Optional) Install the ESP-IDF extension for VSCode from https://marketplace.visualstudio.com/items?itemName=espressif.esp-idf-extension
 
 ### Building
