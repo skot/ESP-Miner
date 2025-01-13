@@ -6,6 +6,7 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "global_state.h"
+#include "influx_task.h"
 #include "math.h"
 #include "mining.h"
 #include "nvs_config.h"
