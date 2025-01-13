@@ -296,6 +296,17 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             }
             last_asic_frequency = asic_frequency;
         }
+        // monitor into influx
+
+        influx_task_set_pwr(
+            GLOBAL_STATE->POWER_MANAGEMENT_MODULE.voltage,
+            GLOBAL_STATE->POWER_MANAGEMENT_MODULE.current,
+            GLOBAL_STATE->POWER_MANAGEMENT_MODULE.power
+        );
+        influx_task_set_temperature(
+            GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp_avg, 
+            GLOBAL_STATE->POWER_MANAGEMENT_MODULE.vr_temp
+        );
 
         // Check for changing of overheat mode
         SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;

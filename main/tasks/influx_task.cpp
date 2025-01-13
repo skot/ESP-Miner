@@ -35,18 +35,15 @@ void influx_task_set_temperature(float temp, float temp2)
     pthread_mutex_unlock(&influxdb->lock);
 }
 
-void influx_task_set_pwr(float vin, float iin, float pin, float vout, float iout, float pout)
+void influx_task_set_pwr(float voltage, float current, float power)
 {
     if (!influxdb) {
         return;
     }
     pthread_mutex_lock(&influxdb->lock);
-    influxdb->stats.pwr_vin = vin;
-    influxdb->stats.pwr_iin = iin;
-    influxdb->stats.pwr_pin = pin;
-    influxdb->stats.pwr_vout = vout;
-    influxdb->stats.pwr_iout = iout;
-    influxdb->stats.pwr_pout = pout;
+    influxdb->stats.pwr_vin = voltage;
+    influxdb->stats.pwr_iin = current;
+    influxdb->stats.pwr_pin = power;
     pthread_mutex_unlock(&influxdb->lock);
 }
 
