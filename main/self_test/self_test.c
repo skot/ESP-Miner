@@ -513,7 +513,7 @@ void self_test(void * pvParameters)
     }
 
     tests_done(GLOBAL_STATE, TESTS_PASSED);
-    ESP_LOGI(TAG, "Self Tests Passed!!!");
+
     return;  
 }
 
@@ -530,10 +530,13 @@ static void tests_done(GlobalState * GLOBAL_STATE, bool test_result)
         default:
     }
 
-    if (test_result != TESTS_PASSED) {
+    if (test_result == TESTS_FAILED) {
         ESP_LOGI(TAG, "SELF TESTS FAIL -- Press RESET to continue");  
         //wait here for a long press to reboot
         vTaskDelay(portMAX_DELAY);
+    }else{
+        nvs_config_set_u16(NVS_CONFIG_SELF_TEST, 0);
+        ESP_LOGI(TAG, "Self Tests Passed!!!");
     }
 
 }
