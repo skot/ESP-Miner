@@ -3,7 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import { environment } from '../../environments/environment';
 import { of } from 'rxjs';
-import { tap, catchError, shareReplay } from 'rxjs/operators';
+import { catchError, shareReplay } from 'rxjs/operators';
 
 export interface ThemeSettings {
   colorScheme: string;
@@ -26,7 +26,6 @@ export class ThemeService {
     })
   );
 
-  // Move mock settings to a private property
   private readonly mockSettings: ThemeSettings = {
     colorScheme: 'dark',
     theme: 'dark',
