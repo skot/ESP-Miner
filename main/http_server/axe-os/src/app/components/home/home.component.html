@@ -23,10 +23,6 @@
                                     <span>
                                         {{info.hashRate * 1000000000 | hashSuffix}}
                                     </span>
-                                    <span class="text-500 text-xs" *ngIf="expectedHashRate$ | async as expectedHashRate">
-                                        <div class="underline">Expected</div>
-                                        <div>{{expectedHashRate * 1000000000 | hashSuffix}}</div>
-                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -37,6 +33,10 @@
                                 {{calculateAverage(hashrateData) | hashSuffix}}
                             </span>
                         </ng-container>
+
+                        <div class="text-500 text-xs" *ngIf="expectedHashRate$ | async as expectedHashRate">
+                            Expected: {{expectedHashRate * 1000000000 | hashSuffix}}
+                        </div>
                     </div>
                 </div>
                 <div class="col-12 md:col-6 xl:col-3">
@@ -48,10 +48,6 @@
                                     <span>
                                         {{info.power / (info.hashRate/1000) | number: '1.2-2'}} <small>J/TH</small>
                                     </span>
-                                    <span class="text-500 text-xs" *ngIf="expectedHashRate$ | async as expectedHashRate">
-                                        <div class="underline">Expected</div>
-                                        <div>{{info.power / (expectedHashRate/1000) | number: '1.2-2'}} J/TH</div>
-                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -62,6 +58,10 @@
                                 {{calculateEfficiencyAverage(hashrateData, powerData) | number: '1.2-2'}} <small>J/TH</small>
                             </span>
                         </ng-container>
+
+                        <div class="text-500 text-xs " *ngIf="expectedHashRate$ | async as expectedHashRate" >
+                            Expected: {{info.power / (expectedHashRate/1000) | number: '1.2-2'}} J/TH
+                        </div>
                     </div>
                 </div>
                 <div class="col-12 md:col-6 xl:col-3">
