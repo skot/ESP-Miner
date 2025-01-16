@@ -92,7 +92,7 @@ static esp_err_t check_is_same_network(httpd_req_t * req){
 
     if (err == ESP_OK) {
         switch (mode) {
-            case WIFI_MODE_STA:
+            case WIFI_MODE_AP:
             case WIFI_MODE_APSTA:
                 ESP_LOGI(TAG, "WiFi is in AP+/STA mode.");
                 return ESP_OK;
