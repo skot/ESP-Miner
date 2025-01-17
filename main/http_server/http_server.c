@@ -1,5 +1,4 @@
 #include "http_server.h"
-#include "recovery_page.h"
 #include "theme_api.h"  // Add theme API include
 #include "cJSON.h"
 #include "esp_chip_info.h"
@@ -257,7 +256,11 @@ static esp_err_t rest_recovery_handler(httpd_req_t * req)
         return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
     }
 
-    httpd_resp_send(req, recovery_page, HTTPD_RESP_USE_STRLEN);
+    extern const unsigned char recovery_page_start[] asm("_binary_recovery_page_html_start");
+    extern const unsigned char recovery_page_end[] asm("_binary_recovery_page_html_end");
+    const size_t recovery_page_size = (recovery_page_end - recovery_page_start);
+    httpd_resp_send_chunk(req, (const char*)recovery_page_start, recovery_page_size);
+    httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
 
