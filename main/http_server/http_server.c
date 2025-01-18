@@ -410,22 +410,22 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "frequency")) != NULL && item->valueint > 0) {
         nvs_config_set_u16(NVS_CONFIG_ASIC_FREQ, item->valueint);
     }
-    if ((item = cJSON_GetObjectItem(root, "flipscreen")) != NULL) {
+    if ((item = cJSON_GetObjectItem(root, "flipScreen")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_FLIP_SCREEN, item->valueint);
     }
-    if ((item = cJSON_GetObjectItem(root, "overheat_mode")) != NULL) {
+    if ((item = cJSON_GetObjectItem(root, "overheatMode")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
     }
-    if ((item = cJSON_GetObjectItem(root, "invertscreen")) != NULL) {
+    if ((item = cJSON_GetObjectItem(root, "invertScreen")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_INVERT_SCREEN, item->valueint);
     }
-    if ((item = cJSON_GetObjectItem(root, "invertfanpolarity")) != NULL) {
+    if ((item = cJSON_GetObjectItem(root, "invertFanPolarity")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_INVERT_FAN_POLARITY, item->valueint);
     }
-    if ((item = cJSON_GetObjectItem(root, "autofanspeed")) != NULL) {
+    if ((item = cJSON_GetObjectItem(root, "autoFanSpeed")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, item->valueint);
     }
-    if ((item = cJSON_GetObjectItem(root, "fanspeed")) != NULL) {
+    if ((item = cJSON_GetObjectItem(root, "fanSpeed")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, item->valueint);
     }
 
@@ -497,7 +497,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "current", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.current);
     cJSON_AddNumberToObject(root, "temp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.chip_temp_avg);
     cJSON_AddNumberToObject(root, "vrTemp", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.vr_temp);
-    cJSON_AddNumberToObject(root, "hashRate", GLOBAL_STATE->SYSTEM_MODULE.current_hashrate);
+    cJSON_AddNumberToObject(root, "hashrate", GLOBAL_STATE->SYSTEM_MODULE.current_hashrate);
     cJSON_AddStringToObject(root, "bestDiff", GLOBAL_STATE->SYSTEM_MODULE.best_diff_string);
     cJSON_AddStringToObject(root, "bestSessionDiff", GLOBAL_STATE->SYSTEM_MODULE.best_session_diff_string);
     cJSON_AddNumberToObject(root, "stratumDiff", GLOBAL_STATE->stratum_difficulty);
@@ -536,7 +536,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
             break;
     }
     cJSON_AddNumberToObject(root, "smallCoreCount", small_core_count);
-    cJSON_AddStringToObject(root, "ASICModel", GLOBAL_STATE->asic_model_str);
+    cJSON_AddStringToObject(root, "asicModel", GLOBAL_STATE->asic_model_str);
     cJSON_AddStringToObject(root, "stratumURL", stratumURL);
     cJSON_AddStringToObject(root, "fallbackStratumURL", fallbackStratumURL);
     cJSON_AddNumberToObject(root, "stratumPort", nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT, CONFIG_STRATUM_PORT));
@@ -549,15 +549,15 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddStringToObject(root, "boardVersion", board_version);
     cJSON_AddStringToObject(root, "runningPartition", esp_ota_get_running_partition()->label);
 
-    cJSON_AddNumberToObject(root, "flipscreen", nvs_config_get_u16(NVS_CONFIG_FLIP_SCREEN, 1));
-    cJSON_AddNumberToObject(root, "overheat_mode", nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0));
-    cJSON_AddNumberToObject(root, "invertscreen", nvs_config_get_u16(NVS_CONFIG_INVERT_SCREEN, 0));
+    cJSON_AddNumberToObject(root, "flipScreen", nvs_config_get_u16(NVS_CONFIG_FLIP_SCREEN, 1));
+    cJSON_AddNumberToObject(root, "invertScreen", nvs_config_get_u16(NVS_CONFIG_INVERT_SCREEN, 0));
+    cJSON_AddNumberToObject(root, "overheatMode", nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0));
 
-    cJSON_AddNumberToObject(root, "invertfanpolarity", nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
-    cJSON_AddNumberToObject(root, "autofanspeed", nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1));
+    cJSON_AddNumberToObject(root, "invertFanPolarity", nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
+    cJSON_AddNumberToObject(root, "autoFanSpeed", nvs_config_get_u16(NVS_CONFIG_AUTO_FAN_SPEED, 1));
 
-    cJSON_AddNumberToObject(root, "fanspeed", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc);
-    cJSON_AddNumberToObject(root, "fanrpm", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_rpm);
+    cJSON_AddNumberToObject(root, "fanSpeed", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc);
+    cJSON_AddNumberToObject(root, "fanRPM", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_rpm);
 
     free(ssid);
     free(hostname);
@@ -645,7 +645,7 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
         httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Not allowed in AP mode");
         return ESP_OK;
     }
-    
+
     char buf[1000];
     esp_ota_handle_t ota_handle;
     int remaining = req->content_len;
@@ -835,21 +835,21 @@ esp_err_t start_rest_server(void * pvParameters)
     REST_CHECK(httpd_start(&server, &config) == ESP_OK, "Start server failed", err_start);
 
     httpd_uri_t recovery_explicit_get_uri = {
-        .uri = "/recovery", 
-        .method = HTTP_GET, 
-        .handler = rest_recovery_handler, 
+        .uri = "/recovery",
+        .method = HTTP_GET,
+        .handler = rest_recovery_handler,
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &recovery_explicit_get_uri);
-    
+
     // Register theme API endpoints
     ESP_ERROR_CHECK(register_theme_api_endpoints(server, rest_context));
 
     /* URI handler for fetching system info */
     httpd_uri_t system_info_get_uri = {
-        .uri = "/api/system/info", 
-        .method = HTTP_GET, 
-        .handler = GET_system_info, 
+        .uri = "/api/system/info",
+        .method = HTTP_GET,
+        .handler = GET_system_info,
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &system_info_get_uri);
@@ -863,24 +863,24 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_register_uri_handler(server, &swarm_options_uri);
 
     httpd_uri_t system_restart_uri = {
-        .uri = "/api/system/restart", .method = HTTP_POST, 
-        .handler = POST_restart, 
+        .uri = "/api/system/restart", .method = HTTP_POST,
+        .handler = POST_restart,
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &system_restart_uri);
 
     httpd_uri_t system_restart_options_uri = {
-        .uri = "/api/system/restart", 
-        .method = HTTP_OPTIONS, 
-        .handler = handle_options_request, 
+        .uri = "/api/system/restart",
+        .method = HTTP_OPTIONS,
+        .handler = handle_options_request,
         .user_ctx = NULL
     };
     httpd_register_uri_handler(server, &system_restart_options_uri);
 
     httpd_uri_t update_system_settings_uri = {
-        .uri = "/api/system", 
-        .method = HTTP_PATCH, 
-        .handler = PATCH_update_settings, 
+        .uri = "/api/system",
+        .method = HTTP_PATCH,
+        .handler = PATCH_update_settings,
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &update_system_settings_uri);
@@ -894,26 +894,26 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_register_uri_handler(server, &system_options_uri);
 
     httpd_uri_t update_post_ota_firmware = {
-        .uri = "/api/system/OTA", 
-        .method = HTTP_POST, 
-        .handler = POST_OTA_update, 
+        .uri = "/api/system/OTA",
+        .method = HTTP_POST,
+        .handler = POST_OTA_update,
         .user_ctx = NULL
     };
     httpd_register_uri_handler(server, &update_post_ota_firmware);
 
     httpd_uri_t update_post_ota_www = {
-        .uri = "/api/system/OTAWWW", 
-        .method = HTTP_POST, 
-        .handler = POST_WWW_update, 
+        .uri = "/api/system/OTAWWW",
+        .method = HTTP_POST,
+        .handler = POST_WWW_update,
         .user_ctx = NULL
     };
     httpd_register_uri_handler(server, &update_post_ota_www);
 
     httpd_uri_t ws = {
-        .uri = "/api/ws", 
-        .method = HTTP_GET, 
-        .handler = echo_handler, 
-        .user_ctx = NULL, 
+        .uri = "/api/ws",
+        .method = HTTP_GET,
+        .handler = echo_handler,
+        .user_ctx = NULL,
         .is_websocket = true
     };
     httpd_register_uri_handler(server, &ws);
@@ -921,8 +921,8 @@ esp_err_t start_rest_server(void * pvParameters)
     if (enter_recovery) {
         /* Make default route serve Recovery */
         httpd_uri_t recovery_implicit_get_uri = {
-            .uri = "/*", .method = HTTP_GET, 
-            .handler = rest_recovery_handler, 
+            .uri = "/*", .method = HTTP_GET,
+            .handler = rest_recovery_handler,
             .user_ctx = rest_context
         };
         httpd_register_uri_handler(server, &recovery_implicit_get_uri);
@@ -930,9 +930,9 @@ esp_err_t start_rest_server(void * pvParameters)
     } else {
         /* URI handler for getting web server files */
         httpd_uri_t common_get_uri = {
-            .uri = "/*", 
-            .method = HTTP_GET, 
-            .handler = rest_common_get_handler, 
+            .uri = "/*",
+            .method = HTTP_GET,
+            .handler = rest_common_get_handler,
             .user_ctx = rest_context
         };
         httpd_register_uri_handler(server, &common_get_uri);
