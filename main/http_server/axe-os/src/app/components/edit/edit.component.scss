@@ -1,5 +1,45 @@
-.pi {
-    right: 1rem;
-    font-size: 1.5rem;
-    top: 1rem;
+:host ::ng-deep {
+    .p-input-icon-right {
+        width: 100%;
+        
+        i {
+            cursor: pointer;
+            color: var(--text-color-secondary);
+            
+            &:hover {
+                color: var(--text-color);
+            }
+        }
+    }
+
+    .warning {
+        color: var(--red-500);
+        font-weight: 600;
+        margin-left: 0.5rem;
+    }
+
+    .note {
+        color: var(--yellow-500);
+        font-weight: 600;
+        margin-left: 0.5rem;
+    }
+
+    .warning-card {
+        background: var(--red-100);
+        border-color: var(--red-300);
+
+        small {
+            color: var(--red-700);
+        }
+    }
+
+    .p-dropdown {
+        width: 100%;
+    }
+
+    input[type="text"],
+    input[type="number"],
+    input[type="password"] {
+        width: 100%;
+    }
 }
