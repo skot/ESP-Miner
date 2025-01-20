@@ -107,10 +107,22 @@ static uint32_t extract_origin_ip_addr(char *origin)
                 ESP_LOGW(CORS_TAG, "Invalid IP address: %s", ip_str);
             } else {
                 ESP_LOGD(CORS_TAG, "Extracted IP address %lu", origin_ip_addr);
+                return origin_ip_addr;
             }
-        } else {
-            ESP_LOGW(CORS_TAG, "IP address string is too long: %s", ip_start);
         }
+
+        char * hostname = nvs_config_get_string(NVS_CONFIG_HOSTNAME, CONFIG_LWIP_LOCAL_HOSTNAME);
+        char fqdn[128];
+        snprintf(fqdn, sizeof(fqdn), "%s.local", hostname);
+
+        if (strcasecmp(hostname, ip_start) == 0 || strcasecmp(fqdn, ip_start) == 0) {
+            struct hostent *host = gethostbyname(hostname);
+            if (host != NULL && host->h_addr_list[0] != NULL) {
+                origin_ip_addr = ((struct in_addr *)host->h_addr_list[0])->s_addr;
+            }
+        }
+
+        free(hostname);
     }
 
     return origin_ip_addr;

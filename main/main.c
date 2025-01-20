@@ -1,4 +1,4 @@
-
+#include "mdns.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "nvs_flash.h"
@@ -21,9 +21,9 @@
 #include "self_test.h"
 
 static GlobalState GLOBAL_STATE = {
-    .extranonce_str = NULL, 
-    .extranonce_2_len = 0, 
-    .abandon_work = 0, 
+    .extranonce_str = NULL,
+    .extranonce_2_len = 0,
+    .abandon_work = 0,
     .version_mask = 0,
     .ASIC_initalized = false
 };
@@ -109,6 +109,9 @@ void app_main(void)
             vTaskDelay(1000 / portTICK_PERIOD_MS);
         }
     }
+
+    ESP_ERROR_CHECK( mdns_init() );
+    ESP_ERROR_CHECK( mdns_hostname_set(hostname) );
 
     free(wifi_ssid);
     free(wifi_pass);
