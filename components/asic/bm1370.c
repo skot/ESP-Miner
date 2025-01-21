@@ -15,7 +15,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef CONFIG_GPIO_ASIC_RESET
 #define GPIO_ASIC_RESET CONFIG_GPIO_ASIC_RESET
+#else
+#define GPIO_ASIC_RESET 1
+#endif
 
 #define TYPE_JOB 0x20
 #define TYPE_CMD 0x40
