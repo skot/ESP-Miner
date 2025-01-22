@@ -556,6 +556,9 @@ void TPS546_write_entire_config(void)
     ESP_LOGI(TAG, "Writing MFR REVISION");
     smb_write_block(PMBUS_MFR_ID, MFR_REVISION, 3);
 
+
+    smb_write_word(PMBUS_STACK_CONFIG, INIT_STACK_CONFIG_TWO_PHASE);
+    
     /*
     !!!!!!!!!!!!!!!!!!!!!!!!!!!
     // Never write this to NVM as it can corrupt the TPS in an unrecoverable state, just do it on boot every time
