@@ -161,10 +161,9 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             default:
         }
 
-        power_management->fan_rpm = EMC2101_get_fan_speed();
-
         switch (GLOBAL_STATE->device_model) {
             case DEVICE_MAX:
+                power_management->fan_rpm = EMC2101_get_fan_speed();
                 power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2101_get_external_temp() : -1;
 
                 if ((power_management->chip_temp_avg > THROTTLE_TEMP) &&
@@ -185,7 +184,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 break;
             case DEVICE_ULTRA:
             case DEVICE_SUPRA:
-                
+                power_management->fan_rpm = EMC2101_get_fan_speed();
                 if (GLOBAL_STATE->board_version >= 402 && GLOBAL_STATE->board_version <= 499) {
                     power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2101_get_external_temp() : -1;
                     power_management->vr_temp = (float)TPS546_get_temperature();
@@ -221,6 +220,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 
                 break;
             case DEVICE_GAMMA:
+                power_management->fan_rpm = EMC2101_get_fan_speed();
                 power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2101_get_external_temp() : -1;
                 power_management->vr_temp = (float)TPS546_get_temperature();
 
