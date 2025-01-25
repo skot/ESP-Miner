@@ -17,10 +17,10 @@
 #define TPS546_INIT_FREQUENCY 650  /* KHz */
 
 /* vin voltage */
-#define TPS546_INIT_VIN_ON  4.8  /* V */
-#define TPS546_INIT_VIN_OFF 4.5  /* V */
-#define TPS546_INIT_VIN_UV_WARN_LIMIT 5.8 /* V */
-#define TPS546_INIT_VIN_OV_FAULT_LIMIT 6.0 /* V */
+#define TPS546_INIT_VIN_ON  11.0  /* V */
+#define TPS546_INIT_VIN_OFF 10.5  /* V */
+#define TPS546_INIT_VIN_UV_WARN_LIMIT 14.0 /* V */
+#define TPS546_INIT_VIN_OV_FAULT_LIMIT 15.0 /* V */
 #define TPS546_INIT_VIN_OV_FAULT_RESPONSE 0xB7  /* retry 6 times */
 
   /* vout voltage */
@@ -36,8 +36,8 @@
 #define TPS546_INIT_VOUT_MIN 1 /* v */
 
   /* iout current */
-#define TPS546_INIT_IOUT_OC_WARN_LIMIT  25.00 /* A */
-#define TPS546_INIT_IOUT_OC_FAULT_LIMIT 30.00 /* A */
+#define TPS546_INIT_IOUT_OC_WARN_LIMIT  50.00 /* A */
+#define TPS546_INIT_IOUT_OC_FAULT_LIMIT 55.00 /* A */
 #define TPS546_INIT_IOUT_OC_FAULT_RESPONSE 0xC0  /* shut down, no retries */
 
   /* temperature */
