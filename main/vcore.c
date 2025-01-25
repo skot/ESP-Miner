@@ -36,6 +36,7 @@ esp_err_t VCORE_init(GlobalState * global_state) {
             }
             break;
         case DEVICE_GAMMA:
+        case DEVICE_GAMMATURBO:
             if (TPS546_init() != ESP_OK) {
                 ESP_LOGE(TAG, "TPS546 init failed!");
                 return ESP_FAIL;
@@ -91,6 +92,7 @@ esp_err_t VCORE_set_voltage(float core_voltage, GlobalState * global_state)
             }
             break;
         case DEVICE_GAMMA:
+        case DEVICE_GAMMATURBO:
                 ESP_LOGI(TAG, "Set ASIC voltage = %.3fV", core_voltage);
                 TPS546_set_vout(core_voltage * (float)global_state->voltage_domain);
             break;
