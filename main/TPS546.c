@@ -361,7 +361,7 @@ int TPS546_init(void)
     ESP_LOGI(TAG, "Writing new config values");
     smb_read_byte(PMBUS_VOUT_MODE, &voutmode);
     ESP_LOGI(TAG, "VOUT_MODE: %02x", voutmode);
-    TPS546_write_entire_config();
+    //TPS546_write_entire_config();
     //}
 
     // /* Show temperature */
