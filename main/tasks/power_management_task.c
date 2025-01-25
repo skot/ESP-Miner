@@ -71,6 +71,8 @@ static double automatic_fan_speed(float chip_temp, GlobalState * GLOBAL_STATE)
             GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc = perc;
             EMC2101_set_fan_speed( perc );
             break;
+        case DEVICE_GAMMATURBO:
+            break;
         default:
     }
 	return result;
@@ -116,6 +118,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 			}
             break;
         case DEVICE_GAMMA:
+        case DEVICE_GAMMATURBO:
             break;
         default:
     }
@@ -147,6 +150,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             
                 break;
             case DEVICE_GAMMA:
+            case DEVICE_GAMMATURBO:
                     power_management->voltage = TPS546_get_vin() * 1000;
                     power_management->current = TPS546_get_iout() * 1000;
                     // calculate regulator power (in milliwatts)
@@ -243,6 +247,33 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     exit(EXIT_FAILURE);
                 }
                 break;
+            case DEVICE_GAMMATURBO:
+                //power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2101_get_external_temp() : -1;
+                power_management->vr_temp = (float)TPS546_get_temperature();
+
+                // EMC2101 will give bad readings if the ASIC is turned off
+                if(power_management->voltage < TPS546_INIT_VOUT_MIN){
+                    break;
+                }
+
+                //overheat mode if the voltage regulator or ASIC is too hot
+                if ((power_management->vr_temp > TPS546_THROTTLE_TEMP || power_management->chip_temp_avg > THROTTLE_TEMP) &&
+                    (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
+                    ESP_LOGE(TAG, "OVERHEAT! VR: %fC ASIC %fC", power_management->vr_temp, power_management->chip_temp_avg );
+
+                    EMC2101_set_fan_speed(1);
+
+                    // Turn off core voltage
+                    VCORE_set_voltage(0.0, GLOBAL_STATE);
+
+                    nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, 1000);
+                    nvs_config_set_u16(NVS_CONFIG_ASIC_FREQ, 50);
+                    nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, 100);
+                    nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, 0);
+                    nvs_config_set_u16(NVS_CONFIG_OVERHEAT_MODE, 1);
+                    exit(EXIT_FAILURE);
+                }
+                break;
             default:
         }
 
@@ -257,11 +288,12 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 case DEVICE_ULTRA:
                 case DEVICE_SUPRA:
                 case DEVICE_GAMMA:
-
                     float fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
                     power_management->fan_perc = fs;
                     EMC2101_set_fan_speed((float) fs / 100);
 
+                    break;
+                case DEVICE_GAMMATURBO:
                     break;
                 default:
             }

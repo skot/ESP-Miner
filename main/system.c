@@ -110,6 +110,8 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
             EMC2101_set_ideality_factor(EMC2101_IDEALITY_1_0319);
             EMC2101_set_beta_compensation(EMC2101_BETA_11);
             break;
+        case DEVICE_GAMMATURBO:
+            break;
         default:
     }
 
@@ -123,6 +125,7 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
             }
             break;
         case DEVICE_GAMMA:
+        case DEVICE_GAMMATURBO:
         default:
     }
 
@@ -140,6 +143,7 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
+        case DEVICE_GAMMATURBO:
             // display
             if (display_init(GLOBAL_STATE) != ESP_OK || !GLOBAL_STATE->SYSTEM_MODULE.is_screen_active) {
                 ESP_LOGW(TAG, "OLED init failed!");
