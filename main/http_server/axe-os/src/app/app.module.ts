@@ -18,7 +18,8 @@ import { LogsComponent } from './components/logs/logs.component';
 import { NetworkComponent } from './components/network/network.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { SwarmComponent } from './components/swarm/swarm.component';
-import { ThemeConfigComponent } from './components/settings/theme-config.component';
+import { ThemeConfigComponent } from './components/design/theme-config.component';
+import { DesignComponent } from './components/design/design.component';
 import { AppLayoutModule } from './layout/app.layout.module';
 import { ANSIPipe } from './pipes/ansi.pipe';
 import { DateAgoPipe } from './pipes/date-ago.pipe';
@@ -47,7 +48,8 @@ const components = [
     SwarmComponent,
     SettingsComponent,
     HashSuffixPipe,
-    ThemeConfigComponent
+    ThemeConfigComponent,
+    DesignComponent
   ],
   imports: [
     BrowserModule,
