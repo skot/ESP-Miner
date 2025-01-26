@@ -253,7 +253,8 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 }
                 break;
             case DEVICE_GAMMATURBO:
-                //power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2103_get_external_temp() : -1;
+                power_management->fan_rpm = EMC2103_get_fan_speed();
+                power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2103_get_external_temp() : -1;
                 power_management->vr_temp = (float)TPS546_get_temperature();
 
                 // EMC2101 will give bad readings if the ASIC is turned off
@@ -266,7 +267,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
                     ESP_LOGE(TAG, "OVERHEAT! VR: %fC ASIC %fC", power_management->vr_temp, power_management->chip_temp_avg );
 
-                    EMC2101_set_fan_speed(1);
+                    EMC2103_set_fan_speed(1);
 
                     // Turn off core voltage
                     VCORE_set_voltage(0.0, GLOBAL_STATE);
