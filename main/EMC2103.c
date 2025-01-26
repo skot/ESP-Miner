@@ -82,6 +82,9 @@ float EMC2103_get_external_temp(void)
 
     ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_EXTERNAL_TEMP1_MSB, &temp_msb, 1));
     ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_EXTERNAL_TEMP1_LSB, &temp_lsb, 1));
+
+    //print the temps
+    //ESP_LOGI(TAG, "Temp1 MSB: %02X Temp1 LSB: %02X", temp_msb, temp_lsb);
     
     // Combine MSB and LSB, and then right shift to get 11 bits
     reading = (temp_msb << 8) | temp_lsb;
@@ -107,6 +110,9 @@ float EMC2103_get_external_temp(void)
 
     ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_EXTERNAL_TEMP2_MSB, &temp_msb, 1));
     ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_EXTERNAL_TEMP2_LSB, &temp_lsb, 1));
+
+    //print the temps
+    //ESP_LOGI(TAG, "Temp2 MSB: %02X Temp2 LSB: %02X", temp_msb, temp_lsb);
     
     // Combine MSB and LSB, and then right shift to get 11 bits
     reading = (temp_msb << 8) | temp_lsb;
