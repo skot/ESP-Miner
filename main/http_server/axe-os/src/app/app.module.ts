@@ -11,6 +11,7 @@ import { ToastrModule } from 'ngx-toastr';
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
 import { EditComponent } from './components/edit/edit.component';
+import { PoolComponent } from './components/pool/pool.component';
 import { NetworkEditComponent } from './components/network-edit/network.edit.component';
 import { HomeComponent } from './components/home/home.component';
 import { LoadingComponent } from './components/loading/loading.component';
@@ -36,7 +37,8 @@ const components = [
   LoadingComponent,
   NetworkComponent,
   SettingsComponent,
-  LogsComponent
+  LogsComponent,
+  PoolComponent
 ];
 
 @NgModule({
@@ -49,7 +51,8 @@ const components = [
     SettingsComponent,
     HashSuffixPipe,
     ThemeConfigComponent,
-    DesignComponent
+    DesignComponent,
+    PoolComponent
   ],
   imports: [
     BrowserModule,
