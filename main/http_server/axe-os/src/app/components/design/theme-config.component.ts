@@ -34,8 +34,8 @@ interface ThemeOption {
 
         <div class="col-12">
           <h6>Theme Colors</h6>
-          <div class="grid">
-            <div *ngFor="let theme of themes" class="col-3">
+          <div class="grid gap-2">
+            <div *ngFor="let theme of themes" class="col-2">
               <button pButton [class]="'p-button-rounded p-button-text color-dot'"
                       [style.backgroundColor]="theme.primaryColor"
                       style="width: 2rem; height: 2rem; border: none;"
