@@ -270,4 +270,12 @@ export class SwarmComponent implements OnInit, OnDestroy {
     this.totals.bestDiff = this.formatBestDiff(maxDiff);
   }
 
+  hasModel(model: string): string {
+    return this.swarm.some(axe => axe.ASICModel === model) ? '1' : '0.5';
+  }
+
+  hasMultipleChips(): string {
+    return this.swarm.some(axe => axe.asicCount > 1) ? '1' : '0.5';
+  }
+
 }
