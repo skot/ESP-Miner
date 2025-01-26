@@ -20,36 +20,27 @@ esp_err_t EMC2103_init(bool invertPolarity) {
         return ESP_FAIL;
     }
 
-    // set the TACH input
-    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_REG_CONFIG, 0x04));
+    // Configure the fan setting
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_CONFIGURATION1, 0));
 
     if (invertPolarity) {
-        ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_FAN_CONFIG, 0b00100011));
+        ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_PWM_CONFIG, 0x01));
     }
-
-
-
-    // We're using default filtering and conversion, no need to set them again.
-    // //set filtering
-    // ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_TEMP_FILTER, EMC2103_DEFAULT_FILTER));
-
-    // //set conversion rate
-    // ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_REG_DATA_RATE, EMC2103_DEFAULT_DATARATE));
 
     return ESP_OK;
 
 }
 
-void EMC2103_set_ideality_factor(uint8_t ideality){
-    //set Ideality Factor
-    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_IDEALITY_FACTOR, ideality));
-}
+// void EMC2103_set_ideality_factor(uint8_t ideality){
+//     //set Ideality Factor
+//     ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_IDEALITY_FACTOR, ideality));
+// }
 
-void EMC2103_set_beta_compensation(uint8_t beta){
-    //set Beta Compensation
-    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_BETA_COMPENSATION, beta));
+// void EMC2103_set_beta_compensation(uint8_t beta){
+//     //set Beta Compensation
+//     ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_BETA_COMPENSATION, beta));
 
-}
+// }
 
 // takes a fan speed percent
 void EMC2103_set_fan_speed(float percent)
@@ -57,7 +48,7 @@ void EMC2103_set_fan_speed(float percent)
     uint8_t speed;
 
     speed = (uint8_t) (63.0 * percent);
-    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_REG_FAN_SETTING, speed));
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_FAN_SETTING, speed));
 }
 
 // RPM = 5400000/reading
@@ -87,8 +78,10 @@ float EMC2103_get_external_temp(void)
     uint8_t temp_msb, temp_lsb;
     uint16_t reading;
 
-    ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_EXTERNAL_TEMP_MSB, &temp_msb, 1));
-    ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_EXTERNAL_TEMP_LSB, &temp_lsb, 1));
+    float temp1, temp2;
+
+    ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_EXTERNAL_TEMP1_MSB, &temp_msb, 1));
+    ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_EXTERNAL_TEMP1_LSB, &temp_lsb, 1));
     
     // Combine MSB and LSB, and then right shift to get 11 bits
     reading = (temp_msb << 8) | temp_lsb;
@@ -102,22 +95,67 @@ float EMC2103_get_external_temp(void)
         signed_reading |= 0xF800;  // Set upper bits to extend the sign
     }
 
-    if (signed_reading == EMC2103_TEMP_FAULT_OPEN_CIRCUIT) {
-        ESP_LOGE(TAG, "EMC2103 TEMP_FAULT_OPEN_CIRCUIT: %04X", signed_reading);
+    // if (signed_reading == EMC2103_TEMP_FAULT_OPEN_CIRCUIT) {
+    //     ESP_LOGE(TAG, "EMC2103 TEMP_FAULT_OPEN_CIRCUIT: %04X", signed_reading);
+    // }
+    // if (signed_reading == EMC2103_TEMP_FAULT_SHORT) {
+    //     ESP_LOGE(TAG, "EMC2103 TEMP_FAULT_SHORT: %04X", signed_reading);
+    // }
+
+    // Convert the signed reading to temperature in Celsius
+    temp1 = (float)signed_reading / 8.0;
+
+    ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_EXTERNAL_TEMP2_MSB, &temp_msb, 1));
+    ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_EXTERNAL_TEMP2_LSB, &temp_lsb, 1));
+    
+    // Combine MSB and LSB, and then right shift to get 11 bits
+    reading = (temp_msb << 8) | temp_lsb;
+    reading >>= 5;  // Now, `reading` contains an 11-bit signed value
+
+    // Cast `reading` to a signed 16-bit integer
+    signed_reading = (int16_t)reading;
+
+    // If the 11th bit (sign bit in 11-bit data) is set, extend the sign
+    if (signed_reading & 0x0400) {
+        signed_reading |= 0xF800;  // Set upper bits to extend the sign
     }
-    if (signed_reading == EMC2103_TEMP_FAULT_SHORT) {
-        ESP_LOGE(TAG, "EMC2103 TEMP_FAULT_SHORT: %04X", signed_reading);
+
+    // if (signed_reading == EMC2103_TEMP_FAULT_OPEN_CIRCUIT) {
+    //     ESP_LOGE(TAG, "EMC2103 TEMP_FAULT_OPEN_CIRCUIT: %04X", signed_reading);
+    // }
+    // if (signed_reading == EMC2103_TEMP_FAULT_SHORT) {
+    //     ESP_LOGE(TAG, "EMC2103 TEMP_FAULT_SHORT: %04X", signed_reading);
+    // }
+
+    // Convert the signed reading to temperature in Celsius
+    temp2 = (float)signed_reading / 8.0;
+
+
+    //debug the temps
+    ESP_LOGI(TAG, "Temp1: %f Temp2: %f", temp1, temp2);
+
+    return temp1;
+}
+
+float EMC2103_get_internal_temp(void)
+{
+    uint8_t temp_msb, temp_lsb;
+
+    ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_INTERNAL_TEMP_MSB, &temp_msb, 1));
+    ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_INTERNAL_TEMP_LSB, &temp_lsb, 1));
+
+        // Combine MSB and LSB, and then right shift to get 11 bits
+    uint16_t reading = (temp_msb << 8) | temp_lsb;
+    reading >>= 5;  // Now, `reading` contains an 11-bit signed value
+
+    // Cast `reading` to a signed 16-bit integer
+    int16_t signed_reading = (int16_t)reading;
+
+    // If the 11th bit (sign bit in 11-bit data) is set, extend the sign
+    if (signed_reading & 0x0400) {
+        signed_reading |= 0xF800;  // Set upper bits to extend the sign
     }
 
     // Convert the signed reading to temperature in Celsius
-    float result = (float)signed_reading / 8.0;
-
-    return result;
-}
-
-uint8_t EMC2103_get_internal_temp(void)
-{
-    uint8_t temp;
-    ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_INTERNAL_TEMP, &temp, 1));
-    return temp;
+    return (float)signed_reading / 8.0;
 }

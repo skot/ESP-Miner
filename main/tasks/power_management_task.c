@@ -1,5 +1,6 @@
 #include <string.h>
 #include "EMC2101.h"
+#include "EMC2103.h"
 #include "INA260.h"
 #include "bm1397.h"
 #include "esp_log.h"
@@ -62,16 +63,20 @@ static double automatic_fan_speed(float chip_temp, GlobalState * GLOBAL_STATE)
         result = ((chip_temp - min_temp) / temp_range) * fan_range + min_fan_speed;
     }
 
+    float perc;
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
         case DEVICE_GAMMA:
-            float perc = (float) result / 100;
+            perc = (float) result / 100;
             GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc = perc;
             EMC2101_set_fan_speed( perc );
             break;
         case DEVICE_GAMMATURBO:
+            perc = (float) result / 100;
+            GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc = perc;
+            EMC2103_set_fan_speed( perc );
             break;
         default:
     }
@@ -248,7 +253,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 }
                 break;
             case DEVICE_GAMMATURBO:
-                //power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2101_get_external_temp() : -1;
+                //power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2103_get_external_temp() : -1;
                 power_management->vr_temp = (float)TPS546_get_temperature();
 
                 // EMC2101 will give bad readings if the ASIC is turned off
@@ -283,17 +288,22 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             power_management->fan_perc = (float)automatic_fan_speed(power_management->chip_temp_avg, GLOBAL_STATE);
 
         } else {
+            float fs;
             switch (GLOBAL_STATE->device_model) {
                 case DEVICE_MAX:
                 case DEVICE_ULTRA:
                 case DEVICE_SUPRA:
                 case DEVICE_GAMMA:
-                    float fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
+                    fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
                     power_management->fan_perc = fs;
                     EMC2101_set_fan_speed((float) fs / 100);
 
                     break;
                 case DEVICE_GAMMATURBO:
+                    fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
+                    power_management->fan_perc = fs;
+                    EMC2103_set_fan_speed((float) fs / 100);
+
                     break;
                 default:
             }
