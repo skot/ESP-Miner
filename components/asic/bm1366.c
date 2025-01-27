@@ -504,7 +504,7 @@ task_result * BM1366_proccess_work(void * pvParameters)
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
     if (GLOBAL_STATE->valid_jobs[job_id] == 0) {
-        ESP_LOGE(TAG, "Invalid job found, 0x%02X", job_id);
+        ESP_LOGW(TAG, "Invalid job found, 0x%02X", job_id);
         return NULL;
     }
 

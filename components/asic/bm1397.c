@@ -458,7 +458,7 @@ task_result *BM1397_proccess_work(void *pvParameters)
     GlobalState *GLOBAL_STATE = (GlobalState *)pvParameters;
     if (GLOBAL_STATE->valid_jobs[rx_job_id] == 0)
     {
-        ESP_LOGI(TAG, "Invalid job nonce found, id=%d", rx_job_id);
+        ESP_LOGW(TAG, "Invalid job nonce found, id=%d", rx_job_id);
         return NULL;
     }
 
