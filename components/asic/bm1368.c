@@ -5,6 +5,8 @@
 #include "serial.h"
 #include "utils.h"
 
+#include "driver/uart.h"
+
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -199,14 +201,14 @@ bool do_frequency_transition(float target_frequency) {
         }
         current = next_dividable;
         BM1368_send_hash_frequency(current);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        ESP_ERROR_CHECK_WITHOUT_ABORT(uart_wait_tx_done(UART_NUM_1, 100 / portTICK_PERIOD_MS));
     }
 
     while ((direction > 0 && current < target) || (direction < 0 && current > target)) {
         float next_step = fmin(fabs(direction), fabs(target - current));
         current += direction > 0 ? next_step : -next_step;
         BM1368_send_hash_frequency(current);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
+        ESP_ERROR_CHECK_WITHOUT_ABORT(uart_wait_tx_done(UART_NUM_1, 100 / portTICK_PERIOD_MS));
     }
     BM1368_send_hash_frequency(target);
     return true;
