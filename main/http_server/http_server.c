@@ -15,6 +15,7 @@
 #include "global_state.h"
 #include "nvs_config.h"
 #include "vcore.h"
+#include "connect.h"
 #include <fcntl.h>
 #include <string.h>
 #include <sys/param.h>
@@ -34,6 +35,41 @@
 
 static const char * TAG = "http_server";
 static const char * CORS_TAG = "CORS";
+
+/* Handler for WiFi scan endpoint */
+static esp_err_t GET_wifi_scan(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "application/json");
+
+    wifi_ap_record_simple_t ap_records[20];
+    uint16_t ap_count = 0;
+
+    esp_err_t err = wifi_scan(ap_records, &ap_count);
+    if (err != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "WiFi scan failed");
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON *networks = cJSON_CreateArray();
+
+    for (int i = 0; i < ap_count; i++) {
+        cJSON *network = cJSON_CreateObject();
+        cJSON_AddStringToObject(network, "ssid", (char *)ap_records[i].ssid);
+        cJSON_AddNumberToObject(network, "rssi", ap_records[i].rssi);
+        cJSON_AddNumberToObject(network, "authmode", ap_records[i].authmode);
+        cJSON_AddItemToArray(networks, network);
+    }
+
+    cJSON_AddItemToObject(root, "networks", networks);
+
+    const char *response = cJSON_Print(root);
+    httpd_resp_sendstr(req, response);
+
+    free((void *)response);
+    cJSON_Delete(root);
+    return ESP_OK;
+}
 
 static GlobalState * GLOBAL_STATE;
 static httpd_handle_t server = NULL;
@@ -856,6 +892,15 @@ esp_err_t start_rest_server(void * pvParameters)
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &system_info_get_uri);
+
+    /* URI handler for WiFi scan */
+    httpd_uri_t wifi_scan_get_uri = {
+        .uri = "/api/system/wifi/scan",
+        .method = HTTP_GET,
+        .handler = GET_wifi_scan,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &wifi_scan_get_uri);
 
     httpd_uri_t swarm_options_uri = {
         .uri = "/api/swarm",

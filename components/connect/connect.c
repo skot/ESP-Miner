@@ -15,6 +15,9 @@
 #include "connect.h"
 #include "main.h"
 
+// Maximum number of access points to scan
+#define MAX_AP_COUNT 20
+
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK
 #define ESP_WIFI_SAE_MODE WPA3_SAE_PWE_HUNT_AND_PECK
 #define EXAMPLE_H2E_IDENTIFIER ""
@@ -50,6 +53,34 @@
 static EventGroupHandle_t s_wifi_event_group;
 
 static const char * TAG = "wifi_station";
+
+// Function to scan for available WiFi networks
+esp_err_t wifi_scan(wifi_ap_record_simple_t *ap_records, uint16_t *ap_count) {
+    wifi_scan_config_t scan_config = {
+        .ssid = 0,
+        .bssid = 0,
+        .channel = 0,
+        .show_hidden = false
+    };
+
+    // Start WiFi scan
+    ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, true));
+    
+    // Get scan results
+    uint16_t number = MAX_AP_COUNT;
+    wifi_ap_record_t ap_info[MAX_AP_COUNT];
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&number, ap_info));
+    
+    // Store results in simplified structure
+    *ap_count = number;
+    for (int i = 0; i < number; i++) {
+        memcpy(ap_records[i].ssid, ap_info[i].ssid, sizeof(ap_records[i].ssid));
+        ap_records[i].rssi = ap_info[i].rssi;
+        ap_records[i].authmode = ap_info[i].authmode;
+    }
+    
+    return ESP_OK;
+}
 
 static int s_retry_num = 0;
 
