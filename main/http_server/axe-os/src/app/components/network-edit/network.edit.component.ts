@@ -92,8 +92,11 @@ export class NetworkEditComponent implements OnInit {
           // Sort networks by signal strength (highest first)
           const networks = response.networks.sort((a, b) => b.rssi - a.rssi);
 
+          // filter out poor wifi connections
+          const poorNetworks = networks.filter(network => network.rssi >= -80);
+
           // Remove duplicate Network Names and show highest signal strength only
-          const uniqueNetworks = networks.reduce((acc, network) => {
+          const uniqueNetworks = poorNetworks.reduce((acc, network) => {
             if (!acc[network.ssid] || acc[network.ssid].rssi < network.rssi) {
               acc[network.ssid] = network;
             }
