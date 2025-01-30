@@ -13,8 +13,14 @@ import { ApModeGuard } from './guards/ap-mode.guard';
 
 const routes: Routes = [
   {
-    path: 'ap',
-    component: NetworkComponent
+      path: 'ap',
+      component: AppLayoutComponent,
+      children: [
+        {
+          path: '',
+          component: NetworkComponent
+        }
+      ]
   },
   {
     path: '',
