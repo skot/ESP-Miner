@@ -112,7 +112,10 @@ static lv_obj_t * create_scr_configure(SystemModule * module) {
     lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 
     lv_obj_t *label1 = lv_label_create(scr);
-    lv_label_set_text(label1, "Hello Bitaxe!");
+    lv_obj_set_width(label1, LV_HOR_RES);
+    lv_obj_set_style_anim_duration(label1, 15000, LV_PART_MAIN);
+    lv_label_set_long_mode(label1, LV_LABEL_LONG_SCROLL_CIRCULAR);
+    lv_label_set_text(label1, "Welcome to your new Bitaxe! Connect to the configuration Wifi and connect the Bitaxe to your network.");
 
     // skip a line, it looks nicer this way
     lv_label_create(scr);
