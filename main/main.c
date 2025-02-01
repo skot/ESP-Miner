@@ -1,6 +1,7 @@
 
 #include "esp_event.h"
 #include "esp_log.h"
+#include "esp_psram.h"
 #include "nvs_flash.h"
 
 // #include "protocol_examples_common.h"
@@ -33,6 +34,13 @@ static const char * TAG = "bitaxe";
 void app_main(void)
 {
     ESP_LOGI(TAG, "Welcome to the bitaxe - hack the planet!");
+
+    if (!esp_psram_is_initialized()) {
+        ESP_LOGE(TAG, "No PSRAM available on ESP32 device!");
+        GLOBAL_STATE.psram_is_available = false;
+    } else {
+        GLOBAL_STATE.psram_is_available = true;
+    }
 
     // Init I2C
     ESP_ERROR_CHECK(i2c_bitaxe_init());
@@ -75,7 +83,7 @@ void app_main(void)
     strncpy(GLOBAL_STATE.SYSTEM_MODULE.ssid, wifi_ssid, sizeof(GLOBAL_STATE.SYSTEM_MODULE.ssid));
     GLOBAL_STATE.SYSTEM_MODULE.ssid[sizeof(GLOBAL_STATE.SYSTEM_MODULE.ssid)-1] = 0;
 
-    // init and connect to wifi
+    // init AP and connect to wifi
     wifi_init(wifi_ssid, wifi_pass, hostname, GLOBAL_STATE.SYSTEM_MODULE.ip_addr_str);
 
     generate_ssid(GLOBAL_STATE.SYSTEM_MODULE.ap_ssid);

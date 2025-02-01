@@ -6,6 +6,8 @@ import { LogsComponent } from './components/logs/logs.component';
 import { SettingsComponent } from './components/settings/settings.component';
 import { NetworkComponent } from './components/network/network.component';
 import { SwarmComponent } from './components/swarm/swarm.component';
+import { DesignComponent } from './components/design/design.component';
+import { PoolComponent } from './components/pool/pool.component';
 import { AppLayoutComponent } from './layout/app.layout.component';
 
 const routes: Routes = [
@@ -32,6 +34,14 @@ const routes: Routes = [
       {
         path: 'swarm',
         component: SwarmComponent
+      },
+      {
+        path: 'design',
+        component: DesignComponent
+      },
+      {
+        path: 'pool',
+        component: PoolComponent
       }
     ]
   },
