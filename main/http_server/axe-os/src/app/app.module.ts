@@ -28,6 +28,9 @@ import { HashSuffixPipe } from './pipes/hash-suffix.pipe';
 import { PrimeNGModule } from './prime-ng.module';
 import { MessageModule } from 'primeng/message';
 import { TooltipModule } from 'primeng/tooltip';
+import { DialogModule } from 'primeng/dialog';
+import { DynamicDialogModule, DialogService as PrimeDialogService } from 'primeng/dynamicdialog';
+import { DialogService, DialogListComponent } from './services/dialog.service';
 
 const components = [
   AppComponent,
@@ -52,7 +55,8 @@ const components = [
     HashSuffixPipe,
     ThemeConfigComponent,
     DesignComponent,
-    PoolComponent
+    PoolComponent,
+    DialogListComponent
   ],
   imports: [
     BrowserModule,
@@ -68,10 +72,14 @@ const components = [
     PrimeNGModule,
     AppLayoutModule,
     MessageModule,
-    TooltipModule
+    TooltipModule,
+    DialogModule,
+    DynamicDialogModule
   ],
   providers: [
     { provide: LocationStrategy, useClass: HashLocationStrategy },
+    DialogService,
+    PrimeDialogService
   ],
   bootstrap: [AppComponent]
 })
