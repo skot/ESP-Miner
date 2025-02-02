@@ -102,11 +102,18 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
         ESP_LOGI(TAG, "Could not connect to '%s' [rssi %d]: reason %d", event->ssid, event->rssi, event->reason);
 
         // Wait a little
+
+        // add boolean request to the wifi scan so no reconnect is happening
+
         vTaskDelay(2500 / portTICK_PERIOD_MS);
-        esp_wifi_connect();
-        s_retry_num++;
-        ESP_LOGI(TAG, "Retrying Wi-Fi connection...");
-        MINER_set_wifi_status(WIFI_RETRYING, s_retry_num, event->reason);
+        if(connected != true) {
+            esp_wifi_connect();
+            s_retry_num++;
+            ESP_LOGI(TAG, "Retrying Wi-Fi connection...");
+            MINER_set_wifi_status(WIFI_RETRYING, s_retry_num, event->reason);
+        }
+
+        
 
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
 
@@ -115,6 +122,7 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
 
         ESP_LOGI(TAG, "Bitaxe ip: %s", _ip_addr_str);
         s_retry_num = 0;
+        connected = true;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
         MINER_set_wifi_status(WIFI_CONNECTED, 0, 0);
     }
