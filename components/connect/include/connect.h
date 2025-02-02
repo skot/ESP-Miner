@@ -41,4 +41,4 @@ void wifi_init(const char * wifi_ssid, const char * wifi_pass, const char * host
 EventBits_t wifi_connect(void);
 void generate_ssid(char * ssid);
 esp_err_t wifi_scan(wifi_ap_record_simple_t *ap_records, uint16_t *ap_count);
-bool connected;
+extern bool connected;

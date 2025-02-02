@@ -53,6 +53,7 @@ static EventGroupHandle_t s_wifi_event_group;
 
 static const char * TAG = "wifi_station";
 static bool scanning = false;
+bool connected = false;  // Global variable definition
 
 // Function to scan for available WiFi networks
 esp_err_t wifi_scan(wifi_ap_record_simple_t *ap_records, uint16_t *ap_count) {
