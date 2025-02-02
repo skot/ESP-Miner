@@ -97,7 +97,7 @@ static lv_obj_t * create_scr_invalid_asic(SystemModule * module) {
     lv_label_set_text(label1, "ASIC MODEL INVALID");
 
     lv_obj_t *label2 = lv_label_create(scr);
-    lv_label_set_text(label2, "Wifi (join to setup):");
+    lv_label_set_text(label2, "Wi-Fi (for setup):");
 
     lv_obj_t *label3 = lv_label_create(scr);
     lv_label_set_text(label3, module->ap_ssid);
@@ -115,7 +115,7 @@ static lv_obj_t * create_scr_configure(SystemModule * module) {
     lv_obj_set_width(label1, LV_HOR_RES);
     lv_obj_set_style_anim_duration(label1, 15000, LV_PART_MAIN);
     lv_label_set_long_mode(label1, LV_LABEL_LONG_SCROLL_CIRCULAR);
-    lv_label_set_text(label1, "Welcome to your new Bitaxe! Connect to the configuration Wifi and connect the Bitaxe to your network.");
+    lv_label_set_text(label1, "Welcome to your new Bitaxe! Connect to the configuration Wi-Fi and connect the Bitaxe to your network.");
 
     // skip a line, it looks nicer this way
     lv_label_create(scr);
@@ -144,7 +144,7 @@ static lv_obj_t * create_scr_connection(SystemModule * module) {
     lv_label_set_text(wifi_status_label, module->wifi_status);
 
     lv_obj_t *label3 = lv_label_create(scr);
-    lv_label_set_text(label3, "Wifi (for setup):");
+    lv_label_set_text(label3, "Wi-Fi (for setup):");
 
     lv_obj_t *label4 = lv_label_create(scr);
     lv_label_set_text(label4, module->ap_ssid);
