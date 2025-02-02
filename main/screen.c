@@ -97,7 +97,7 @@ static lv_obj_t * create_scr_invalid_asic(SystemModule * module) {
     lv_label_set_text(label1, "ASIC MODEL INVALID");
 
     lv_obj_t *label2 = lv_label_create(scr);
-    lv_label_set_text(label2, "Wi-Fi (join to setup):");
+    lv_label_set_text(label2, "Wi-Fi (for setup):");
 
     lv_obj_t *label3 = lv_label_create(scr);
     lv_label_set_text(label3, module->ap_ssid);
