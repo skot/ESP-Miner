@@ -1,4 +1,3 @@
-
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_system.h"
@@ -53,9 +52,17 @@
 static EventGroupHandle_t s_wifi_event_group;
 
 static const char * TAG = "wifi_station";
+static bool scanning = false;
 
 // Function to scan for available WiFi networks
 esp_err_t wifi_scan(wifi_ap_record_simple_t *ap_records, uint16_t *ap_count) {
+    // Set scanning flag to prevent reconnection attempts
+    scanning = true;
+    
+    // Stop any ongoing connection attempts
+    esp_wifi_disconnect();
+    vTaskDelay(500 / portTICK_PERIOD_MS); // Give some time for disconnect to complete
+    
     wifi_scan_config_t scan_config = {
         .ssid = 0,
         .bssid = 0,
@@ -63,8 +70,11 @@ esp_err_t wifi_scan(wifi_ap_record_simple_t *ap_records, uint16_t *ap_count) {
         .show_hidden = false
     };
 
-    // Start WiFi scan
-    ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, true));
+    esp_err_t err = esp_wifi_scan_start(&scan_config, true);
+    if (err != ESP_OK) {
+        scanning = false;
+        return err;
+    }
     
     // Get scan results
     uint16_t number = MAX_AP_COUNT;
@@ -79,6 +89,8 @@ esp_err_t wifi_scan(wifi_ap_record_simple_t *ap_records, uint16_t *ap_count) {
         ap_records[i].authmode = ap_info[i].authmode;
     }
     
+    // Reset scanning flag after scan is complete
+    scanning = false;
     return ESP_OK;
 }
 
@@ -89,8 +101,10 @@ static char * _ip_addr_str;
 static void event_handler(void * arg, esp_event_base_t event_base, int32_t event_id, void * event_data)
 {
     if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
-        MINER_set_wifi_status(WIFI_CONNECTING, 0, 0);
+        if (!scanning) {
+            esp_wifi_connect();
+            MINER_set_wifi_status(WIFI_CONNECTING, 0, 0);
+        }
     } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
         //lookup the exact reason code
         wifi_event_sta_disconnected_t* event = (wifi_event_sta_disconnected_t*) event_data;
@@ -102,21 +116,16 @@ static void event_handler(void * arg, esp_event_base_t event_base, int32_t event
         ESP_LOGI(TAG, "Could not connect to '%s' [rssi %d]: reason %d", event->ssid, event->rssi, event->reason);
 
         // Wait a little
-
-        // add boolean request to the wifi scan so no reconnect is happening
-
         vTaskDelay(2500 / portTICK_PERIOD_MS);
-        if(connected != true) {
+        
+        if (!connected && !scanning) {
             esp_wifi_connect();
             s_retry_num++;
             ESP_LOGI(TAG, "Retrying Wi-Fi connection...");
             MINER_set_wifi_status(WIFI_RETRYING, s_retry_num, event->reason);
         }
 
-        
-
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-
         ip_event_got_ip_t * event = (ip_event_got_ip_t *) event_data;
         snprintf(_ip_addr_str, IP4ADDR_STRLEN_MAX, IPSTR, IP2STR(&event->ip_info.ip));
 
