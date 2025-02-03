@@ -41,7 +41,7 @@ void ASIC_result_task(void *pvParameters)
 
         ESP_LOGI(TAG, "Nonce difficulty %.2f of %ld.", nonce_diff, GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff);
 
-        if (nonce_diff > GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff)
+        if (nonce_diff >= GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff)
         {
             SYSTEM_notify_found_nonce(
                 &GLOBAL_STATE->SYSTEM_MODULE,
