@@ -67,6 +67,24 @@
 #define ON_OFF_CONFIG_POLARITY 0x00 // turn off POLARITY bit
 #define ON_OFF_CONFIG_DELAY 0x00 // turn off DELAY bit
 
+//// STATUS_WORD Offsets
+#define TPS546_STATUS_VOUT    0x8000 //bit 15
+#define TPS546_STATUS_IOUT    0x4000
+#define TPS546_STATUS_INPUT   0x2000
+#define TPS546_STATUS_MFR     0x1000
+#define TPS546_STATUS_PGOOD   0x0800
+#define TPS546_STATUS_OTHER   0x0200
+
+#define TPS546_STATUS_BUSY    0x0080
+#define TPS546_STATUS_OFF     0x0040
+#define TPS546_STATUS_VOUT_OV 0x0020
+#define TPS546_STATUS_IOUT_OC 0x0010
+#define TPS546_STATUS_VIN_UV  0x0008
+#define TPS546_STATUS_TEMP    0x0004
+#define TPS546_STATUS_CML     0x0002
+#define TPS546_STATUS_NONE    0x0001
+
+
 
 /* public functions */
 int TPS546_init(void);
@@ -81,6 +99,8 @@ float TPS546_get_iout(void);
 float TPS546_get_vout(void);
 void TPS546_set_vout(float volts);
 void TPS546_show_voltage_settings(void);
-void TPS546_print_status(void);
+esp_err_t TPS546_check_status(uint16_t *);
+esp_err_t TPS546_parse_status(uint16_t status);
+esp_err_t TPS546_clear_faults(void);
 
 #endif /* TPS546_H_ */
