@@ -42,9 +42,6 @@ static esp_err_t GET_wifi_scan(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json");
     
-    // Set connected to false to prevent reconnection attempts
-    connected = false;
-    
     // Give some time for the connected flag to take effect
     vTaskDelay(100 / portTICK_PERIOD_MS);
     
