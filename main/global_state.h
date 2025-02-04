@@ -126,6 +126,11 @@ typedef struct
     bool new_stratum_version_rolling_msg;
 
     int sock;
+
+    // A message ID that must be unique per request that expects a response.
+    // For requests not expecting a response (called notifications), this is null.
+    int send_uid;
+
     bool ASIC_initalized;
     bool psram_is_available;
 } GlobalState;
