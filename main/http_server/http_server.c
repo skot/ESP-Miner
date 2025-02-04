@@ -32,6 +32,7 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include <pthread.h>
+#include "connect.h"
 
 static const char * TAG = "http_server";
 static const char * CORS_TAG = "CORS";
@@ -40,7 +41,10 @@ static const char * CORS_TAG = "CORS";
 static esp_err_t GET_wifi_scan(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json");
-
+    
+    // Give some time for the connected flag to take effect
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    
     wifi_ap_record_simple_t ap_records[20];
     uint16_t ap_count = 0;
 

@@ -164,7 +164,6 @@ void stratum_task(void * pvParameters)
     while (1) {
         if (!is_wifi_connected()) {
             ESP_LOGI(TAG, "WiFi disconnected, attempting to reconnect...");
-            esp_wifi_connect();
             vTaskDelay(10000 / portTICK_PERIOD_MS);
             continue;
         }
