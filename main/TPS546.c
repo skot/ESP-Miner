@@ -57,6 +57,15 @@ static esp_err_t smb_write_byte(uint8_t command, uint8_t data)
 }
 
 /**
+ * @brief SMBus write addr
+ * @param command The command to write
+ */
+static esp_err_t smb_write_addr(uint8_t command)
+{
+    return i2c_bitaxe_register_write_addr(tps546_dev_handle, command);
+}
+
+/**
  * @brief SMBus read word
  * @param command The command to read
  * @param result Pointer to store the read data
@@ -355,8 +364,6 @@ int TPS546_init(void)
     /* Read version number and see if it matches */
     TPS546_read_mfr_info(read_mfr_revision);
     // if (memcmp(read_mfr_revision, MFR_REVISION, 3) != 0) {
-
-    TPS546_clear_faults();
     
     // If it doesn't match, then write all the registers and set new version number
     // ESP_LOGI(TAG, "--------------------------------");
@@ -423,11 +430,16 @@ int TPS546_init(void)
     ESP_LOGI(TAG, "%02x %02x %02x %02x %02x", comp_config[0], comp_config[1],
         comp_config[2], comp_config[3], comp_config[4]);
 
+
+    ESP_LOGI(TAG, "Clearing faults");
+    TPS546_clear_faults();
+
     return 0;
 }
 
 esp_err_t TPS546_clear_faults(void) {
-    if (smb_write_byte(PMBUS_CLEAR_FAULTS, 0xFF) != ESP_OK) {
+    // if (smb_write_byte(PMBUS_CLEAR_FAULTS, 0xFF) != ESP_OK) {
+    if (smb_write_addr(PMBUS_CLEAR_FAULTS) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to clear faults");
         return ESP_FAIL;
     }

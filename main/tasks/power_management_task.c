@@ -123,6 +123,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     vTaskDelay(500 / portTICK_PERIOD_MS);
     uint16_t last_core_voltage = 0.0;
     uint16_t last_asic_frequency = power_management->frequency_value;
+    uint16_t TPS546_status;
     
     while (1) {
 
@@ -147,6 +148,11 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             
                 break;
             case DEVICE_GAMMA:
+                    TPS546_check_status(&TPS546_status);
+                    if (TPS546_status != 0) {
+                        ESP_LOGE(TAG, "TPS546 Status error: %04x", TPS546_status);
+                        TPS546_parse_status(TPS546_status);
+                    }
                     power_management->voltage = TPS546_get_vin() * 1000;
                     power_management->current = TPS546_get_iout() * 1000;
                     // calculate regulator power (in milliwatts)
