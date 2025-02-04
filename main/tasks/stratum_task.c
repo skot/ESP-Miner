@@ -137,7 +137,6 @@ void stratum_primary_heartbeat(void * pvParameters)
         if (sock < 0) {
             ESP_LOGD(TAG, "Heartbeat. Failed socket create check!");
             vTaskDelay(60000 / portTICK_PERIOD_MS);
-            close(sock);
             continue;
         }
 
