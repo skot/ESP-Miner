@@ -420,6 +420,13 @@ int TPS546_init(void)
     temp = slinear11_2_int(u16_value);
     ESP_LOGI(TAG, "TOFF_FALL: %d", temp);
     ESP_LOGI(TAG, "--------------------------------------");
+    smb_read_byte(PMBUS_PHASE, &u8_value);
+    ESP_LOGI(TAG, "PHASE: %02x", u8_value);
+    smb_read_word(PMBUS_STACK_CONFIG, &u16_value);
+    ESP_LOGI(TAG, "STACK_CONFIG: %04x", u16_value);
+    smb_read_byte(PMBUS_SYNC_CONFIG, &u8_value);
+    ESP_LOGI(TAG, "SYNC_CONFIG: %02x", u8_value);
+
 
     // Read the compensation config registers
     if (smb_read_block(PMBUS_COMPENSATION_CONFIG, comp_config, 5) != ESP_OK) {
@@ -502,6 +509,10 @@ void TPS546_write_entire_config(void)
         return;
     }
 
+    /* Phase */
+    ESP_LOGI(TAG, "Setting PHASE");
+    smb_write_byte(PMBUS_PHASE, TPS546_INIT_PHASE);
+
     /* Switch frequency */
     ESP_LOGI(TAG, "Setting FREQUENCY");
     smb_write_word(PMBUS_FREQUENCY_SWITCH, int_2_slinear11(TPS546_INIT_FREQUENCY));
@@ -511,10 +522,13 @@ void TPS546_write_entire_config(void)
     smb_write_word(PMBUS_VIN_ON, float_2_slinear11(TPS546_INIT_VIN_ON));
     ESP_LOGI(TAG, "Setting VIN_OFF: %.2f", TPS546_INIT_VIN_OFF);
     smb_write_word(PMBUS_VIN_OFF, float_2_slinear11(TPS546_INIT_VIN_OFF));
-    ESP_LOGI(TAG, "Setting VIN_UV_WARN_LIMIT: %.2f", TPS546_INIT_VIN_UV_WARN_LIMIT);
-    smb_write_word(PMBUS_VIN_UV_WARN_LIMIT, float_2_slinear11(TPS546_INIT_VIN_UV_WARN_LIMIT));
+
     ESP_LOGI(TAG, "Setting VIN_OV_FAULT_LIMIT: %.2f", TPS546_INIT_VIN_OV_FAULT_LIMIT);
     smb_write_word(PMBUS_VIN_OV_FAULT_LIMIT, float_2_slinear11(TPS546_INIT_VIN_OV_FAULT_LIMIT));
+
+    ESP_LOGI(TAG, "Setting VIN_UV_WARN_LIMIT: %.2f", TPS546_INIT_VIN_UV_WARN_LIMIT);
+    smb_write_word(PMBUS_VIN_UV_WARN_LIMIT, float_2_slinear11(TPS546_INIT_VIN_UV_WARN_LIMIT));
+
     ESP_LOGI(TAG, "Setting VIN_OV_FAULT_RESPONSE: %02X", TPS546_INIT_VIN_OV_FAULT_RESPONSE);
     smb_write_byte(PMBUS_VIN_OV_FAULT_RESPONSE, TPS546_INIT_VIN_OV_FAULT_RESPONSE);
 
