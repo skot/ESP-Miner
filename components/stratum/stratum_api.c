@@ -345,7 +345,7 @@ int STRATUM_V1_authenticate(int socket, int send_uid, const char * username, con
 /// @param ntime The hex-encoded time value use in the block header.
 /// @param extranonce_2 The hex-encoded value of extra nonce 2.
 /// @param nonce The hex-encoded nonce value to use in the block header.
-int STRATUM_V1_submit_share(int socket, int send_uid,const char * username, const char * jobid,
+int STRATUM_V1_submit_share(int socket, int send_uid, const char * username, const char * jobid,
                             const char * extranonce_2, const uint32_t ntime,
                             const uint32_t nonce, const uint32_t version)
 {

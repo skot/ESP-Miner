@@ -62,8 +62,6 @@ typedef struct
     char * error_str;
 } StratumApiV1Message;
 
-void STRATUM_V1_reset_uid();
-
 void STRATUM_V1_initialize_buffer();
 
 char *STRATUM_V1_receive_jsonrpc_line(int sockfd);
