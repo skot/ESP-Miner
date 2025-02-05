@@ -152,6 +152,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                     if (TPS546_status != 0) {
                         ESP_LOGE(TAG, "TPS546 Status error: %04x", TPS546_status);
                         TPS546_parse_status(TPS546_status);
+                        TPS546_clear_faults();
                     }
                     power_management->voltage = TPS546_get_vin() * 1000;
                     power_management->current = TPS546_get_iout() * 1000;

@@ -21,15 +21,15 @@
 /* vin voltage */
 #define TPS546_INIT_VIN_ON  4.8  /* V */
 #define TPS546_INIT_VIN_OFF 4.5  /* V */
-#define TPS546_INIT_VIN_UV_WARN_LIMIT 4.5 /* V */
+#define TPS546_INIT_VIN_UV_WARN_LIMIT 4.8 /* V */
 #define TPS546_INIT_VIN_OV_FAULT_LIMIT 5.5 /* V */
 #define TPS546_INIT_VIN_OV_FAULT_RESPONSE 0xB7  /* retry 6 times */
 
   /* vout voltage */
 #define TPS546_INIT_SCALE_LOOP 0.25  /* Voltage Scale factor */
-#define TPS546_INIT_VOUT_MAX 3 /* V */
-#define TPS546_INIT_VOUT_OV_FAULT_LIMIT 1.25 /* %/100 above VOUT_COMMAND */
-#define TPS546_INIT_VOUT_OV_WARN_LIMIT  1.1 /* %/100 above VOUT_COMMAND */
+#define TPS546_INIT_VOUT_MAX 2 /* V */
+#define TPS546_INIT_VOUT_OV_FAULT_LIMIT 1.2 // The hardware supports values from 105% to 140% of VOUT_COMMAND in 2.5% steps. When output conversion is disabled, the hardware supports values from 110% to 140% of VOUT_COMMAND in 10% steps.
+#define TPS546_INIT_VOUT_OV_WARN_LIMIT  1.16 // The hardware supports values from 103% to 116% VOUT_COMMAND in 1% steps.
 #define TPS546_INIT_VOUT_MARGIN_HIGH 1.1 /* %/100 above VOUT */
 #define TPS546_INIT_VOUT_COMMAND 1.2  /* V absolute value */
 #define TPS546_INIT_VOUT_MARGIN_LOW 0.90 /* %/100 below VOUT */
