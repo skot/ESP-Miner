@@ -25,7 +25,7 @@
 #define TPS546_INIT_VIN_OV_FAULT_LIMIT 5.5 /* V */
 #define TPS546_INIT_VIN_OV_FAULT_RESPONSE 0xB7  /* retry 6 times */
 
-  /* vout voltage */
+/* vout voltage */
 #define TPS546_INIT_SCALE_LOOP 0.25  /* Voltage Scale factor */
 #define TPS546_INIT_VOUT_MAX 2 /* V */
 #define TPS546_INIT_VOUT_OV_FAULT_LIMIT 1.2 // The hardware supports values from 105% to 140% of VOUT_COMMAND in 2.5% steps. When output conversion is disabled, the hardware supports values from 110% to 140% of VOUT_COMMAND in 10% steps.
@@ -37,12 +37,12 @@
 #define TPS546_INIT_VOUT_UV_FAULT_LIMIT 0.75 /* %/100 below VOUT_COMMAND */
 #define TPS546_INIT_VOUT_MIN 1 /* v */
 
-  /* iout current */
+/* iout current */
 #define TPS546_INIT_IOUT_OC_WARN_LIMIT  25.00 /* A */
 #define TPS546_INIT_IOUT_OC_FAULT_LIMIT 30.00 /* A */
 #define TPS546_INIT_IOUT_OC_FAULT_RESPONSE 0xC0  /* shut down, no retries */
 
-  /* temperature */
+/* temperature */
 // It is better to set the temperature warn limit for TPS546 more higher than Ultra 
 #define TPS546_INIT_OT_WARN_LIMIT  105 /* degrees C */
 #define TPS546_INIT_OT_FAULT_LIMIT 145 /* degrees C */
