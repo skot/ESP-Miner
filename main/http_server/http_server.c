@@ -528,6 +528,8 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     char * stratumUser = nvs_config_get_string(NVS_CONFIG_STRATUM_USER, CONFIG_STRATUM_USER);
     char * fallbackStratumUser = nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_USER, CONFIG_FALLBACK_STRATUM_USER);
     char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "unknown");
+    uint16_t freq = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
+    uint16_t asic_count = GLOBAL_STATE->asic_count;
 
     esp_wifi_get_mac(WIFI_IF_STA, mac);
     snprintf(formattedMac, 18, "%02X:%02X:%02X:%02X:%02X:%02X", mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
@@ -550,7 +552,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "coreVoltage", nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE));
     cJSON_AddNumberToObject(root, "coreVoltageActual", VCORE_get_voltage_mv(GLOBAL_STATE));
-    cJSON_AddNumberToObject(root, "frequency", nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY));
+    cJSON_AddNumberToObject(root, "frequency", freq);
     cJSON_AddStringToObject(root, "ssid", ssid);
     cJSON_AddStringToObject(root, "macAddr", formattedMac);
     cJSON_AddStringToObject(root, "hostname", hostname);
@@ -558,7 +560,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "sharesAccepted", GLOBAL_STATE->SYSTEM_MODULE.shares_accepted);
     cJSON_AddNumberToObject(root, "sharesRejected", GLOBAL_STATE->SYSTEM_MODULE.shares_rejected);
     cJSON_AddNumberToObject(root, "uptimeSeconds", (esp_timer_get_time() - GLOBAL_STATE->SYSTEM_MODULE.start_time) / 1000000);
-    cJSON_AddNumberToObject(root, "asicCount", GLOBAL_STATE->asic_count);
+    cJSON_AddNumberToObject(root, "asicCount", asic_count);
     uint16_t small_core_count = 0;
     switch (GLOBAL_STATE->asic_model){
         case ASIC_BM1397:
@@ -578,6 +580,8 @@ static esp_err_t GET_system_info(httpd_req_t * req)
             small_core_count = -1;
             break;
     }
+    float expected_hashrate = freq * ((small_core_count * asic_count) / 1000.0);
+    cJSON_AddNumberToObject(root, "expectedHashrate", expected_hashrate);
     cJSON_AddNumberToObject(root, "smallCoreCount", small_core_count);
     cJSON_AddStringToObject(root, "ASICModel", GLOBAL_STATE->asic_model_str);
     cJSON_AddStringToObject(root, "stratumURL", stratumURL);
