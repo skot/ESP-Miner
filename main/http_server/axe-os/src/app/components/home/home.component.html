@@ -146,7 +146,14 @@
                 <div class="grid">
                     <div class="col-12">
 
-                        <h6>ASIC Temperature <span style="float: right;">{{info.temp}}&deg;C</span></h6>
+                        <h6>ASIC Temperature 
+                            <span style="float: right;">
+                                <ng-template #noTemp>--</ng-template>
+                                <ng-container *ngIf="info.temp > 0; else noTemp">
+                                    {{info.temp}}&deg;C
+                                </ng-container>
+                            </span>
+                        </h6>
                         <p-progressBar [value]="(info.temp / maxTemp) * 100" [style]="{ height: '6px' }" >
                             <ng-template pTemplate="content" let-value></ng-template>
                         </p-progressBar>

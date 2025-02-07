@@ -192,16 +192,16 @@ static lv_obj_t * create_scr_stats() {
     lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_SPACE_EVENLY, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
 
     hashrate_label = lv_label_create(scr);
-    lv_label_set_text(hashrate_label, "Gh/s: n/a");
+    lv_label_set_text(hashrate_label, "Gh/s: --");
 
     efficiency_label = lv_label_create(scr);
-    lv_label_set_text(efficiency_label, "J/Th: n/a");
+    lv_label_set_text(efficiency_label, "J/Th: --");
 
     difficulty_label = lv_label_create(scr);
-    lv_label_set_text(difficulty_label, "Best: n/a");
+    lv_label_set_text(difficulty_label, "Best: --");
 
     chip_temp_label = lv_label_create(scr);
-    lv_label_set_text(chip_temp_label, "Temp: n/a");
+    lv_label_set_text(chip_temp_label, "Temp: --");
 
     return scr;
 }
