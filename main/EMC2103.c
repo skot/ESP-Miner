@@ -20,6 +20,8 @@ esp_err_t EMC2103_init(bool invertPolarity) {
         return ESP_FAIL;
     }
 
+    ESP_LOGI(TAG, "EMC2103 init with polarity %d", invertPolarity);
+
     // Configure the fan setting
     ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_CONFIGURATION1, 0));
 
@@ -45,10 +47,9 @@ esp_err_t EMC2103_init(bool invertPolarity) {
 // takes a fan speed percent
 void EMC2103_set_fan_speed(float percent)
 {
-    uint8_t speed;
-
-    speed = (uint8_t) (63.0 * percent);
-    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_FAN_SETTING, speed));
+    uint8_t setting = (uint8_t) (255.0 * (1.0 - percent));
+    ESP_LOGI(TAG, "Setting fan speed to %.2f%% (%d)", percent*100.0, setting);
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_FAN_SETTING, setting));
 }
 
 // RPM = 5400000/reading
@@ -141,27 +142,4 @@ float EMC2103_get_external_temp(void)
     ESP_LOGI(TAG, "Temp1: %f Temp2: %f", temp1, temp2);
 
     return temp1;
-}
-
-float EMC2103_get_internal_temp(void)
-{
-    uint8_t temp_msb, temp_lsb;
-
-    ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_INTERNAL_TEMP_MSB, &temp_msb, 1));
-    ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_INTERNAL_TEMP_LSB, &temp_lsb, 1));
-
-        // Combine MSB and LSB, and then right shift to get 11 bits
-    uint16_t reading = (temp_msb << 8) | temp_lsb;
-    reading >>= 5;  // Now, `reading` contains an 11-bit signed value
-
-    // Cast `reading` to a signed 16-bit integer
-    int16_t signed_reading = (int16_t)reading;
-
-    // If the 11th bit (sign bit in 11-bit data) is set, extend the sign
-    if (signed_reading & 0x0400) {
-        signed_reading |= 0xF800;  // Set upper bits to extend the sign
-    }
-
-    // Convert the signed reading to temperature in Celsius
-    return (float)signed_reading / 8.0;
 }
