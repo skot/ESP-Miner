@@ -17,9 +17,8 @@
 
 static const uint64_t BM1397_CORE_COUNT = 168;
 static const uint64_t BM1397_SMALL_CORE_COUNT = 672;
-static const float BM1397_NONCE_PERCENT = (float)BM1397_CORE_COUNT/256.0; //maximum nonce space with 1 chip
 static const float BM1397_MIDSTATE_ENGINES = 4.0;
-static const float BM1397_FULLSCAN_PERCENT = 0.5;      //normalised value 1 means do the maximum space, 0 dont wait before sending work
+static const float BM1397_TIMEOUT_PERCENT = 1.0;
 
 typedef struct
 {
@@ -61,5 +60,7 @@ int BM1397_set_max_baud(void);
 int BM1397_set_default_baud(void);
 void BM1397_send_hash_frequency(float frequency);
 task_result * BM1397_proccess_work(void * GLOBAL_STATE);
+uint8_t BM1397_get_chip_address_interval(int chips);
+int BM1397_get_timeout(uint64_t frequency, uint16_t asic_count,int versions_to_roll);
 
 #endif /* BM1397_H_ */

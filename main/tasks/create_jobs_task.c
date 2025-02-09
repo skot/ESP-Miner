@@ -34,11 +34,8 @@ void create_jobs_task(void *pvParameters)
             int version_rolls = (int)(GLOBAL_STATE->version_mask >> 13);
             ESP_LOGI(TAG, "Set chip version rolls %i", version_rolls);
 
-            //calulate update to fullscan_ms as new version rolling
-            double new_version_percent = (double)(version_rolls+1) / (double)VERSION_ROLLS_MAX;
-            double prcnt_change = new_version_percent/GLOBAL_STATE->version_space_percent;
-            GLOBAL_STATE->asic_job_frequency_ms *= prcnt_change;
-            GLOBAL_STATE->version_space_percent = new_version_percent;
+            // update timeout of chip
+            GLOBAL_STATE->asic_job_frequency_ms = (GLOBAL_STATE->ASIC_functions.get_timeout_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE->asic_count,version_rolls);
             ESP_LOGI(TAG, "Set chip fullscan %f", GLOBAL_STATE->asic_job_frequency_ms);
 
             (GLOBAL_STATE->ASIC_functions.set_version_mask)(GLOBAL_STATE->version_mask);

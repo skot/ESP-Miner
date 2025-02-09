@@ -15,13 +15,10 @@
 
 static const uint64_t BM1366_CORE_COUNT = 112;
 static const uint64_t BM1366_SMALL_CORE_COUNT = 894;
-static const float BM1366_NONCE_PERCENT = (float)BM1366_CORE_COUNT/256.0;  //maximum nonce space with 1 chip
 static const float BM1366_MIDSTATE_ENGINES = 8.0;
-static const int BM1366_HCN = 5450;
-static const float BM1366_HCN_MAX = 430000.0;
-static const float BM1366_HCN_PERCENT = (float)BM1366_HCN/BM1366_HCN_MAX;  //hcn limit effect
-static const float BM1366_VERSION_PERCENT = 1.0;                           //version scan percent
-static const float BM1366_FULLSCAN_PERCENT = 0.5;                          //normalised value 1 means do the maximum space, 0 dont wait before sending work
+static const float BM1366_NONCE_PERCENT = 1.0;
+static const float BM1366_VERSION_PERCENT = 1.0;
+static const float BM1366_TIMEOUT_PERCENT = 1.0;
 
 typedef struct
 {
@@ -50,5 +47,9 @@ int BM1366_set_max_baud(void);
 int BM1366_set_default_baud(void);
 void BM1366_send_hash_frequency(float frequency);
 task_result * BM1366_proccess_work(void * GLOBAL_STATE);
+uint8_t BM1366_get_chip_address_interval(int chips);
+int BM1366_get_timeout(uint64_t frequency, uint16_t asic_count,int versions_to_roll);
+
+
 
 #endif /* BM1366_H_ */

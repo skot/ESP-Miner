@@ -9,8 +9,6 @@
 #include "global_state.h"
 
 static const char * TAG = "nvs_device";
-static const double NONCE_SPACE = 4294967296.0; //  2^32
-static const double VERSION_SPACE = 65536.0; //  2^16
 
 
 esp_err_t NVSDevice_init(void) {
@@ -77,6 +75,8 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
     ESP_LOGI(TAG, "Found Board Version: %d", GLOBAL_STATE->board_version);
 
     GLOBAL_STATE->asic_model_str = nvs_config_get_string(NVS_CONFIG_ASIC_MODEL, "");
+    GLOBAL_STATE->asic_job_frequency_ms = 20.0;// use for bm1397;
+
     if (strcmp(GLOBAL_STATE->asic_model_str, "BM1366") == 0) {
         ESP_LOGI(TAG, "ASIC: %dx BM1366 (%" PRIu64 " cores)", GLOBAL_STATE->asic_count, BM1366_CORE_COUNT);
         GLOBAL_STATE->asic_model = ASIC_BM1366;
@@ -85,13 +85,10 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_max_baud_fn = BM1366_set_max_baud,
                                         .set_difficulty_mask_fn = BM1366_set_job_difficulty_mask,
                                         .send_work_fn = BM1366_send_work,
-                                        .set_version_mask = BM1366_set_version_mask};
-        GLOBAL_STATE->asic_job_frequency_ms =  (
-            (double) (BM1366_FULLSCAN_PERCENT * BM1366_HCN_PERCENT * BM1366_NONCE_PERCENT * BM1366_VERSION_PERCENT * NONCE_SPACE * VERSION_SPACE) / 
-            (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1366_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count;
+                                        .set_version_mask = BM1366_set_version_mask,
+                                        .get_chip_address_interval_fn = BM1366_get_chip_address_interval,
+                                        .get_timeout_fn=BM1366_get_timeout};
         GLOBAL_STATE->ASIC_difficulty = BM1366_ASIC_DIFFICULTY;
-        GLOBAL_STATE->version_space_percent = (double)BM1366_VERSION_PERCENT;
-
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
         } else if (strcmp(GLOBAL_STATE->asic_model_str, "BM1370") == 0) {
         ESP_LOGI(TAG, "ASIC: %dx BM1370 (%" PRIu64 " cores)", GLOBAL_STATE->asic_count, BM1370_CORE_COUNT);
@@ -101,13 +98,10 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_max_baud_fn = BM1370_set_max_baud,
                                         .set_difficulty_mask_fn = BM1370_set_job_difficulty_mask,
                                         .send_work_fn = BM1370_send_work,
-                                        .set_version_mask = BM1370_set_version_mask};
-        GLOBAL_STATE->asic_job_frequency_ms =  (
-            (double) (BM1370_FULLSCAN_PERCENT * BM1370_HCN_PERCENT * BM1370_NONCE_PERCENT * BM1370_VERSION_PERCENT * NONCE_SPACE * VERSION_SPACE) / 
-            (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1370_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count;
+                                        .set_version_mask = BM1370_set_version_mask,
+                                        .get_chip_address_interval_fn = BM1370_get_chip_address_interval,
+                                        .get_timeout_fn=BM1370_get_timeout};
         GLOBAL_STATE->ASIC_difficulty = BM1370_ASIC_DIFFICULTY;
-        GLOBAL_STATE->version_space_percent = (double)BM1370_VERSION_PERCENT;
-
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
     } else if (strcmp(GLOBAL_STATE->asic_model_str, "BM1368") == 0) {
         ESP_LOGI(TAG, "ASIC: %dx BM1368 (%" PRIu64 " cores)", GLOBAL_STATE->asic_count, BM1368_CORE_COUNT);
@@ -117,14 +111,10 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_max_baud_fn = BM1368_set_max_baud,
                                         .set_difficulty_mask_fn = BM1368_set_job_difficulty_mask,
                                         .send_work_fn = BM1368_send_work,
-                                        .set_version_mask = BM1368_set_version_mask};
-
-        GLOBAL_STATE->asic_job_frequency_ms =  (
-            (double) (BM1368_FULLSCAN_PERCENT * BM1368_HCN_PERCENT * BM1368_NONCE_PERCENT * BM1368_VERSION_PERCENT * NONCE_SPACE * VERSION_SPACE) / 
-            (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1368_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count;
+                                        .set_version_mask = BM1368_set_version_mask,
+                                        .get_chip_address_interval_fn = BM1368_get_chip_address_interval,
+                                        .get_timeout_fn=BM1368_get_timeout};
         GLOBAL_STATE->ASIC_difficulty = BM1368_ASIC_DIFFICULTY;
-        GLOBAL_STATE->version_space_percent = (double)BM1368_VERSION_PERCENT;
-
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
     } else if (strcmp(GLOBAL_STATE->asic_model_str, "BM1397") == 0) {
         ESP_LOGI(TAG, "ASIC: %dx BM1397 (%" PRIu64 " cores)", GLOBAL_STATE->asic_count, BM1397_SMALL_CORE_COUNT);
@@ -134,14 +124,10 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_max_baud_fn = BM1397_set_max_baud,
                                         .set_difficulty_mask_fn = BM1397_set_job_difficulty_mask,
                                         .send_work_fn = BM1397_send_work,
-                                        .set_version_mask = BM1397_set_version_mask};
-        // the bm1397 is a different equation as no version rolling and operates on 4 different spaces in paralell  
-        GLOBAL_STATE->asic_job_frequency_ms = (
-            (double) (BM1397_FULLSCAN_PERCENT * BM1397_MIDSTATE_ENGINES * BM1397_NONCE_PERCENT * NONCE_SPACE) / 
-            (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1397_SMALL_CORE_COUNT * 1000)) / (double) GLOBAL_STATE->asic_count; 
+                                        .set_version_mask = BM1397_set_version_mask,
+                                        .get_chip_address_interval_fn = BM1397_get_chip_address_interval,
+                                        .get_timeout_fn=BM1397_get_timeout};
         GLOBAL_STATE->ASIC_difficulty = BM1397_ASIC_DIFFICULTY;
-        GLOBAL_STATE->version_space_percent = (double)1.0;
-
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
     } else {
         ESP_LOGE(TAG, "Invalid ASIC model");

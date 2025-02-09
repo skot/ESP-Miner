@@ -46,6 +46,8 @@ typedef struct
     void (*set_difficulty_mask_fn)(int);
     void (*send_work_fn)(void * GLOBAL_STATE, bm_job * next_bm_job);
     void (*set_version_mask)(uint32_t);
+    uint8_t (*get_chip_address_interval_fn)(int chips);
+    int (*get_timeout_fn)(uint64_t frequency, uint16_t asic_count, int versions_to_roll);
 } AsicFunctions;
 
 typedef struct

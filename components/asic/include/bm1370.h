@@ -50,5 +50,7 @@ int BM1370_set_max_baud(void);
 int BM1370_set_default_baud(void);
 void BM1370_send_hash_frequency(int, float, float);
 task_result * BM1370_proccess_work(void * GLOBAL_STATE);
+uint8_t BM1370_get_chip_address_interval(int chips);
+int BM1370_get_timeout(uint64_t frequency, uint16_t asic_count,int versions_to_roll);
 
 #endif /* BM1370_H_ */
