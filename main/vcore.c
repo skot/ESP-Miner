@@ -36,6 +36,7 @@ esp_err_t VCORE_init(GlobalState * global_state) {
             }
             break;
         case DEVICE_GAMMA:
+        case DEVICE_LV07:
             if (TPS546_init() != ESP_OK) {
                 ESP_LOGE(TAG, "TPS546 init failed!");
                 return ESP_FAIL;
@@ -91,6 +92,7 @@ esp_err_t VCORE_set_voltage(float core_voltage, GlobalState * global_state)
             }
             break;
         case DEVICE_GAMMA:
+        case DEVICE_LV07:
                 ESP_LOGI(TAG, "Set ASIC voltage = %.3fV", core_voltage);
                 TPS546_set_vout(core_voltage * (float)global_state->voltage_domain);
             break;
@@ -102,5 +104,13 @@ esp_err_t VCORE_set_voltage(float core_voltage, GlobalState * global_state)
 }
 
 uint16_t VCORE_get_voltage_mv(GlobalState * global_state) {
+        
+    switch (global_state->device_model) {
+        case DEVICE_LV07:
+            return (TPS546_get_vout() * 1000) / global_state->voltage_domain;
+            break;
+        default:
+    }
+
     return ADC_get_vcore() / global_state->voltage_domain;
 }

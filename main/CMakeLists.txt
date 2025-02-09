@@ -3,6 +3,8 @@ SRCS
     "adc.c"
     "DS4432U.c"
     "EMC2101.c"
+    "EMC2302.c"
+    "TMP1075.c"
     "i2c_bitaxe.c"
     "INA260.c"
     "main.c"
