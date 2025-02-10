@@ -33,31 +33,41 @@ esp_err_t EMC2103_init(bool invertPolarity) {
 
 }
 
-// void EMC2103_set_ideality_factor(uint8_t ideality){
-//     //set Ideality Factor
-//     ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_IDEALITY_FACTOR, ideality));
-// }
+void EMC2103_set_ideality_factor(uint8_t ideality){
+    //set Ideality Factor
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_EXTERNAL_DIODE1_IDEALITY, ideality));
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_EXTERNAL_DIODE2_IDEALITY, ideality));
+}
 
-// void EMC2103_set_beta_compensation(uint8_t beta){
-//     //set Beta Compensation
-//     ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_BETA_COMPENSATION, beta));
+void EMC2103_set_beta_compensation(uint8_t beta){
+    //set Beta Compensation
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_EXTERNAL_DIODE1_BETA, beta));
+    ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_EXTERNAL_DIODE2_BETA, beta));
 
-// }
+}
 
-// takes a fan speed percent
+/**
+ * @brief Set the fan speed as a percentage.
+ *
+ * @param percent The desired fan speed as a percentage (0.0 to 1.0).
+ */
 void EMC2103_set_fan_speed(float percent)
 {
     uint8_t setting = (uint8_t) (255.0 * percent);
-    ESP_LOGI(TAG, "Setting fan speed to %.2f%% (%d)", percent*100.0, setting);
+    //ESP_LOGI(TAG, "Setting fan speed to %.2f%% (%d)", percent*100.0, setting);
     ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_FAN_SETTING, setting));
 }
 
-// RPM = 5400000/reading
+/**
+ * @brief Get the current fan speed in RPM.
+ *
+ * @return uint16_t The fan speed in RPM.
+ */
 uint16_t EMC2103_get_fan_speed(void)
 {
     uint8_t tach_lsb, tach_msb;
     uint16_t reading;
-    uint16_t RPM;
+    uint32_t RPM;
 
     ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_TACH_LSB, &tach_lsb, 1));
     ESP_ERROR_CHECK(i2c_bitaxe_register_read(EMC2103_dev_handle, EMC2103_TACH_MSB, &tach_msb, 1));
@@ -65,7 +75,11 @@ uint16_t EMC2103_get_fan_speed(void)
     // ESP_LOGI(TAG, "Raw Fan Speed = %02X %02X", tach_msb, tach_lsb);
 
     reading = tach_lsb | (tach_msb << 8);
-    RPM = 5400000 / reading;
+    reading >>= 3;
+
+    //RPM = (3,932,160 * m)/reading
+    //m is the multipler, which is default 2
+    RPM = 7864320 / reading;
 
     // ESP_LOGI(TAG, "Fan Speed = %d RPM", RPM);
     if (RPM == 82) {
@@ -74,6 +88,11 @@ uint16_t EMC2103_get_fan_speed(void)
     return RPM;
 }
 
+/**
+ * @brief Get the external temperature in Celsius.
+ *
+ * @return float The external temperature in Celsius.
+ */
 float EMC2103_get_external_temp(void)
 {
     uint8_t temp_msb, temp_lsb;
@@ -139,7 +158,7 @@ float EMC2103_get_external_temp(void)
 
 
     //debug the temps
-    ESP_LOGI(TAG, "Temp1: %f Temp2: %f", temp1, temp2);
+    //ESP_LOGI(TAG, "Temp1: %.2f Temp2: %.2f", temp1, temp2);
 
     return temp1;
 }

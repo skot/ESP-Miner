@@ -38,6 +38,26 @@
 #define EMC2103_MANUFACTURER_ID 0xFE
 #define EMC2103_REVISION 0xFF
 
+//Table 6.10 Substrate Diode Ideality Factor Look-Up Table (BJT Model)
+#define EMC2103_IDEALITY_0_9973	 0x10
+#define EMC2103_IDEALITY_0_9986	 0x11
+#define EMC2103_IDEALITY_1_0000	 0x12
+#define EMC2103_IDEALITY_1_0013	 0x13
+#define EMC2103_IDEALITY_1_0026	 0x14
+#define EMC2103_IDEALITY_1_0039	 0x15
+#define EMC2103_IDEALITY_1_0053	 0x16
+#define EMC2103_IDEALITY_1_0066	 0x17
+
+//Table 6.12 Beta Compensation Look Up Table
+#define EMC2103_BETA_080         0x00
+#define EMC2103_BETA_111         0x01
+#define EMC2103_BETA_176         0x02
+#define EMC2103_BETA_290         0x03
+#define EMC2103_BETA_480         0x04
+#define EMC2103_BETA_900         0x05
+#define EMC2103_BETA_2330        0x06
+#define EMC2103_BETA_DISABLED    0x07
+
 
 
 void EMC2103_set_fan_speed(float);
@@ -46,6 +66,6 @@ uint16_t EMC2103_get_fan_speed(void);
 esp_err_t EMC2103_init(bool);
 float EMC2103_get_external_temp(void);
 float EMC2103_get_internal_temp(void);
-// void EMC2103_set_ideality_factor(uint8_t);
-// void EMC2103_set_beta_compensation(uint8_t);
+void EMC2103_set_ideality_factor(uint8_t);
+void EMC2103_set_beta_compensation(uint8_t);
 #endif /* EMC2103_H_ */
