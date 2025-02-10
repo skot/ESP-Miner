@@ -4,6 +4,7 @@
 #include "mining.h"
 #include "utils.h"
 #include "mbedtls/sha256.h"
+#include "esp_log.h"
 
 void free_bm_job(bm_job *job)
 {
@@ -15,6 +16,11 @@ void free_bm_job(bm_job *job)
 char *construct_coinbase_tx(const char *coinbase_1, const char *coinbase_2,
                             const char *extranonce, const char *extranonce_2)
 {
+    //ESP_LOGI("TAG", "coinbase_1: %s", coinbase_1);
+    //ESP_LOGI("TAG", "coinbase_2: %s", coinbase_2);
+    //ESP_LOGI("TAG", "extranonce: %s", extranonce);
+    //ESP_LOGI("TAG", "extranonce_2: %s", extranonce_2);
+
     int coinbase_tx_len = strlen(coinbase_1) + strlen(coinbase_2) + strlen(extranonce) + strlen(extranonce_2) + 1;
 
     char *coinbase_tx = malloc(coinbase_tx_len);
