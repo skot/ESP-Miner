@@ -47,7 +47,7 @@ esp_err_t EMC2103_init(bool invertPolarity) {
 // takes a fan speed percent
 void EMC2103_set_fan_speed(float percent)
 {
-    uint8_t setting = (uint8_t) (255.0 * (1.0 - percent));
+    uint8_t setting = (uint8_t) (255.0 * percent);
     ESP_LOGI(TAG, "Setting fan speed to %.2f%% (%d)", percent*100.0, setting);
     ESP_ERROR_CHECK(i2c_bitaxe_register_write_byte(EMC2103_dev_handle, EMC2103_FAN_SETTING, setting));
 }
