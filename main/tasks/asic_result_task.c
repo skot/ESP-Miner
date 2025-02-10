@@ -28,8 +28,14 @@ void ASIC_result_task(void *pvParameters)
         }
 
         uint8_t job_id = asic_result->job_id;
+        StratumConnection *current_connection = &GLOBAL_STATE->connections[GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->connection_id];
+        if (current_connection->state != STRATUM_CONNECTED)
+        {
+            ESP_LOGW(TAG, "Connection for job 0x%02X no longer open", job_id);
+            continue;
+        }
 
-        if (GLOBAL_STATE->valid_jobs[job_id] == 0)
+        if (current_connection->jobs[job_id] == 0)
         {
             ESP_LOGW(TAG, "Invalid job nonce found, 0x%02X", job_id);
             continue;
@@ -46,11 +52,10 @@ void ASIC_result_task(void *pvParameters)
 
         if (nonce_diff >= GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->pool_diff)
         {
-            char * user = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_user : GLOBAL_STATE->SYSTEM_MODULE.pool_user;
             int ret = STRATUM_V1_submit_share(
-                GLOBAL_STATE->sock,
-                GLOBAL_STATE->send_uid++,
-                user,
+                current_connection->sock,
+                current_connection->send_uid++,
+                current_connection->username,
                 GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->jobid,
                 GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->extranonce2,
                 GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->ntime,
@@ -59,7 +64,7 @@ void ASIC_result_task(void *pvParameters)
 
             if (ret < 0) {
                 ESP_LOGI(TAG, "Unable to write share to socket. Closing connection. Ret: %d (errno %d: %s)", ret, errno, strerror(errno));
-                stratum_close_connection(GLOBAL_STATE);
+                stratum_close_connection(current_connection);
             }
         }
 
