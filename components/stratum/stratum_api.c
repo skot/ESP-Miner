@@ -16,93 +16,95 @@
 #define BUFFER_SIZE 1024
 static const char * TAG = "stratum_api";
 
-static char * json_rpc_buffer = NULL;
-static size_t json_rpc_buffer_size = 0;
+static void debug_stratum_tx(const char * POOL_TAG, const char *);
+int _parse_stratum_subscribe_result_message(const char * POOL_TAG, const char * result_json_str, char ** extranonce, int * extranonce2_len);
 
-static void debug_stratum_tx(const char *);
-int _parse_stratum_subscribe_result_message(const char * result_json_str, char ** extranonce, int * extranonce2_len);
 
-void STRATUM_V1_initialize_buffer()
-{
-    json_rpc_buffer = malloc(BUFFER_SIZE);
-    json_rpc_buffer_size = BUFFER_SIZE;
-    if (json_rpc_buffer == NULL) {
-        printf("Error: Failed to allocate memory for buffer\n");
+StratumApiV1Buffer *STRATUM_V1_buffer_create() {
+    StratumApiV1Buffer *buf = malloc(sizeof(StratumApiV1Buffer));
+    if (!buf) {
+        fprintf(stderr, "Error: Failed to allocate memory for StratumApiV1Buffer\n");
         exit(1);
     }
-    memset(json_rpc_buffer, 0, BUFFER_SIZE);
+
+    STRATUM_V1_buffer_init(buf);
+
+    return buf;
 }
 
-void cleanup_stratum_buffer()
-{
-    free(json_rpc_buffer);
+void STRATUM_V1_buffer_init(StratumApiV1Buffer *buf) {
+    buf->data = malloc(BUFFER_SIZE);
+    buf->size = BUFFER_SIZE;
+
+    if (!buf->data) {
+        fprintf(stderr, "Error: Failed to allocate memory for buffer\n");
+        exit(1);
+    }
+    memset(buf->data, 0, buf->size);
 }
 
-static void realloc_json_buffer(size_t len)
-{
-    size_t old, new;
+void STRATUM_V1_buffer_clear(StratumApiV1Buffer *buf) {
+    memset(buf->data, 0, BUFFER_SIZE);
+    buf->size = 0;
+}
 
-    old = strlen(json_rpc_buffer);
-    new = old + len + 1;
+void STRATUM_V1_buffer_realloc(StratumApiV1Buffer *buf, size_t additional_len) {
+    size_t old_size = strlen(buf->data);
+    size_t new_size = old_size + additional_len + 1;
 
-    if (new < json_rpc_buffer_size) {
+    if (new_size <= buf->size) {
         return;
     }
 
-    new = new + (BUFFER_SIZE - (new % BUFFER_SIZE));
-    void * new_sockbuf = realloc(json_rpc_buffer, new);
+    new_size += BUFFER_SIZE - (new_size % BUFFER_SIZE);
+    char *new_data = realloc(buf->data, new_size);
 
-    if (new_sockbuf == NULL) {
+    if (!new_data) {
         fprintf(stderr, "Error: realloc failed in recalloc_sock()\n");
         ESP_LOGI(TAG, "Restarting System because of ERROR: realloc failed in recalloc_sock");
         vTaskDelay(1000 / portTICK_PERIOD_MS);
         esp_restart();
     }
 
-    json_rpc_buffer = new_sockbuf;
-    memset(json_rpc_buffer + old, 0, new - old);
-    json_rpc_buffer_size = new;
+    buf->data = new_data;
+    memset(buf->data + old_size, 0, new_size - old_size);
+    buf->size = new_size;
 }
 
-char * STRATUM_V1_receive_jsonrpc_line(int sockfd)
+char *STRATUM_V1_receive_jsonrpc_line(const char * POOL_TAG, int sockfd, StratumApiV1Buffer *json_buf)
 {
-    if (json_rpc_buffer == NULL) {
-        STRATUM_V1_initialize_buffer();
-    }
     char *line, *tok = NULL;
     char recv_buffer[BUFFER_SIZE];
     int nbytes;
     size_t buflen = 0;
 
-    if (!strstr(json_rpc_buffer, "\n")) {
+    if (!strstr(json_buf->data, "\n")) {
         do {
             memset(recv_buffer, 0, BUFFER_SIZE);
             nbytes = recv(sockfd, recv_buffer, BUFFER_SIZE - 1, 0);
-            if (nbytes == -1) {
-                ESP_LOGI(TAG, "Error: recv (errno %d: %s)", errno, strerror(errno));
-                if (json_rpc_buffer) {
-                    free(json_rpc_buffer);
-                    json_rpc_buffer=0;
-                }
-                return 0;
+            if (nbytes <= 0)
+            {
+                ESP_LOGI(POOL_TAG, "Error: recv (errno %d: %s)", errno, strerror(errno));
+                STRATUM_V1_buffer_clear(json_buf);
+                return NULL;
             }
 
-            realloc_json_buffer(nbytes);
-            strncat(json_rpc_buffer, recv_buffer, nbytes);
-        } while (!strstr(json_rpc_buffer, "\n"));
+            STRATUM_V1_buffer_realloc(json_buf, nbytes);
+            strncat(json_buf->data, recv_buffer, nbytes);
+        } while (!strstr(json_buf->data, "\n"));
     }
-    buflen = strlen(json_rpc_buffer);
-    tok = strtok(json_rpc_buffer, "\n");
+    buflen = strlen(json_buf->data);
+    tok = strtok(json_buf->data, "\n");
     line = strdup(tok);
     int len = strlen(line);
     if (buflen > len + 1)
-        memmove(json_rpc_buffer, json_rpc_buffer + len + 1, buflen - len + 1);
+        memmove(json_buf->data, json_buf->data + len + 1, buflen - len + 1);
     else
-        strcpy(json_rpc_buffer, "");
+        strcpy(json_buf->data, "");
     return line;
 }
 
-void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
+void STRATUM_V1_parse(const char * POOL_TAG, StratumApiV1Message * message, const char * stratum_json)
 {
     cJSON * json = cJSON_Parse(stratum_json);
 
@@ -127,7 +129,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
         } else if (strcmp("client.reconnect", method_json->valuestring) == 0) {
             result = CLIENT_RECONNECT;
         } else {
-            ESP_LOGI(TAG, "unhandled method in stratum message: %s", stratum_json);
+            ESP_LOGI(POOL_TAG, "unhandled method in stratum message: %s", stratum_json);
         }
 
     //if there is no method, then it is a result
@@ -181,7 +183,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
 
             cJSON * extranonce2_len_json = cJSON_GetArrayItem(result_json, 2);
             if (extranonce2_len_json == NULL) {
-                ESP_LOGE(TAG, "Unable to parse extranonce2_len: %s", result_json->valuestring);
+                ESP_LOGE(POOL_TAG, "Unable to parse extranonce2_len: %s", result_json->valuestring);
                 message->response_success = false;
                 goto done;
             }
@@ -189,7 +191,7 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
 
             cJSON * extranonce_json = cJSON_GetArrayItem(result_json, 1);
             if (extranonce_json == NULL) {
-                ESP_LOGE(TAG, "Unable parse extranonce: %s", result_json->valuestring);
+                ESP_LOGE(POOL_TAG, "Unable parse extranonce: %s", result_json->valuestring);
                 message->response_success = false;
                 goto done;
             }
@@ -198,8 +200,8 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
             message->response_success = true;
 
             //print the extranonce_str
-            ESP_LOGI(TAG, "extranonce_str: %s", message->extranonce_str);
-            ESP_LOGI(TAG, "extranonce_2_len: %d", message->extranonce_2_len);
+            ESP_LOGI(POOL_TAG, "extranonce_str: %s", message->extranonce_str);
+            ESP_LOGI(POOL_TAG, "extranonce_2_len: %d", message->extranonce_2_len);
 
         //if the id is STRATUM_ID_CONFIGURE parse it
         } else if (parsed_id == STRATUM_ID_CONFIGURE) {
@@ -207,13 +209,13 @@ void STRATUM_V1_parse(StratumApiV1Message * message, const char * stratum_json)
             if (mask != NULL) {
                 result = STRATUM_RESULT_VERSION_MASK;
                 message->version_mask = strtoul(mask->valuestring, NULL, 16);
-                ESP_LOGI(TAG, "Set version mask: %08lx", message->version_mask);
+                ESP_LOGI(POOL_TAG, "Set version mask: %08lx", message->version_mask);
             } else {
-                ESP_LOGI(TAG, "error setting version mask: %s", stratum_json);
+                ESP_LOGI(POOL_TAG, "error setting version mask: %s", stratum_json);
             }
 
         } else {
-            ESP_LOGI(TAG, "unhandled result in stratum message: %s", stratum_json);
+            ESP_LOGI(POOL_TAG, "unhandled result in stratum message: %s", stratum_json);
         }
     }
 
@@ -275,29 +277,29 @@ void STRATUM_V1_free_mining_notify(mining_notify * params)
     free(params);
 }
 
-int _parse_stratum_subscribe_result_message(const char * result_json_str, char ** extranonce, int * extranonce2_len)
+int _parse_stratum_subscribe_result_message(const char * POOL_TAG, const char * result_json_str, char ** extranonce, int * extranonce2_len)
 {
     cJSON * root = cJSON_Parse(result_json_str);
     if (root == NULL) {
-        ESP_LOGE(TAG, "Unable to parse %s", result_json_str);
+        ESP_LOGE(POOL_TAG, "Unable to parse %s", result_json_str);
         return -1;
     }
     cJSON * result = cJSON_GetObjectItem(root, "result");
     if (result == NULL) {
-        ESP_LOGE(TAG, "Unable to parse subscribe result %s", result_json_str);
+        ESP_LOGE(POOL_TAG, "Unable to parse subscribe result %s", result_json_str);
         return -1;
     }
 
     cJSON * extranonce2_len_json = cJSON_GetArrayItem(result, 2);
     if (extranonce2_len_json == NULL) {
-        ESP_LOGE(TAG, "Unable to parse extranonce2_len: %s", result->valuestring);
+        ESP_LOGE(POOL_TAG, "Unable to parse extranonce2_len: %s", result->valuestring);
         return -1;
     }
     *extranonce2_len = extranonce2_len_json->valueint;
 
     cJSON * extranonce_json = cJSON_GetArrayItem(result, 1);
     if (extranonce_json == NULL) {
-        ESP_LOGE(TAG, "Unable parse extranonce: %s", result->valuestring);
+        ESP_LOGE(POOL_TAG, "Unable parse extranonce: %s", result->valuestring);
         return -1;
     }
     *extranonce = malloc(strlen(extranonce_json->valuestring) + 1);
@@ -308,33 +310,33 @@ int _parse_stratum_subscribe_result_message(const char * result_json_str, char *
     return 0;
 }
 
-int STRATUM_V1_subscribe(int socket, int send_uid, char * model)
+int STRATUM_V1_subscribe(const char * POOL_TAG, int socket, int send_uid, char * model)
 {
     // Subscribe
     char subscribe_msg[BUFFER_SIZE];
     const esp_app_desc_t *app_desc = esp_app_get_description();
     const char *version = app_desc->version;	
     sprintf(subscribe_msg, "{\"id\": %d, \"method\": \"mining.subscribe\", \"params\": [\"bitaxe/%s/%s\"]}\n", send_uid, model, version);
-    debug_stratum_tx(subscribe_msg);
+    debug_stratum_tx(POOL_TAG, subscribe_msg);
 
     return write(socket, subscribe_msg, strlen(subscribe_msg));
 }
 
-int STRATUM_V1_suggest_difficulty(int socket, int send_uid, uint32_t difficulty)
+int STRATUM_V1_suggest_difficulty(const char * POOL_TAG, int socket, int send_uid, uint32_t difficulty)
 {
     char difficulty_msg[BUFFER_SIZE];
     sprintf(difficulty_msg, "{\"id\": %d, \"method\": \"mining.suggest_difficulty\", \"params\": [%ld]}\n", send_uid, difficulty);
-    debug_stratum_tx(difficulty_msg);
+    debug_stratum_tx(POOL_TAG, difficulty_msg);
 
     return write(socket, difficulty_msg, strlen(difficulty_msg));
 }
 
-int STRATUM_V1_authenticate(int socket, int send_uid, const char * username, const char * pass)
+int STRATUM_V1_authenticate(const char * POOL_TAG, int socket, int send_uid, const char * username, const char * pass)
 {
     char authorize_msg[BUFFER_SIZE];
     sprintf(authorize_msg, "{\"id\": %d, \"method\": \"mining.authorize\", \"params\": [\"%s\", \"%s\"]}\n", send_uid, username,
             pass);
-    debug_stratum_tx(authorize_msg);
+    debug_stratum_tx(POOL_TAG, authorize_msg);
 
     return write(socket, authorize_msg, strlen(authorize_msg));
 }
@@ -353,31 +355,31 @@ int STRATUM_V1_submit_share(int socket, int send_uid, const char * username, con
     sprintf(submit_msg,
             "{\"id\": %d, \"method\": \"mining.submit\", \"params\": [\"%s\", \"%s\", \"%s\", \"%08lx\", \"%08lx\", \"%08lx\"]}\n",
             send_uid, username, jobid, extranonce_2, ntime, nonce, version);
-    debug_stratum_tx(submit_msg);
+    debug_stratum_tx(TAG, submit_msg);
 
     return write(socket, submit_msg, strlen(submit_msg));
 }
 
-int STRATUM_V1_configure_version_rolling(int socket, int send_uid, uint32_t * version_mask)
+int STRATUM_V1_configure_version_rolling(const char * POOL_TAG, int socket, int send_uid)
 {
     char configure_msg[BUFFER_SIZE * 2];
     sprintf(configure_msg,
             "{\"id\": %d, \"method\": \"mining.configure\", \"params\": [[\"version-rolling\"], {\"version-rolling.mask\": "
             "\"ffffffff\"}]}\n",
             send_uid);
-    debug_stratum_tx(configure_msg);
+    debug_stratum_tx(POOL_TAG, configure_msg);
 
     return write(socket, configure_msg, strlen(configure_msg));
 }
 
-static void debug_stratum_tx(const char * msg)
+static void debug_stratum_tx(const char * POOL_TAG, const char * msg)
 {
     //remove the trailing newline
     char * newline = strchr(msg, '\n');
     if (newline != NULL) {
         *newline = '\0';
     }
-    ESP_LOGI(TAG, "tx: %s", msg);
+    ESP_LOGI(POOL_TAG, "tx: %s", msg);
 
     //put it back!
     if (newline != NULL) {

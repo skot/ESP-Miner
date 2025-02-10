@@ -4,6 +4,7 @@
 #include "mining.h"
 #include "utils.h"
 #include "mbedtls/sha256.h"
+#include "esp_log.h"
 
 void free_bm_job(bm_job *job)
 {
@@ -61,6 +62,7 @@ bm_job construct_bm_job(mining_notify *params, const char *merkle_root, const ui
     new_job.target = params->target;
     new_job.ntime = params->ntime;
     new_job.pool_diff = params->difficulty;
+    new_job.connection_id = params->connection_id;
 
     hex2bin(merkle_root, new_job.merkle_root, 32);
 
