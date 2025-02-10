@@ -2,8 +2,6 @@ idf_component_register(
 SRCS
     "adc.c"
     "DS4432U.c"
-    "EMC2101.c"
-    "EMC2103.c"
     "i2c_bitaxe.c"
     "INA260.c"
     "main.c"
@@ -26,6 +24,9 @@ SRCS
     "./tasks/asic_task.c"
     "./tasks/asic_result_task.c"
     "./tasks/power_management_task.c"
+    "./thermal/EMC2101.c"
+    "./thermal/EMC2103.c"
+    "./thermal/thermal.c"
 
 INCLUDE_DIRS
     "."
@@ -36,6 +37,7 @@ INCLUDE_DIRS
     "../components/connect/include"
     "../components/dns_server/include"
     "../components/stratum/include"
+    "thermal"
 
 PRIV_REQUIRES
     "app_update"
