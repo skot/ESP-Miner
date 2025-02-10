@@ -93,7 +93,7 @@ void stratum_primary_heartbeat(void * pvParameters)
 {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
-    ESP_LOGI(TAG, "Starting heartbeat thread for primary endpoint: %s", primary_stratum_url);
+    ESP_LOGI(TAG, "Starting heartbeat thread for primary pool: %s:%d", primary_stratum_url, primary_stratum_port);
     vTaskDelay(10000 / portTICK_PERIOD_MS);
 
     int addr_family = AF_INET;
@@ -198,7 +198,7 @@ void stratum_task(void * pvParameters)
 
     xTaskCreate(stratum_primary_heartbeat, "stratum primary heartbeat", 8192, pvParameters, 1, NULL);
 
-    ESP_LOGI(TAG, "Trying to get IP for URL: %s", stratum_url);
+    ESP_LOGI(TAG, "Opening connection to pool: %s:%d", stratum_url, port);
     while (1) {
         if (!is_wifi_connected()) {
             ESP_LOGI(TAG, "WiFi disconnected, attempting to reconnect...");
