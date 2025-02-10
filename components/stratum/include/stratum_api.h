@@ -28,6 +28,7 @@ static const int  STRATUM_ID_SUBSCRIBE    = 2;
 
 typedef struct
 {
+    uint8_t connection_id;
     char *job_id;
     char *prev_block_hash;
     char *coinbase_1;
@@ -62,21 +63,28 @@ typedef struct
     char * error_str;
 } StratumApiV1Message;
 
-void STRATUM_V1_initialize_buffer();
 
-char *STRATUM_V1_receive_jsonrpc_line(int sockfd);
+typedef struct {
+    char *data;
+    size_t size;
+} StratumApiV1Buffer;
 
-int STRATUM_V1_subscribe(int socket, int send_uid, char * model);
+StratumApiV1Buffer *STRATUM_V1_buffer_create();
+void STRATUM_V1_buffer_init(StratumApiV1Buffer *buf);
 
-void STRATUM_V1_parse(StratumApiV1Message *message, const char *stratum_json);
+char *STRATUM_V1_receive_jsonrpc_line(const char * POOL_TAG, int sockfd, StratumApiV1Buffer *json_buf);
+
+int STRATUM_V1_subscribe(const char * POOL_TAG,int socket, int send_uid, char * model);
+
+void STRATUM_V1_parse(const char * POOL_TAG, StratumApiV1Message *message, const char *stratum_json);
 
 void STRATUM_V1_free_mining_notify(mining_notify *params);
 
-int STRATUM_V1_authenticate(int socket, int send_uid, const char *username, const char *pass);
+int STRATUM_V1_authenticate(const char * POOL_TAG, int socket, int send_uid, const char *username, const char *pass);
 
-int STRATUM_V1_configure_version_rolling(int socket, int send_uid, uint32_t * version_mask);
+int STRATUM_V1_configure_version_rolling(const char * POOL_TAG,int socket, int send_uid);
 
-int STRATUM_V1_suggest_difficulty(int socket, int send_uid, uint32_t difficulty);
+int STRATUM_V1_suggest_difficulty(const char * POOL_TAG, int socket, int send_uid, uint32_t difficulty);
 
 int STRATUM_V1_submit_share(int socket, int send_uid, const char *username, const char *jobid,
                             const char *extranonce_2, const uint32_t ntime, const uint32_t nonce,
