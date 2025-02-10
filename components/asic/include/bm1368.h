@@ -5,8 +5,6 @@
 #include "driver/gpio.h"
 #include "mining.h"
 
-#define ASIC_BM1368_JOB_FREQUENCY_MS 500
-
 #define CRC5_MASK 0x1F
 #define BM1368_ASIC_DIFFICULTY 256
 
@@ -17,6 +15,10 @@
 
 static const uint64_t BM1368_CORE_COUNT = 80;
 static const uint64_t BM1368_SMALL_CORE_COUNT = 1276;
+static const float BM1368_MIDSTATE_ENGINES = 16.0;
+static const float BM1368_NONCE_PERCENT = 1.0;
+static const float BM1368_VERSION_PERCENT = 1.0;  
+static const float BM1368_TIMEOUT_PERCENT = 1.0; 
 
 typedef struct
 {
@@ -46,5 +48,7 @@ int BM1368_set_default_baud(void);
 bool BM1368_send_hash_frequency(float frequency);
 bool do_frequency_transition(float target_frequency);
 task_result * BM1368_proccess_work(void * GLOBAL_STATE);
+uint8_t BM1368_get_chip_address_interval(int chips);
+int BM1368_get_timeout(uint64_t frequency, uint16_t asic_count,int versions_to_roll);
 
 #endif /* BM1368_H_ */
