@@ -20,8 +20,6 @@
 
 #include "system.h"
 #include "i2c_bitaxe.h"
-#include "EMC2101.h"
-#include "EMC2103.h"
 #include "INA260.h"
 #include "adc.h"
 #include "connect.h"
@@ -30,6 +28,7 @@
 #include "input.h"
 #include "screen.h"
 #include "vcore.h"
+#include "thermal.h"
 
 static const char * TAG = "SystemModule";
 
@@ -99,23 +98,7 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
     VCORE_init(GLOBAL_STATE);
     VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
 
-    //init the EMC2101, if we have one
-    switch (GLOBAL_STATE->device_model) {
-        case DEVICE_MAX:
-        case DEVICE_ULTRA:
-        case DEVICE_SUPRA:
-            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
-            break;
-        case DEVICE_GAMMA:
-            EMC2101_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
-            EMC2101_set_ideality_factor(EMC2101_IDEALITY_1_0319);
-            EMC2101_set_beta_compensation(EMC2101_BETA_11);
-            break;
-        case DEVICE_GAMMATURBO:
-            EMC2103_init(nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
-            break;
-        default:
-    }
+    Thermal_init(GLOBAL_STATE->device_model, nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
 
     //initialize the INA260, if we have one.
     switch (GLOBAL_STATE->device_model) {

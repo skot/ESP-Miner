@@ -108,6 +108,11 @@ float EMC2103_get_external_temp(void)
     
     // Combine MSB and LSB, and then right shift to get 11 bits
     reading = (temp_msb << 8) | temp_lsb;
+
+    if (reading == EMC2103_TEMP_DIODE_FAULT) {
+        ESP_LOGE(TAG, "EMC2103 TEMP_DIODE1_FAULT: %04X", reading);
+    }
+
     reading >>= 5;  // Now, `reading` contains an 11-bit signed value
 
     // Cast `reading` to a signed 16-bit integer
@@ -117,13 +122,6 @@ float EMC2103_get_external_temp(void)
     if (signed_reading & 0x0400) {
         signed_reading |= 0xF800;  // Set upper bits to extend the sign
     }
-
-    // if (signed_reading == EMC2103_TEMP_FAULT_OPEN_CIRCUIT) {
-    //     ESP_LOGE(TAG, "EMC2103 TEMP_FAULT_OPEN_CIRCUIT: %04X", signed_reading);
-    // }
-    // if (signed_reading == EMC2103_TEMP_FAULT_SHORT) {
-    //     ESP_LOGE(TAG, "EMC2103 TEMP_FAULT_SHORT: %04X", signed_reading);
-    // }
 
     // Convert the signed reading to temperature in Celsius
     temp1 = (float)signed_reading / 8.0;
@@ -136,6 +134,9 @@ float EMC2103_get_external_temp(void)
     
     // Combine MSB and LSB, and then right shift to get 11 bits
     reading = (temp_msb << 8) | temp_lsb;
+    if (reading == EMC2103_TEMP_DIODE_FAULT) {
+        ESP_LOGE(TAG, "EMC2103 TEMP_DIODE2_FAULT: %04X", reading);
+    }
     reading >>= 5;  // Now, `reading` contains an 11-bit signed value
 
     // Cast `reading` to a signed 16-bit integer
@@ -145,13 +146,6 @@ float EMC2103_get_external_temp(void)
     if (signed_reading & 0x0400) {
         signed_reading |= 0xF800;  // Set upper bits to extend the sign
     }
-
-    // if (signed_reading == EMC2103_TEMP_FAULT_OPEN_CIRCUIT) {
-    //     ESP_LOGE(TAG, "EMC2103 TEMP_FAULT_OPEN_CIRCUIT: %04X", signed_reading);
-    // }
-    // if (signed_reading == EMC2103_TEMP_FAULT_SHORT) {
-    //     ESP_LOGE(TAG, "EMC2103 TEMP_FAULT_SHORT: %04X", signed_reading);
-    // }
 
     // Convert the signed reading to temperature in Celsius
     temp2 = (float)signed_reading / 8.0;

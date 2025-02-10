@@ -1,6 +1,4 @@
 #include <string.h>
-#include "EMC2101.h"
-#include "EMC2103.h"
 #include "INA260.h"
 #include "bm1397.h"
 #include "esp_log.h"
@@ -13,6 +11,7 @@
 #include "serial.h"
 #include "TPS546.h"
 #include "vcore.h"
+#include "thermal.h"
 
 #define GPIO_ASIC_ENABLE CONFIG_GPIO_ASIC_ENABLE
 #define GPIO_ASIC_RESET  CONFIG_GPIO_ASIC_RESET
@@ -62,24 +61,10 @@ static double automatic_fan_speed(float chip_temp, GlobalState * GLOBAL_STATE)
         double fan_range = 100 - min_fan_speed;
         result = ((chip_temp - min_temp) / temp_range) * fan_range + min_fan_speed;
     }
+    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+    power_management->fan_perc = result;
+    Thermal_set_fan_percent(GLOBAL_STATE->device_model, result/100.0);
 
-    float perc;
-    switch (GLOBAL_STATE->device_model) {
-        case DEVICE_MAX:
-        case DEVICE_ULTRA:
-        case DEVICE_SUPRA:
-        case DEVICE_GAMMA:
-            perc = (float) result / 100;
-            GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc = perc;
-            EMC2101_set_fan_speed( perc );
-            break;
-        case DEVICE_GAMMATURBO:
-            perc = (float) result / 100;
-            GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc = perc;
-            EMC2103_set_fan_speed( perc );
-            break;
-        default:
-    }
 	return result;
 }
 
@@ -166,16 +151,19 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             default:
         }
 
+        power_management->fan_rpm = Thermal_get_fan_speed(GLOBAL_STATE->device_model);
+        power_management->chip_temp_avg = Thermal_get_chip_temp(GLOBAL_STATE);
+
         switch (GLOBAL_STATE->device_model) {
             case DEVICE_MAX:
-                power_management->fan_rpm = EMC2101_get_fan_speed();
-                power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2101_get_external_temp() : -1;
+                //power_management->fan_rpm = EMC2101_get_fan_speed();
+                //power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2101_get_external_temp() : -1;
 
                 if ((power_management->chip_temp_avg > THROTTLE_TEMP) &&
                     (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
                     ESP_LOGE(TAG, "OVERHEAT ASIC %fC", power_management->chip_temp_avg );
-
-                    EMC2101_set_fan_speed(1);
+                    power_management->fan_perc = 100;
+                    Thermal_set_fan_percent(GLOBAL_STATE->device_model, 1);
                     if (power_management->HAS_POWER_EN) {
                         gpio_set_level(GPIO_ASIC_ENABLE, 1);
                     }
@@ -189,16 +177,16 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 break;
             case DEVICE_ULTRA:
             case DEVICE_SUPRA:
-                power_management->fan_rpm = EMC2101_get_fan_speed();
+                //power_management->fan_rpm = EMC2101_get_fan_speed();
                 if (GLOBAL_STATE->board_version >= 402 && GLOBAL_STATE->board_version <= 499) {
-                    power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2101_get_external_temp() : -1;
+                    //power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2101_get_external_temp() : -1;
                     power_management->vr_temp = (float)TPS546_get_temperature();
                 } else {
-                    power_management->chip_temp_avg = EMC2101_get_internal_temp() + 5;
+                    //power_management->chip_temp_avg = EMC2101_get_internal_temp() + 5;
                     power_management->vr_temp = 0.0;
                 }
 
-                // EMC2101 will give bad readings if the ASIC is turned off
+                //ASIC Thermal Diode will give bad readings if the ASIC is turned off
                 if(power_management->voltage < TPS546_INIT_VOUT_MIN){
                     break;
                 }
@@ -207,8 +195,8 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 if ((power_management->vr_temp > TPS546_THROTTLE_TEMP || power_management->chip_temp_avg > THROTTLE_TEMP) &&
                     (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
                     ESP_LOGE(TAG, "OVERHEAT! VR: %fC ASIC %fC", power_management->vr_temp, power_management->chip_temp_avg );
-
-                    EMC2101_set_fan_speed(1);
+                    power_management->fan_perc = 100;
+                    Thermal_set_fan_percent(GLOBAL_STATE->device_model, 1);
                     if (GLOBAL_STATE->board_version >= 402 && GLOBAL_STATE->board_version <= 499) {
                         // Turn off core voltage
                         VCORE_set_voltage(0.0, GLOBAL_STATE);
@@ -225,11 +213,11 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 
                 break;
             case DEVICE_GAMMA:
-                power_management->fan_rpm = EMC2101_get_fan_speed();
-                power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2101_get_external_temp() : -1;
+                //power_management->fan_rpm = EMC2101_get_fan_speed();
+                //power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2101_get_external_temp() : -1;
                 power_management->vr_temp = (float)TPS546_get_temperature();
 
-                // EMC2101 will give bad readings if the ASIC is turned off
+                //ASIC Thermal Diode will give bad readings if the ASIC is turned off
                 if(power_management->voltage < TPS546_INIT_VOUT_MIN){
                     break;
                 }
@@ -238,8 +226,8 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 if ((power_management->vr_temp > TPS546_THROTTLE_TEMP || power_management->chip_temp_avg > THROTTLE_TEMP) &&
                     (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
                     ESP_LOGE(TAG, "OVERHEAT! VR: %fC ASIC %fC", power_management->vr_temp, power_management->chip_temp_avg );
-
-                    EMC2101_set_fan_speed(1);
+                    power_management->fan_perc = 100;
+                    Thermal_set_fan_percent(GLOBAL_STATE->device_model, 1);
 
                     // Turn off core voltage
                     VCORE_set_voltage(0.0, GLOBAL_STATE);
@@ -253,11 +241,11 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 }
                 break;
             case DEVICE_GAMMATURBO:
-                power_management->fan_rpm = EMC2103_get_fan_speed();
-                power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2103_get_external_temp() : -1;
+                //power_management->fan_rpm = EMC2103_get_fan_speed();
+                //power_management->chip_temp_avg = GLOBAL_STATE->ASIC_initalized ? EMC2103_get_external_temp() : -1;
                 power_management->vr_temp = (float)TPS546_get_temperature();
 
-                // EMC2101 will give bad readings if the ASIC is turned off
+                // ASIC Thermal Diode will give bad readings if the ASIC is turned off
                 if(power_management->voltage < TPS546_INIT_VOUT_MIN){
                     break;
                 }
@@ -266,8 +254,8 @@ void POWER_MANAGEMENT_task(void * pvParameters)
                 if ((power_management->vr_temp > TPS546_THROTTLE_TEMP || power_management->chip_temp_avg > THROTTLE_TEMP) &&
                     (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
                     ESP_LOGE(TAG, "OVERHEAT! VR: %fC ASIC %fC", power_management->vr_temp, power_management->chip_temp_avg );
-
-                    EMC2103_set_fan_speed(1);
+                    power_management->fan_perc = 100;
+                    Thermal_set_fan_percent(GLOBAL_STATE->device_model, 1);
 
                     // Turn off core voltage
                     VCORE_set_voltage(0.0, GLOBAL_STATE);
@@ -289,25 +277,9 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             power_management->fan_perc = (float)automatic_fan_speed(power_management->chip_temp_avg, GLOBAL_STATE);
 
         } else {
-            float fs;
-            switch (GLOBAL_STATE->device_model) {
-                case DEVICE_MAX:
-                case DEVICE_ULTRA:
-                case DEVICE_SUPRA:
-                case DEVICE_GAMMA:
-                    fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
-                    power_management->fan_perc = fs;
-                    EMC2101_set_fan_speed((float) fs / 100);
-
-                    break;
-                case DEVICE_GAMMATURBO:
-                    fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
-                    power_management->fan_perc = fs;
-                    EMC2103_set_fan_speed((float) fs / 100);
-
-                    break;
-                default:
-            }
+            float fs = (float) nvs_config_get_u16(NVS_CONFIG_FAN_SPEED, 100);
+            power_management->fan_perc = fs;
+            Thermal_set_fan_percent(GLOBAL_STATE->device_model, (float) fs / 100.0);
         }
 
         // Read the state of plug sense pin
