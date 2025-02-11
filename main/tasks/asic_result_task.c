@@ -1,3 +1,5 @@
+#include <lwip/tcpip.h>
+
 #include "system.h"
 #include "work_queue.h"
 #include "serial.h"
@@ -7,7 +9,7 @@
 #include "nvs_config.h"
 #include "utils.h"
 #include "stratum_task.h"
-#include <lwip/tcpip.h>
+#include "asic.h"
 
 static const char *TAG = "asic_result";
 
@@ -17,7 +19,8 @@ void ASIC_result_task(void *pvParameters)
 
     while (1)
     {
-        task_result *asic_result = (*GLOBAL_STATE->ASIC_functions.receive_result_fn)(GLOBAL_STATE);
+        //task_result *asic_result = (*GLOBAL_STATE->ASIC_functions.receive_result_fn)(GLOBAL_STATE);
+        task_result *asic_result = ASIC_proccess_work(GLOBAL_STATE);
 
         if (asic_result == NULL)
         {

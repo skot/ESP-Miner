@@ -236,7 +236,7 @@ static void screen_update_cb(lv_timer_t * timer)
         return;
     }
 
-    if (GLOBAL_STATE->ASIC_functions.init_fn == NULL) {
+    if (GLOBAL_STATE->valid_model == false) {
         screen_show(SCR_INVALID_ASIC);
         return;
     }
