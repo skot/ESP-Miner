@@ -176,7 +176,7 @@ esp_err_t ASIC_set_device_model(GlobalState * GLOBAL_STATE) {
     } else if (strcmp(GLOBAL_STATE->device_model_str, "ultra") == 0) {
         GLOBAL_STATE->asic_model = ASIC_BM1366;
         GLOBAL_STATE->valid_model = true;
-        //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1366_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
+        //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1366_CORE_COUNT * 1000)) / (double) BITAXE_ULTRA_ASIC_COUNT; // version-rolling so Small Cores have different Nonce Space
         GLOBAL_STATE->asic_job_frequency_ms = 2000; //ms
         GLOBAL_STATE->ASIC_difficulty = BM1366_ASIC_DIFFICULTY;
         ESP_LOGI(TAG, "DEVICE: bitaxeUltra");
@@ -186,7 +186,7 @@ esp_err_t ASIC_set_device_model(GlobalState * GLOBAL_STATE) {
     } else if (strcmp(GLOBAL_STATE->device_model_str, "supra") == 0) {
         GLOBAL_STATE->asic_model = ASIC_BM1368;
         GLOBAL_STATE->valid_model = true;
-        //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1368_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
+        //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1368_CORE_COUNT * 1000)) / (double) BITAXE_SUPRA_ASIC_COUNT; // version-rolling so Small Cores have different Nonce Space
         GLOBAL_STATE->asic_job_frequency_ms = 500; //ms
         GLOBAL_STATE->ASIC_difficulty = BM1368_ASIC_DIFFICULTY;
         ESP_LOGI(TAG, "DEVICE: bitaxeSupra");
@@ -196,7 +196,7 @@ esp_err_t ASIC_set_device_model(GlobalState * GLOBAL_STATE) {
     } else if (strcmp(GLOBAL_STATE->device_model_str, "gamma") == 0) {
         GLOBAL_STATE->asic_model = ASIC_BM1370;
         GLOBAL_STATE->valid_model = true;
-        //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1370_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
+        //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1370_CORE_COUNT * 1000)) / (double) BITAXE_GAMMA_ASIC_COUNT; // version-rolling so Small Cores have different Nonce Space
         GLOBAL_STATE->asic_job_frequency_ms = 500; //ms
         GLOBAL_STATE->ASIC_difficulty = BM1370_ASIC_DIFFICULTY;
         ESP_LOGI(TAG, "DEVICE: bitaxeGamma");
@@ -206,7 +206,7 @@ esp_err_t ASIC_set_device_model(GlobalState * GLOBAL_STATE) {
     } else if (strcmp(GLOBAL_STATE->device_model_str, "gammaturbo") == 0) {
         GLOBAL_STATE->asic_model = ASIC_BM1370;
         GLOBAL_STATE->valid_model = true;
-        //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1370_CORE_COUNT * 1000)) / (double) GLOBAL_STATE.asic_count; // version-rolling so Small Cores have different Nonce Space
+        //GLOBAL_STATE.asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value * BM1370_CORE_COUNT * 1000)) / (double) BITAXE_GAMMATURBO_ASIC_COUNT; // version-rolling so Small Cores have different Nonce Space
         GLOBAL_STATE->asic_job_frequency_ms = 500; //ms
         GLOBAL_STATE->ASIC_difficulty = BM1370_ASIC_DIFFICULTY;
         ESP_LOGI(TAG, "DEVICE: bitaxeGammaTurbo");
