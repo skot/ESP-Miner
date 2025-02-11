@@ -118,7 +118,7 @@ int TPS546_get_temperature(void);
 float TPS546_get_vin(void);
 float TPS546_get_iout(void);
 float TPS546_get_vout(void);
-void TPS546_set_vout(float volts);
+esp_err_t TPS546_set_vout(float volts);
 void TPS546_show_voltage_settings(void);
 void TPS546_print_status(void);
 

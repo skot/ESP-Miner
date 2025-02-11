@@ -44,34 +44,28 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
         ESP_LOGI(TAG, "DEVICE: Max");
         GLOBAL_STATE->device_model = DEVICE_MAX;
         GLOBAL_STATE->asic_count = 1;
-        GLOBAL_STATE->voltage_domain = 1;
     } else if (strcmp(GLOBAL_STATE->device_model_str, "ultra") == 0) {
         ESP_LOGI(TAG, "DEVICE: Ultra");
         GLOBAL_STATE->device_model = DEVICE_ULTRA;
         GLOBAL_STATE->asic_count = 1;
-        GLOBAL_STATE->voltage_domain = 1;
     } else if (strcmp(GLOBAL_STATE->device_model_str, "supra") == 0) {
         ESP_LOGI(TAG, "DEVICE: Supra");
         GLOBAL_STATE->device_model = DEVICE_SUPRA;
         GLOBAL_STATE->asic_count = 1;
-        GLOBAL_STATE->voltage_domain = 1;
     } else if (strcmp(GLOBAL_STATE->device_model_str, "gamma") == 0) {
         ESP_LOGI(TAG, "DEVICE: Gamma");
         GLOBAL_STATE->device_model = DEVICE_GAMMA;
         GLOBAL_STATE->asic_count = 1;
-        GLOBAL_STATE->voltage_domain = 1;
     } else if (strcmp(GLOBAL_STATE->device_model_str, "gammaturbo") == 0) {
         ESP_LOGI(TAG, "DEVICE: GammaTurbo");
         GLOBAL_STATE->device_model = DEVICE_GAMMATURBO;
         GLOBAL_STATE->asic_count = 2;
-        GLOBAL_STATE->voltage_domain = 1;
     } else {
         ESP_LOGE(TAG, "Invalid DEVICE model");
         // maybe should return here to now execute anything with a faulty device parameter !
         // this stops crashes/reboots and allows dev testing without an asic
         GLOBAL_STATE->device_model = DEVICE_UNKNOWN;
         GLOBAL_STATE->asic_count = -1;
-        GLOBAL_STATE->voltage_domain = 1;
 
         return ESP_FAIL;
     }
