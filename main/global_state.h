@@ -101,8 +101,6 @@ typedef struct
     AsicModel asic_model;
     bool valid_model;
     char * asic_model_str;
-    //uint16_t asic_count;
-    //AsicFunctions ASIC_functions;
     double asic_job_frequency_ms;
     uint32_t ASIC_difficulty;
 
