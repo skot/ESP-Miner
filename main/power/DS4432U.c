@@ -66,6 +66,8 @@ esp_err_t DS4432U_set_voltage(float vout) {
     }
 
     ESP_RETURN_ON_ERROR(DS4432U_set_current_code(0, reg), TAG, "DS4432U set current code failed!");
+
+    return ESP_OK;
 }
 
 /**
