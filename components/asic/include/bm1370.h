@@ -15,13 +15,7 @@
 
 static const uint64_t BM1370_CORE_COUNT = 128;
 static const uint64_t BM1370_SMALL_CORE_COUNT = 2040;
-static const float BM1370_NONCE_PERCENT = (float)BM1370_CORE_COUNT/256.0; //maximum nonce space with 1 chip
 static const float BM1370_MIDSTATE_ENGINES = 16.0;
-static const int BM1370_HCN = 7861;
-static const float BM1370_HCN_MAX = 430000.0;
-static const float BM1370_HCN_PERCENT = (float)BM1370_HCN/BM1370_HCN_MAX; //hcn limit effect
-static const float BM1370_VERSION_PERCENT = 1.0;                          //version scan percent
-static const float BM1370_FULLSCAN_PERCENT = 0.5;                         //normalised value 1 means do the maximum space, 0 dont wait before sending work
 
 typedef struct
 {
@@ -50,7 +44,5 @@ int BM1370_set_max_baud(void);
 int BM1370_set_default_baud(void);
 void BM1370_send_hash_frequency(int, float, float);
 task_result * BM1370_proccess_work(void * GLOBAL_STATE);
-uint8_t BM1370_get_chip_address_interval(int chips);
-int BM1370_get_timeout(uint64_t frequency, uint16_t asic_count,int versions_to_roll);
-
+float BM1370_set_nonce_percent_and_get_timeout(uint64_t frequency, uint16_t chain_chip_count, int versions_to_roll, float nonce_percent, float timeout_percent);
 #endif /* BM1370_H_ */

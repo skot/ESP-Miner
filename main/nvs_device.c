@@ -86,8 +86,7 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_difficulty_mask_fn = BM1366_set_job_difficulty_mask,
                                         .send_work_fn = BM1366_send_work,
                                         .set_version_mask = BM1366_set_version_mask,
-                                        .get_chip_address_interval_fn = BM1366_get_chip_address_interval,
-                                        .get_timeout_fn=BM1366_get_timeout};
+                                        .set_nonce_percent_and_get_timeout_fn=BM1366_set_nonce_percent_and_get_timeout};
         GLOBAL_STATE->ASIC_difficulty = BM1366_ASIC_DIFFICULTY;
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
         } else if (strcmp(GLOBAL_STATE->asic_model_str, "BM1370") == 0) {
@@ -99,8 +98,7 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_difficulty_mask_fn = BM1370_set_job_difficulty_mask,
                                         .send_work_fn = BM1370_send_work,
                                         .set_version_mask = BM1370_set_version_mask,
-                                        .get_chip_address_interval_fn = BM1370_get_chip_address_interval,
-                                        .get_timeout_fn=BM1370_get_timeout};
+                                        .set_nonce_percent_and_get_timeout_fn=BM1370_set_nonce_percent_and_get_timeout};
         GLOBAL_STATE->ASIC_difficulty = BM1370_ASIC_DIFFICULTY;
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
     } else if (strcmp(GLOBAL_STATE->asic_model_str, "BM1368") == 0) {
@@ -112,8 +110,7 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_difficulty_mask_fn = BM1368_set_job_difficulty_mask,
                                         .send_work_fn = BM1368_send_work,
                                         .set_version_mask = BM1368_set_version_mask,
-                                        .get_chip_address_interval_fn = BM1368_get_chip_address_interval,
-                                        .get_timeout_fn=BM1368_get_timeout};
+                                        .set_nonce_percent_and_get_timeout_fn=BM1368_set_nonce_percent_and_get_timeout};
         GLOBAL_STATE->ASIC_difficulty = BM1368_ASIC_DIFFICULTY;
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
     } else if (strcmp(GLOBAL_STATE->asic_model_str, "BM1397") == 0) {
@@ -125,8 +122,7 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
                                         .set_difficulty_mask_fn = BM1397_set_job_difficulty_mask,
                                         .send_work_fn = BM1397_send_work,
                                         .set_version_mask = BM1397_set_version_mask,
-                                        .get_chip_address_interval_fn = BM1397_get_chip_address_interval,
-                                        .get_timeout_fn=BM1397_get_timeout};
+                                        .set_nonce_percent_and_get_timeout_fn=BM1397_set_nonce_percent_and_get_timeout};
         GLOBAL_STATE->ASIC_difficulty = BM1397_ASIC_DIFFICULTY;
         GLOBAL_STATE->ASIC_functions = ASIC_functions;
     } else {

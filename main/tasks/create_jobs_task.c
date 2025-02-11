@@ -5,12 +5,17 @@
 #include "mining.h"
 #include <limits.h>
 #include "string.h"
+#include "common.h"
 
 #include <sys/time.h>
 
 static const char *TAG = "create_jobs_task";
 
 #define QUEUE_LOW_WATER_MARK 10 // Adjust based on your requirements
+
+// job control
+#define NONCE_PERCENT 1.0
+#define TIMEOUT_PERCENT 1.0
 
 static bool should_generate_more_work(GlobalState *GLOBAL_STATE);
 static void generate_work(GlobalState *GLOBAL_STATE, mining_notify *notification, uint32_t extranonce_2);
@@ -35,7 +40,7 @@ void create_jobs_task(void *pvParameters)
             ESP_LOGI(TAG, "Set chip version rolls %i", version_rolls);
 
             // update timeout of chip
-            GLOBAL_STATE->asic_job_frequency_ms = (GLOBAL_STATE->ASIC_functions.get_timeout_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE->asic_count,version_rolls);
+            GLOBAL_STATE->asic_job_frequency_ms = (GLOBAL_STATE->ASIC_functions.set_nonce_percent_and_get_timeout_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE->asic_count,version_rolls,NONCE_PERCENT,TIMEOUT_PERCENT);
             ESP_LOGI(TAG, "Set chip fullscan %f", GLOBAL_STATE->asic_job_frequency_ms);
 
             (GLOBAL_STATE->ASIC_functions.set_version_mask)(GLOBAL_STATE->version_mask);
