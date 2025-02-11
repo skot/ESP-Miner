@@ -1,6 +1,9 @@
 #ifndef TPS546_H_
 #define TPS546_H_
 
+#include <stdint.h>
+#include <esp_err.h>
+
 #define TPS546_I2CADDR         0x24  //< TPS546 i2c address
 #define TPS546_MANUFACTURER_ID 0xFE  //< Manufacturer ID
 #define TPS546_REVISION        0xFF  //< Chip revision
@@ -69,7 +72,7 @@
 
 
 /* public functions */
-int TPS546_init(void);
+esp_err_t TPS546_init(void);
 void TPS546_read_mfr_info(uint8_t *);
 void TPS546_set_mfr_info(void);
 void TPS546_write_entire_config(void);

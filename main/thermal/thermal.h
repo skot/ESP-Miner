@@ -2,6 +2,7 @@
 #define THERMAL_H
 
 #include <stdbool.h>
+#include <esp_err.h>
 
 #include "EMC2101.h"
 #include "EMC2103.h"

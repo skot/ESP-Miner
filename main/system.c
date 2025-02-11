@@ -100,20 +100,6 @@ void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
 
     Thermal_init(GLOBAL_STATE->device_model, nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
 
-    //initialize the INA260, if we have one.
-    switch (GLOBAL_STATE->device_model) {
-        case DEVICE_MAX:
-        case DEVICE_ULTRA:
-        case DEVICE_SUPRA:
-            if (GLOBAL_STATE->board_version < 402) {
-                INA260_init();
-            }
-            break;
-        case DEVICE_GAMMA:
-        case DEVICE_GAMMATURBO:
-        default:
-    }
-
     vTaskDelay(500 / portTICK_PERIOD_MS);
 
     // Ensure overheat_mode config exists
