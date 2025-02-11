@@ -39,15 +39,15 @@ typedef enum
     ASIC_BM1370,
 } AsicModel;
 
-typedef struct
-{
-    uint8_t (*init_fn)(uint64_t, uint16_t);
-    task_result * (*receive_result_fn)(void * GLOBAL_STATE);
-    int (*set_max_baud_fn)(void);
-    void (*set_difficulty_mask_fn)(int);
-    void (*send_work_fn)(void * GLOBAL_STATE, bm_job * next_bm_job);
-    void (*set_version_mask)(uint32_t);
-} AsicFunctions;
+// typedef struct
+// {
+//     uint8_t (*init_fn)(uint64_t, uint16_t);
+//     task_result * (*receive_result_fn)(void * GLOBAL_STATE);
+//     int (*set_max_baud_fn)(void);
+//     void (*set_difficulty_mask_fn)(int);
+//     void (*send_work_fn)(void * GLOBAL_STATE, bm_job * next_bm_job);
+//     void (*set_version_mask)(uint32_t);
+// } AsicFunctions;
 
 typedef struct
 {
@@ -99,9 +99,10 @@ typedef struct
     char * device_model_str;
     int board_version;
     AsicModel asic_model;
+    bool valid_model;
     char * asic_model_str;
-    uint16_t asic_count;
-    AsicFunctions ASIC_functions;
+    //uint16_t asic_count;
+    //AsicFunctions ASIC_functions;
     double asic_job_frequency_ms;
     uint32_t ASIC_difficulty;
 

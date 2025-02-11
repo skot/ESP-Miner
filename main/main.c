@@ -20,6 +20,7 @@
 #include "adc.h"
 #include "nvs_device.h"
 #include "self_test.h"
+#include "asic.h"
 
 static GlobalState GLOBAL_STATE = {
     .extranonce_str = NULL, 
@@ -124,15 +125,17 @@ void app_main(void)
 
     GLOBAL_STATE.new_stratum_version_rolling_msg = false;
 
-    if (GLOBAL_STATE.ASIC_functions.init_fn != NULL) {
+    if (GLOBAL_STATE.valid_model) {
         wifi_softap_off();
 
         queue_init(&GLOBAL_STATE.stratum_queue);
         queue_init(&GLOBAL_STATE.ASIC_jobs_queue);
 
         SERIAL_init();
-        (*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE.asic_count);
-        SERIAL_set_baud((*GLOBAL_STATE.ASIC_functions.set_max_baud_fn)());
+        //(*GLOBAL_STATE.ASIC_functions.init_fn)(GLOBAL_STATE.POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE.asic_count);
+        ASIC_init(&GLOBAL_STATE);
+        //SERIAL_set_baud((*GLOBAL_STATE.ASIC_functions.set_max_baud_fn)());
+        SERIAL_set_baud(ASIC_set_max_baud(&GLOBAL_STATE));
         SERIAL_clear_buffer();
 
         GLOBAL_STATE.ASIC_initalized = true;
