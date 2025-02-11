@@ -853,24 +853,26 @@ esp_err_t TPS546_parse_status(uint16_t status) {
  * send a 0 to turn off the output
  * @param volts The desired output voltage
 **/
-void TPS546_set_vout(float volts)
-{
+esp_err_t TPS546_set_vout(float volts) {
     uint16_t value;
 
     if (volts == 0) {
         /* turn off output */
         if (smb_write_byte(PMBUS_OPERATION, OPERATION_OFF) != ESP_OK) {
             ESP_LOGE(TAG, "Could not turn off Vout");
+            return ESP_FAIL;
         }
     } else {
         /* make sure we're in range */
         if ((volts < tps546_config.TPS546_INIT_VOUT_MIN) || (volts > tps546_config.TPS546_INIT_VOUT_MAX)) {
             ESP_LOGE(TAG, "Voltage requested (%f V) is out of range", volts);
+            return ESP_FAIL;
         } else {
             /* set the output voltage */
             value = float_2_ulinear16(volts);
             if (smb_write_word(PMBUS_VOUT_COMMAND, value) != ESP_OK) {
                 ESP_LOGE(TAG, "Could not set Vout to %1.2f V", volts);
+                return ESP_FAIL;
             }
 
             ESP_LOGI(TAG, "Vout changed to %1.2f V", volts);
@@ -878,9 +880,12 @@ void TPS546_set_vout(float volts)
             /* turn on output */
            if (smb_write_byte(PMBUS_OPERATION, OPERATION_ON) != ESP_OK) {
                 ESP_LOGE(TAG, "Could not turn on Vout");
+                return ESP_FAIL;
             }
+
         }
     }
+    return ESP_OK;
 }
 
 void TPS546_show_voltage_settings(void)
