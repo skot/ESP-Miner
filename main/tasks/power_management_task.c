@@ -91,9 +91,9 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 
 
         // ASIC Thermal Diode will give bad readings if the ASIC is turned off
-        if(power_management->voltage < TPS546_INIT_VOUT_MIN){
-            goto looper;
-        }
+        // if(power_management->voltage < tps546_config.TPS546_INIT_VOUT_MIN){
+        //     goto looper;
+        // }
 
         //overheat mode if the voltage regulator or ASIC is too hot
         if ((power_management->vr_temp > TPS546_THROTTLE_TEMP || power_management->chip_temp_avg > THROTTLE_TEMP) && (power_management->frequency_value > 50 || power_management->voltage > 1000)) {
@@ -161,7 +161,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             ESP_LOGI(TAG, "Overheat mode updated to: %d", module->overheat_mode);
         }
 
-        looper:
+        // looper:
         vTaskDelay(POLL_RATE / portTICK_PERIOD_MS);
     }
 }
