@@ -6,6 +6,11 @@
 #include "adc.h"
 #include "DS4432U.h"
 #include "TPS546.h"
+#include "INA260.h"
+
+#define GPIO_ASIC_ENABLE CONFIG_GPIO_ASIC_ENABLE
+#define GPIO_ASIC_RESET  CONFIG_GPIO_ASIC_RESET
+#define GPIO_PLUG_SENSE  CONFIG_GPIO_PLUG_SENSE
 
 #define TPS40305_VFB 0.6
 
@@ -21,30 +26,59 @@
 
 static const char *TAG = "vcore.c";
 
-esp_err_t VCORE_init(GlobalState * global_state) {
-    switch (global_state->device_model) {
+esp_err_t VCORE_init(GlobalState * GLOBAL_STATE) {
+    switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
-            if (global_state->board_version >= 402 && global_state->board_version <= 499) {
+            if (GLOBAL_STATE->board_version >= 402 && GLOBAL_STATE->board_version <= 499) {
                 if (TPS546_init() != ESP_OK) {
                     ESP_LOGE(TAG, "TPS546 init failed!");
                     return ESP_FAIL;
                 }
             } else {
                 ESP_RETURN_ON_ERROR(DS4432U_init(), TAG, "DS4432 init failed!");
+                ESP_RETURN_ON_ERROR(INA260_init(), TAG, "INA260 init failed!");
             }
             break;
         case DEVICE_GAMMA:
         case DEVICE_GAMMATURBO:
-            if (TPS546_init() != ESP_OK) {
-                ESP_LOGE(TAG, "TPS546 init failed!");
-                return ESP_FAIL;
-            }
+            ESP_RETURN_ON_ERROR(TPS546_init(), TAG, "TPS546 init failed!");
             break;
         // case DEVICE_HEX:
         default:
     }
+
+    //configure plug sense, if present
+    switch (GLOBAL_STATE->device_model) {
+        case DEVICE_MAX:
+        case DEVICE_ULTRA:
+        case DEVICE_SUPRA:
+			if (GLOBAL_STATE->board_version < 402 || GLOBAL_STATE->board_version > 499) {
+                // Configure plug sense pin as input(barrel jack) 1 is plugged in
+                gpio_config_t barrel_jack_conf = {
+                    .pin_bit_mask = (1ULL << GPIO_PLUG_SENSE),
+                    .mode = GPIO_MODE_INPUT,
+                };
+                gpio_config(&barrel_jack_conf);
+                int barrel_jack_plugged_in = gpio_get_level(GPIO_PLUG_SENSE);
+
+                gpio_set_direction(GPIO_ASIC_ENABLE, GPIO_MODE_OUTPUT);
+                if (barrel_jack_plugged_in == 1 || GLOBAL_STATE->board_version != 204) {
+                    // turn ASIC on
+                    gpio_set_level(GPIO_ASIC_ENABLE, 0);
+                } else {
+                    // turn ASIC off
+                    gpio_set_level(GPIO_ASIC_ENABLE, 1);
+                }
+			}
+            break;
+        case DEVICE_GAMMA:
+        case DEVICE_GAMMATURBO:
+            break;
+        default:
+    }
+
     return ESP_OK;
 }
 

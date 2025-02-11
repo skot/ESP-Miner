@@ -1,4 +1,3 @@
-#include <esp_err.h>
 #include "thermal.h"
 
 #define INTERNAL_OFFSET 5 //degrees C

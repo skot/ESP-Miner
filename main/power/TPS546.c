@@ -1,5 +1,4 @@
 #include <stdio.h>
-#include <stdint.h>
 #include <math.h>
 #include <string.h>
 #include "esp_log.h"
@@ -318,7 +317,7 @@ static uint16_t float_2_ulinear16(float value)
 /**
  * @brief Set up the TPS546 regulator and turn it on
 */
-int TPS546_init(void)
+esp_err_t TPS546_init(void)
 {
 	uint8_t data[7];
     uint8_t u8_value;
@@ -332,7 +331,7 @@ int TPS546_init(void)
 
     if (i2c_bitaxe_add_device(TPS546_I2CADDR, &tps546_dev_handle, TAG) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to add I2C device");
-        return -1;
+        return ESP_FAIL;
     }
 
     /* Establish communication with regulator */
@@ -342,7 +341,7 @@ int TPS546_init(void)
     if ( (memcmp(data, DEVICE_ID1, 6) != 0) && (memcmp(data, DEVICE_ID2, 6) != 0) && (memcmp(data, DEVICE_ID3, 6) != 0))
     {
         ESP_LOGE(TAG, "Cannot find TPS546 regulator - Device ID mismatch");
-        return -1;
+        return ESP_FAIL;
     }
 
     /* Make sure power is turned off until commanded */
@@ -408,13 +407,13 @@ int TPS546_init(void)
     // Read the compensation config registers
     if (smb_read_block(PMBUS_COMPENSATION_CONFIG, comp_config, 5) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to read COMPENSATION CONFIG");
-        return -1;
+        return ESP_FAIL;
     }
     ESP_LOGI(TAG, "COMPENSATION CONFIG");
     ESP_LOGI(TAG, "%02x %02x %02x %02x %02x", comp_config[0], comp_config[1],
         comp_config[2], comp_config[3], comp_config[4]);
 
-    return 0;
+    return ESP_OK;
 }
 
 /**
