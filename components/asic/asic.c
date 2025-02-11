@@ -163,6 +163,11 @@ void ASIC_set_version_mask(GlobalState * GLOBAL_STATE, uint32_t mask) {
 
 esp_err_t ASIC_set_device_model(GlobalState * GLOBAL_STATE) {
 
+    if (GLOBAL_STATE->device_model_str == NULL) {
+        ESP_LOGE(TAG, "No device model string found");
+        return ESP_FAIL;
+    }
+
     if (strcmp(GLOBAL_STATE->device_model_str, "max") == 0) {
         ESP_LOGI(TAG, "DEVICE: bitaxeMax");
         ESP_LOGI(TAG, "ASIC: %dx BM1397 (%" PRIu64 " cores)", BITAXE_MAX_ASIC_COUNT, BM1397_CORE_COUNT);
@@ -213,7 +218,7 @@ esp_err_t ASIC_set_device_model(GlobalState * GLOBAL_STATE) {
         // maybe should return here to now execute anything with a faulty device parameter !
         // this stops crashes/reboots and allows dev testing without an asic
         GLOBAL_STATE->device_model = DEVICE_UNKNOWN;
-
+        GLOBAL_STATE->valid_model = false;
         return ESP_FAIL;
     }
     return ESP_OK;

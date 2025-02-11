@@ -40,13 +40,15 @@ esp_err_t NVSDevice_parse_config(GlobalState * GLOBAL_STATE) {
     GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value = nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY);
     ESP_LOGI(TAG, "NVS_CONFIG_ASIC_FREQ %f", (float)GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value);
 
-    ESP_RETURN_ON_ERROR(ASIC_set_device_model(GLOBAL_STATE), TAG, "Failed to get device model");
-
-    GLOBAL_STATE->board_version = atoi(nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "000"));
+    GLOBAL_STATE->asic_model_str = nvs_config_get_string(NVS_CONFIG_ASIC_MODEL, "");
+    GLOBAL_STATE->device_model_str = nvs_config_get_string(NVS_CONFIG_DEVICE_MODEL, "invalid");
+    char * board_version = nvs_config_get_string(NVS_CONFIG_BOARD_VERSION, "000");
+    GLOBAL_STATE->board_version = atoi(board_version);
+    free(board_version);
     ESP_LOGI(TAG, "Found Device Model: %s", GLOBAL_STATE->device_model_str);
     ESP_LOGI(TAG, "Found Board Version: %d", GLOBAL_STATE->board_version);
 
-    GLOBAL_STATE->asic_model_str = nvs_config_get_string(NVS_CONFIG_ASIC_MODEL, "");
+    ESP_RETURN_ON_ERROR(ASIC_set_device_model(GLOBAL_STATE), TAG, "Failed to get device model");
 
     return ESP_OK;
 }
