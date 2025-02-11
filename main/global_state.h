@@ -46,6 +46,7 @@ typedef struct
     void (*set_difficulty_mask_fn)(int);
     void (*send_work_fn)(void * GLOBAL_STATE, bm_job * next_bm_job);
     void (*set_version_mask)(uint32_t);
+    float (*set_nonce_percent_and_get_timeout_fn)(uint64_t frequency, uint16_t chips_in_chain, int versions_to_roll, float nonce_percent, float timeout_percent);
 } AsicFunctions;
 
 typedef struct
@@ -124,6 +125,8 @@ typedef struct
     uint32_t stratum_difficulty;
     uint32_t version_mask;
     bool new_stratum_version_rolling_msg;
+    double asic_nonce_percent;
+    double asic_timeout_percent;
 
     int sock;
 
