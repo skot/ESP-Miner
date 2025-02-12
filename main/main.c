@@ -34,7 +34,7 @@ static const char * TAG = "bitaxe";
 
 void app_main(void)
 {
-    ESP_LOGI(TAG, "Welcome to the bitaxe - hack the planet!");
+    ESP_LOGI(TAG, "Welcome to the bitaxe - FOSS || GTFO!");
 
     if (!esp_psram_is_initialized()) {
         ESP_LOGE(TAG, "No PSRAM available on ESP32 device!");
