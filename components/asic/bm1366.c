@@ -15,7 +15,11 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define BM1366_RST_PIN GPIO_NUM_1
+#ifdef CONFIG_GPIO_ASIC_RESET
+#define GPIO_ASIC_RESET CONFIG_GPIO_ASIC_RESET
+#else
+#define GPIO_ASIC_RESET 1
+#endif
 
 #define TYPE_JOB 0x20
 #define TYPE_CMD 0x40
@@ -318,13 +322,13 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
 // reset the BM1366 via the RTS line
 static void _reset(void)
 {
-    gpio_set_level(BM1366_RST_PIN, 0);
+    gpio_set_level(GPIO_ASIC_RESET, 0);
 
     // delay for 100ms
     vTaskDelay(100 / portTICK_PERIOD_MS);
 
     // set the gpio pin high
-    gpio_set_level(BM1366_RST_PIN, 1);
+    gpio_set_level(GPIO_ASIC_RESET, 1);
 
     // delay for 100ms
     vTaskDelay(100 / portTICK_PERIOD_MS);
@@ -344,8 +348,8 @@ uint8_t BM1366_init(uint64_t frequency, uint16_t asic_count)
 
     memset(asic_response_buffer, 0, SERIAL_BUF_SIZE);
 
-    esp_rom_gpio_pad_select_gpio(BM1366_RST_PIN);
-    gpio_set_direction(BM1366_RST_PIN, GPIO_MODE_OUTPUT);
+    esp_rom_gpio_pad_select_gpio(GPIO_ASIC_RESET);
+    gpio_set_direction(GPIO_ASIC_RESET, GPIO_MODE_OUTPUT);
 
     // reset the bm1366
     _reset();
@@ -500,7 +504,7 @@ task_result * BM1366_proccess_work(void * pvParameters)
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
     if (GLOBAL_STATE->valid_jobs[job_id] == 0) {
-        ESP_LOGE(TAG, "Invalid job found, 0x%02X", job_id);
+        ESP_LOGW(TAG, "Invalid job found, 0x%02X", job_id);
         return NULL;
     }
 

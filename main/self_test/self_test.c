@@ -21,6 +21,11 @@
 #include "vcore.h"
 #include "utils.h"
 #include "TPS546.h"
+#include "esp_psram.h"
+
+#include "asic.h"
+
+#define GPIO_ASIC_ENABLE CONFIG_GPIO_ASIC_ENABLE
 
 #define TESTS_FAILED 0
 #define TESTS_PASSED 1
@@ -47,6 +52,8 @@
 
 static const char * TAG = "self_test";
 
+SemaphoreHandle_t BootSemaphore;
+
 //local function prototypes
 static void tests_done(GlobalState * GLOBAL_STATE, bool test_result);
 
@@ -61,9 +68,9 @@ bool should_test(GlobalState * GLOBAL_STATE) {
 }
 
 static void reset_self_test() {
-    ESP_LOGI(TAG, "Long press detected, resetting self test flag and rebooting...");
-    nvs_config_set_u16(NVS_CONFIG_SELF_TEST, 0);
-    esp_restart();
+    ESP_LOGI(TAG, "Long press detected...");
+    // Give the semaphore back
+    xSemaphoreGive(BootSemaphore);
 }
 
 static void display_msg(char * msg, GlobalState * GLOBAL_STATE) 
@@ -212,8 +219,8 @@ esp_err_t test_voltage_regulator(GlobalState * GLOBAL_STATE) {
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
             // turn ASIC on
-            gpio_set_direction(GPIO_NUM_10, GPIO_MODE_OUTPUT);
-            gpio_set_level(GPIO_NUM_10, 0);
+            gpio_set_direction(GPIO_ASIC_ENABLE, GPIO_MODE_OUTPUT);
+            gpio_set_level(GPIO_ASIC_ENABLE, 0);
             break;
         case DEVICE_GAMMA:
         default:
@@ -286,6 +293,15 @@ esp_err_t test_init_peripherals(GlobalState * GLOBAL_STATE) {
     return ESP_OK;
 }
 
+esp_err_t test_psram(GlobalState * GLOBAL_STATE){
+    if(!esp_psram_is_initialized()) {
+        ESP_LOGE(TAG, "No PSRAM available on ESP32!");
+        display_msg("PSRAM:FAIL", GLOBAL_STATE);
+        return ESP_FAIL;
+    }
+    return ESP_OK;
+}
+
 /**
  * @brief Perform a self-test of the system.
  *
@@ -301,6 +317,20 @@ void self_test(void * pvParameters)
     ESP_LOGI(TAG, "Running Self Tests");
 
     GLOBAL_STATE->SELF_TEST_MODULE.active = true;
+
+    // Create a binary semaphore
+    BootSemaphore = xSemaphoreCreateBinary();
+
+    if (BootSemaphore == NULL) {
+        ESP_LOGE(TAG, "Failed to create semaphore");
+        return;
+    }
+
+    //Run PSRAM test
+    if(test_psram(GLOBAL_STATE) != ESP_OK) {
+        ESP_LOGE(TAG, "NO PSRAM on device!");
+        tests_done(GLOBAL_STATE, TESTS_FAILED);
+    }
 
     //Run display tests
     if (test_display(GLOBAL_STATE) != ESP_OK) {
@@ -338,11 +368,12 @@ void self_test(void * pvParameters)
         tests_done(GLOBAL_STATE, TESTS_FAILED);
     }
 
-    uint8_t chips_detected = (GLOBAL_STATE->ASIC_functions.init_fn)(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value, GLOBAL_STATE->asic_count);
-    ESP_LOGI(TAG, "%u chips detected, %u expected", chips_detected, GLOBAL_STATE->asic_count);
+    uint8_t chips_detected = ASIC_init(GLOBAL_STATE);
+    uint8_t chips_expected = ASIC_get_asic_count(GLOBAL_STATE);
+    ESP_LOGI(TAG, "%u chips detected, %u expected", chips_detected, chips_expected);
 
-    if (chips_detected != GLOBAL_STATE->asic_count) {
-        ESP_LOGE(TAG, "SELF TEST FAIL, %d of %d CHIPS DETECTED", chips_detected, GLOBAL_STATE->asic_count);
+    if (chips_detected != chips_expected) {
+        ESP_LOGE(TAG, "SELF TEST FAIL, %d of %d CHIPS DETECTED", chips_detected, chips_expected);
         char error_buf[20];
         snprintf(error_buf, 20, "ASIC:FAIL %d CHIPS", chips_detected);
         display_msg(error_buf, GLOBAL_STATE);
@@ -350,7 +381,7 @@ void self_test(void * pvParameters)
     }
 
     //setup and test hashrate
-    int baud = (*GLOBAL_STATE->ASIC_functions.set_max_baud_fn)();
+    int baud = ASIC_set_max_baud(GLOBAL_STATE);
     vTaskDelay(10 / portTICK_PERIOD_MS);
 
     if (SERIAL_set_baud(baud) != ESP_OK) {
@@ -358,8 +389,8 @@ void self_test(void * pvParameters)
         tests_done(GLOBAL_STATE, TESTS_FAILED);
     }
 
-    GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs = heap_caps_malloc(sizeof(bm_job *) * 128, MALLOC_CAP_SPIRAM);
-    GLOBAL_STATE->valid_jobs = heap_caps_malloc(sizeof(uint8_t) * 128, MALLOC_CAP_SPIRAM);
+    GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs = malloc(sizeof(bm_job *) * 128);
+    GLOBAL_STATE->valid_jobs = malloc(sizeof(uint8_t) * 128);
 
     for (int i = 0; i < 128; i++) {
         GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[i] = NULL;
@@ -409,11 +440,13 @@ void self_test(void * pvParameters)
 
     uint8_t difficulty_mask = 8;
 
-    (*GLOBAL_STATE->ASIC_functions.set_difficulty_mask_fn)(difficulty_mask);
+    //(*GLOBAL_STATE->ASIC_functions.set_difficulty_mask_fn)(difficulty_mask);
+    ASIC_set_job_difficulty_mask(GLOBAL_STATE, difficulty_mask);
 
     ESP_LOGI(TAG, "Sending work");
 
-    (*GLOBAL_STATE->ASIC_functions.send_work_fn)(GLOBAL_STATE, &job);
+    //(*GLOBAL_STATE->ASIC_functions.send_work_fn)(GLOBAL_STATE, &job);
+    ASIC_send_work(GLOBAL_STATE, &job);
     
      double start = esp_timer_get_time();
      double sum = 0;
@@ -421,7 +454,7 @@ void self_test(void * pvParameters)
      double hash_rate = 0;
 
     while(duration < 3){
-        task_result * asic_result = (*GLOBAL_STATE->ASIC_functions.receive_result_fn)(GLOBAL_STATE);
+        task_result * asic_result = ASIC_proccess_work(GLOBAL_STATE);
         if (asic_result != NULL) {
             // check the nonce difficulty
             double nonce_diff = test_nonce_value(&job, asic_result->nonce, asic_result->rolled_version);
@@ -495,18 +528,12 @@ void self_test(void * pvParameters)
     }
 
     tests_done(GLOBAL_STATE, TESTS_PASSED);
-    ESP_LOGI(TAG, "Self Tests Passed!!!");
+
     return;  
 }
 
 static void tests_done(GlobalState * GLOBAL_STATE, bool test_result) 
 {
-    if (test_result == TESTS_PASSED) {
-        ESP_LOGI(TAG, "SELF TESTS PASS -- Press RESET to continue");
-    } else {
-        ESP_LOGI(TAG, "SELF TESTS FAIL -- Press RESET to continue");
-    }
-    
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
@@ -518,6 +545,20 @@ static void tests_done(GlobalState * GLOBAL_STATE, bool test_result)
         default:
     }
 
-    //wait here for a long press to reboot
-    vTaskDelay(portMAX_DELAY);
+    if (test_result == TESTS_FAILED) {
+        ESP_LOGI(TAG, "SELF TESTS FAIL -- Press RESET to continue");  
+        while (1) {
+            // Wait here forever until reset_self_test() gives the BootSemaphore
+            if (xSemaphoreTake(BootSemaphore, portMAX_DELAY) == pdTRUE) {
+                nvs_config_set_u16(NVS_CONFIG_SELF_TEST, 0);
+                //wait 100ms for nvs write to finish?
+                vTaskDelay(100 / portTICK_PERIOD_MS);
+                esp_restart();
+            }
+        }
+    } else {
+        nvs_config_set_u16(NVS_CONFIG_SELF_TEST, 0);
+        ESP_LOGI(TAG, "Self Tests Passed!!!");
+    }
+
 }

@@ -1,5 +1,4 @@
 #include "http_server.h"
-#include "recovery_page.h"
 #include "theme_api.h"  // Add theme API include
 #include "cJSON.h"
 #include "esp_chip_info.h"
@@ -16,6 +15,7 @@
 #include "global_state.h"
 #include "nvs_config.h"
 #include "vcore.h"
+#include "connect.h"
 #include <fcntl.h>
 #include <string.h>
 #include <sys/param.h>
@@ -32,13 +32,54 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include <pthread.h>
+#include "connect.h"
+
+#include "asic.h"
 
 static const char * TAG = "http_server";
+static const char * CORS_TAG = "CORS";
+
+/* Handler for WiFi scan endpoint */
+static esp_err_t GET_wifi_scan(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "application/json");
+    
+    // Give some time for the connected flag to take effect
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    
+    wifi_ap_record_simple_t ap_records[20];
+    uint16_t ap_count = 0;
+
+    esp_err_t err = wifi_scan(ap_records, &ap_count);
+    if (err != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "WiFi scan failed");
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON *networks = cJSON_CreateArray();
+
+    for (int i = 0; i < ap_count; i++) {
+        cJSON *network = cJSON_CreateObject();
+        cJSON_AddStringToObject(network, "ssid", (char *)ap_records[i].ssid);
+        cJSON_AddNumberToObject(network, "rssi", ap_records[i].rssi);
+        cJSON_AddNumberToObject(network, "authmode", ap_records[i].authmode);
+        cJSON_AddItemToArray(networks, network);
+    }
+
+    cJSON_AddItemToObject(root, "networks", networks);
+
+    const char *response = cJSON_Print(root);
+    httpd_resp_sendstr(req, response);
+
+    free((void *)response);
+    cJSON_Delete(root);
+    return ESP_OK;
+}
 
 static GlobalState * GLOBAL_STATE;
 static httpd_handle_t server = NULL;
 QueueHandle_t log_queue = NULL;
-StaticQueue_t log_queue_static;
 
 static int fd = -1;
 
@@ -61,6 +102,104 @@ typedef struct rest_server_context
 } rest_server_context_t;
 
 #define CHECK_FILE_EXTENSION(filename, ext) (strcasecmp(&filename[strlen(filename) - strlen(ext)], ext) == 0)
+
+static esp_err_t ip_in_private_range(uint32_t address) {
+    uint32_t ip_address = ntohl(address);
+
+    // 10.0.0.0 - 10.255.255.255 (Class A)
+    if ((ip_address >= 0x0A000000) && (ip_address <= 0x0AFFFFFF)) {
+        return ESP_OK;
+    }
+
+    // 172.16.0.0 - 172.31.255.255 (Class B)
+    if ((ip_address >= 0xAC100000) && (ip_address <= 0xAC1FFFFF)) {
+        return ESP_OK;
+    }
+
+    // 192.168.0.0 - 192.168.255.255 (Class C)
+    if ((ip_address >= 0xC0A80000) && (ip_address <= 0xC0A8FFFF)) {
+        return ESP_OK;
+    }
+
+    return ESP_FAIL;
+}
+
+static uint32_t extract_origin_ip_addr(char *origin)
+{
+    char ip_str[16];
+    uint32_t origin_ip_addr = 0;
+
+    // Find the start of the IP address in the Origin header
+    const char *prefix = "http://";
+    char *ip_start = strstr(origin, prefix);
+    if (ip_start) {
+        ip_start += strlen(prefix); // Move past "http://"
+
+        // Extract the IP address portion (up to the next '/')
+        char *ip_end = strchr(ip_start, '/');
+        size_t ip_len = ip_end ? (size_t)(ip_end - ip_start) : strlen(ip_start);
+        if (ip_len < sizeof(ip_str)) {
+            strncpy(ip_str, ip_start, ip_len);
+            ip_str[ip_len] = '\0'; // Null-terminate the string
+
+            // Convert the IP address string to uint32_t
+            origin_ip_addr = inet_addr(ip_str);
+            if (origin_ip_addr == INADDR_NONE) {
+                ESP_LOGW(CORS_TAG, "Invalid IP address: %s", ip_str);
+            } else {
+                ESP_LOGD(CORS_TAG, "Extracted IP address %lu", origin_ip_addr);
+            }
+        } else {
+            ESP_LOGW(CORS_TAG, "IP address string is too long: %s", ip_start);
+        }
+    }
+
+    return origin_ip_addr;
+}
+
+static esp_err_t is_network_allowed(httpd_req_t * req)
+{
+    if (GLOBAL_STATE->SYSTEM_MODULE.ap_enabled == true) {
+        ESP_LOGI(CORS_TAG, "Device in AP mode. Allowing CORS.");
+        return ESP_OK;
+    }
+
+    int sockfd = httpd_req_to_sockfd(req);
+    char ipstr[INET6_ADDRSTRLEN];
+    struct sockaddr_in6 addr;   // esp_http_server uses IPv6 addressing
+    socklen_t addr_size = sizeof(addr);
+
+    if (getpeername(sockfd, (struct sockaddr *)&addr, &addr_size) < 0) {
+        ESP_LOGE(CORS_TAG, "Error getting client IP");
+        return ESP_FAIL;
+    }
+
+    uint32_t request_ip_addr = addr.sin6_addr.un.u32_addr[3];
+
+    // // Convert to IPv6 string
+    // inet_ntop(AF_INET, &addr.sin6_addr, ipstr, sizeof(ipstr));
+
+    // Convert to IPv4 string
+    inet_ntop(AF_INET, &request_ip_addr, ipstr, sizeof(ipstr));
+
+    // Attempt to get the Origin header.
+    char origin[128];
+    uint32_t origin_ip_addr;
+    if (httpd_req_get_hdr_value_str(req, "Origin", origin, sizeof(origin)) == ESP_OK) {
+        ESP_LOGD(CORS_TAG, "Origin header: %s", origin);
+        origin_ip_addr = extract_origin_ip_addr(origin);
+    } else {
+        ESP_LOGD(CORS_TAG, "No origin header found.");
+        origin_ip_addr = request_ip_addr;
+    }
+
+    if (ip_in_private_range(origin_ip_addr) == ESP_OK && ip_in_private_range(request_ip_addr) == ESP_OK) {
+        return ESP_OK;
+    }
+
+    ESP_LOGI(CORS_TAG, "Client is NOT in the private ip ranges or same range as server.");
+    return ESP_FAIL;
+}
 
 esp_err_t init_fs(void)
 {
@@ -119,6 +258,7 @@ static esp_err_t set_content_type_from_file(httpd_req_t * req, const char * file
 
 static esp_err_t set_cors_headers(httpd_req_t * req)
 {
+
     esp_err_t err;
 
     err = httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
@@ -142,7 +282,15 @@ static esp_err_t set_cors_headers(httpd_req_t * req)
 /* Recovery handler */
 static esp_err_t rest_recovery_handler(httpd_req_t * req)
 {
-    httpd_resp_send(req, recovery_page, HTTPD_RESP_USE_STRLEN);
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    extern const unsigned char recovery_page_start[] asm("_binary_recovery_page_html_start");
+    extern const unsigned char recovery_page_end[] asm("_binary_recovery_page_html_end");
+    const size_t recovery_page_size = (recovery_page_end - recovery_page_start);
+    httpd_resp_send_chunk(req, (const char*)recovery_page_start, recovery_page_size);
+    httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
 
@@ -210,6 +358,10 @@ static esp_err_t rest_common_get_handler(httpd_req_t * req)
 
 static esp_err_t handle_options_request(httpd_req_t * req)
 {
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
     // Set CORS headers for OPTIONS request
     if (set_cors_headers(req) != ESP_OK) {
         httpd_resp_send_500(req);
@@ -224,6 +376,11 @@ static esp_err_t handle_options_request(httpd_req_t * req)
 
 static esp_err_t PATCH_update_settings(httpd_req_t * req)
 {
+
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
     // Set CORS headers
     if (set_cors_headers(req) != ESP_OK) {
         httpd_resp_send_500(req);
@@ -322,6 +479,10 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
 
 static esp_err_t POST_restart(httpd_req_t * req)
 {
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
     // Set CORS headers
     if (set_cors_headers(req) != ESP_OK) {
         httpd_resp_send_500(req);
@@ -347,6 +508,10 @@ static esp_err_t POST_restart(httpd_req_t * req)
 /* Simple handler for getting system handler */
 static esp_err_t GET_system_info(httpd_req_t * req)
 {
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
     httpd_resp_set_type(req, "application/json");
 
     // Set CORS headers
@@ -382,12 +547,9 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
     cJSON_AddNumberToObject(root, "isUsingFallbackStratum", GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback);
 
+    cJSON_AddNumberToObject(root, "isPSRAMAvailable", GLOBAL_STATE->psram_is_available);
+
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
-    cJSON_AddNumberToObject(root, "freeInternalHeap", esp_get_free_internal_heap_size());
-    cJSON_AddNumberToObject(root, "minimumFreeHeap", esp_get_minimum_free_heap_size());
-
-    cJSON_AddStringToObject(root, "idfVersion", esp_get_idf_version());
-
     cJSON_AddNumberToObject(root, "coreVoltage", nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE));
     cJSON_AddNumberToObject(root, "coreVoltageActual", VCORE_get_voltage_mv(GLOBAL_STATE));
     cJSON_AddNumberToObject(root, "frequency", nvs_config_get_u16(NVS_CONFIG_ASIC_FREQ, CONFIG_ASIC_FREQUENCY));
@@ -398,27 +560,8 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "sharesAccepted", GLOBAL_STATE->SYSTEM_MODULE.shares_accepted);
     cJSON_AddNumberToObject(root, "sharesRejected", GLOBAL_STATE->SYSTEM_MODULE.shares_rejected);
     cJSON_AddNumberToObject(root, "uptimeSeconds", (esp_timer_get_time() - GLOBAL_STATE->SYSTEM_MODULE.start_time) / 1000000);
-    cJSON_AddNumberToObject(root, "asicCount", GLOBAL_STATE->asic_count);
-    uint16_t small_core_count = 0;
-    switch (GLOBAL_STATE->asic_model){
-        case ASIC_BM1397:
-            small_core_count = BM1397_SMALL_CORE_COUNT;
-            break;
-        case ASIC_BM1366:
-            small_core_count = BM1366_SMALL_CORE_COUNT;
-            break;
-        case ASIC_BM1368:
-            small_core_count = BM1368_SMALL_CORE_COUNT;
-            break;
-        case ASIC_BM1370:
-            small_core_count = BM1370_SMALL_CORE_COUNT;
-            break;
-        case ASIC_UNKNOWN:
-        default:
-            small_core_count = -1;
-            break;
-    }
-    cJSON_AddNumberToObject(root, "smallCoreCount", small_core_count);
+    cJSON_AddNumberToObject(root, "asicCount", ASIC_get_asic_count(GLOBAL_STATE));
+    cJSON_AddNumberToObject(root, "smallCoreCount", ASIC_get_small_core_count(GLOBAL_STATE));
     cJSON_AddStringToObject(root, "ASICModel", GLOBAL_STATE->asic_model_str);
     cJSON_AddStringToObject(root, "stratumURL", stratumURL);
     cJSON_AddStringToObject(root, "fallbackStratumURL", fallbackStratumURL);
@@ -428,6 +571,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddStringToObject(root, "fallbackStratumUser", fallbackStratumUser);
 
     cJSON_AddStringToObject(root, "version", esp_app_get_description()->version);
+    cJSON_AddStringToObject(root, "idfVersion", esp_get_idf_version());
     cJSON_AddStringToObject(root, "boardVersion", board_version);
     cJSON_AddStringToObject(root, "runningPartition", esp_ota_get_running_partition()->label);
 
@@ -458,6 +602,10 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
 esp_err_t POST_WWW_update(httpd_req_t * req)
 {
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
     wifi_mode_t mode;
     esp_wifi_get_mode(&mode);
     if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)
@@ -527,6 +675,10 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
  */
 esp_err_t POST_OTA_update(httpd_req_t * req)
 {
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
     wifi_mode_t mode;
     esp_wifi_get_mode(&mode);
     if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)
@@ -602,7 +754,7 @@ int log_to_queue(const char * format, va_list args)
     va_end(args_copy);
 
     // Allocate the buffer dynamically
-    char *log_buffer = (char *) heap_caps_calloc(needed_size + 2, sizeof(char), MALLOC_CAP_SPIRAM);
+    char * log_buffer = (char *) calloc(needed_size + 2, sizeof(char));  // +2 for potential \n and \0
     if (log_buffer == NULL) {
         return 0;
     }
@@ -659,6 +811,10 @@ void send_log_to_websocket(char *message)
  */
 esp_err_t echo_handler(httpd_req_t * req)
 {
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
     if (req->method == HTTP_GET) {
         ESP_LOGI(TAG, "Handshake done, the new connection was opened");
         fd = httpd_req_to_sockfd(req);
@@ -718,17 +874,11 @@ esp_err_t start_rest_server(void * pvParameters)
     }
 
     REST_CHECK(base_path, "wrong base path", err);
-
-    rest_server_context_t *rest_context = (rest_server_context_t*) heap_caps_calloc(1, sizeof(rest_server_context_t), MALLOC_CAP_SPIRAM);
-
+    rest_server_context_t * rest_context = calloc(1, sizeof(rest_server_context_t));
     REST_CHECK(rest_context, "No memory for rest context", err);
     strlcpy(rest_context->base_path, base_path, sizeof(rest_context->base_path));
 
-    size_t queue_memory_size = MESSAGE_QUEUE_SIZE * sizeof(char*);
-    void *queue_memory = heap_caps_malloc(queue_memory_size, MALLOC_CAP_SPIRAM);
-    REST_CHECK(queue_memory, "No memory for queue memory", err);
-    log_queue = xQueueCreateStatic(MESSAGE_QUEUE_SIZE, sizeof(char*), queue_memory, &log_queue_static);
-    REST_CHECK(log_queue, "No memory for log queue", err);
+    log_queue = xQueueCreate(MESSAGE_QUEUE_SIZE, sizeof(char*));
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
@@ -739,7 +889,11 @@ esp_err_t start_rest_server(void * pvParameters)
     REST_CHECK(httpd_start(&server, &config) == ESP_OK, "Start server failed", err_start);
 
     httpd_uri_t recovery_explicit_get_uri = {
-        .uri = "/recovery", .method = HTTP_GET, .handler = rest_recovery_handler, .user_ctx = rest_context};
+        .uri = "/recovery", 
+        .method = HTTP_GET, 
+        .handler = rest_recovery_handler, 
+        .user_ctx = rest_context
+    };
     httpd_register_uri_handler(server, &recovery_explicit_get_uri);
     
     // Register theme API endpoints
@@ -747,8 +901,21 @@ esp_err_t start_rest_server(void * pvParameters)
 
     /* URI handler for fetching system info */
     httpd_uri_t system_info_get_uri = {
-        .uri = "/api/system/info", .method = HTTP_GET, .handler = GET_system_info, .user_ctx = rest_context};
+        .uri = "/api/system/info", 
+        .method = HTTP_GET, 
+        .handler = GET_system_info, 
+        .user_ctx = rest_context
+    };
     httpd_register_uri_handler(server, &system_info_get_uri);
+
+    /* URI handler for WiFi scan */
+    httpd_uri_t wifi_scan_get_uri = {
+        .uri = "/api/system/wifi/scan",
+        .method = HTTP_GET,
+        .handler = GET_wifi_scan,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &wifi_scan_get_uri);
 
     httpd_uri_t swarm_options_uri = {
         .uri = "/api/swarm",
@@ -759,15 +926,26 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_register_uri_handler(server, &swarm_options_uri);
 
     httpd_uri_t system_restart_uri = {
-        .uri = "/api/system/restart", .method = HTTP_POST, .handler = POST_restart, .user_ctx = rest_context};
+        .uri = "/api/system/restart", .method = HTTP_POST, 
+        .handler = POST_restart, 
+        .user_ctx = rest_context
+    };
     httpd_register_uri_handler(server, &system_restart_uri);
 
     httpd_uri_t system_restart_options_uri = {
-        .uri = "/api/system/restart", .method = HTTP_OPTIONS, .handler = handle_options_request, .user_ctx = NULL};
+        .uri = "/api/system/restart", 
+        .method = HTTP_OPTIONS, 
+        .handler = handle_options_request, 
+        .user_ctx = NULL
+    };
     httpd_register_uri_handler(server, &system_restart_options_uri);
 
     httpd_uri_t update_system_settings_uri = {
-        .uri = "/api/system", .method = HTTP_PATCH, .handler = PATCH_update_settings, .user_ctx = rest_context};
+        .uri = "/api/system", 
+        .method = HTTP_PATCH, 
+        .handler = PATCH_update_settings, 
+        .user_ctx = rest_context
+    };
     httpd_register_uri_handler(server, &update_system_settings_uri);
 
     httpd_uri_t system_options_uri = {
@@ -779,25 +957,47 @@ esp_err_t start_rest_server(void * pvParameters)
     httpd_register_uri_handler(server, &system_options_uri);
 
     httpd_uri_t update_post_ota_firmware = {
-        .uri = "/api/system/OTA", .method = HTTP_POST, .handler = POST_OTA_update, .user_ctx = NULL};
+        .uri = "/api/system/OTA", 
+        .method = HTTP_POST, 
+        .handler = POST_OTA_update, 
+        .user_ctx = NULL
+    };
     httpd_register_uri_handler(server, &update_post_ota_firmware);
 
     httpd_uri_t update_post_ota_www = {
-        .uri = "/api/system/OTAWWW", .method = HTTP_POST, .handler = POST_WWW_update, .user_ctx = NULL};
+        .uri = "/api/system/OTAWWW", 
+        .method = HTTP_POST, 
+        .handler = POST_WWW_update, 
+        .user_ctx = NULL
+    };
     httpd_register_uri_handler(server, &update_post_ota_www);
 
-    httpd_uri_t ws = {.uri = "/api/ws", .method = HTTP_GET, .handler = echo_handler, .user_ctx = NULL, .is_websocket = true};
+    httpd_uri_t ws = {
+        .uri = "/api/ws", 
+        .method = HTTP_GET, 
+        .handler = echo_handler, 
+        .user_ctx = NULL, 
+        .is_websocket = true
+    };
     httpd_register_uri_handler(server, &ws);
 
     if (enter_recovery) {
         /* Make default route serve Recovery */
         httpd_uri_t recovery_implicit_get_uri = {
-            .uri = "/*", .method = HTTP_GET, .handler = rest_recovery_handler, .user_ctx = rest_context};
+            .uri = "/*", .method = HTTP_GET, 
+            .handler = rest_recovery_handler, 
+            .user_ctx = rest_context
+        };
         httpd_register_uri_handler(server, &recovery_implicit_get_uri);
 
     } else {
         /* URI handler for getting web server files */
-        httpd_uri_t common_get_uri = {.uri = "/*", .method = HTTP_GET, .handler = rest_common_get_handler, .user_ctx = rest_context};
+        httpd_uri_t common_get_uri = {
+            .uri = "/*", 
+            .method = HTTP_GET, 
+            .handler = rest_common_get_handler, 
+            .user_ctx = rest_context
+        };
         httpd_register_uri_handler(server, &common_get_uri);
     }
 
