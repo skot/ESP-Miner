@@ -34,6 +34,8 @@
 #include <pthread.h>
 #include "connect.h"
 
+#include "asic.h"
+
 static const char * TAG = "http_server";
 static const char * CORS_TAG = "CORS";
 
@@ -558,27 +560,8 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "sharesAccepted", GLOBAL_STATE->SYSTEM_MODULE.shares_accepted);
     cJSON_AddNumberToObject(root, "sharesRejected", GLOBAL_STATE->SYSTEM_MODULE.shares_rejected);
     cJSON_AddNumberToObject(root, "uptimeSeconds", (esp_timer_get_time() - GLOBAL_STATE->SYSTEM_MODULE.start_time) / 1000000);
-    cJSON_AddNumberToObject(root, "asicCount", GLOBAL_STATE->asic_count);
-    uint16_t small_core_count = 0;
-    switch (GLOBAL_STATE->asic_model){
-        case ASIC_BM1397:
-            small_core_count = BM1397_SMALL_CORE_COUNT;
-            break;
-        case ASIC_BM1366:
-            small_core_count = BM1366_SMALL_CORE_COUNT;
-            break;
-        case ASIC_BM1368:
-            small_core_count = BM1368_SMALL_CORE_COUNT;
-            break;
-        case ASIC_BM1370:
-            small_core_count = BM1370_SMALL_CORE_COUNT;
-            break;
-        case ASIC_UNKNOWN:
-        default:
-            small_core_count = -1;
-            break;
-    }
-    cJSON_AddNumberToObject(root, "smallCoreCount", small_core_count);
+    cJSON_AddNumberToObject(root, "asicCount", ASIC_get_asic_count(GLOBAL_STATE));
+    cJSON_AddNumberToObject(root, "smallCoreCount", ASIC_get_small_core_count(GLOBAL_STATE));
     cJSON_AddStringToObject(root, "ASICModel", GLOBAL_STATE->asic_model_str);
     cJSON_AddStringToObject(root, "stratumURL", stratumURL);
     cJSON_AddStringToObject(root, "fallbackStratumURL", fallbackStratumURL);
