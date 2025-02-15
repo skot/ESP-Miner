@@ -125,9 +125,9 @@ void app_main(void)
 
     GLOBAL_STATE.new_stratum_version_rolling_msg = false;
 
-    if (GLOBAL_STATE.valid_model) {
-        wifi_softap_off();
+    wifi_softap_off();
 
+    if (GLOBAL_STATE.valid_model) {
         queue_init(&GLOBAL_STATE.stratum_queue);
         queue_init(&GLOBAL_STATE.ASIC_jobs_queue);
 
