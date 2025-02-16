@@ -21,6 +21,7 @@ export class EditComponent implements OnInit, OnDestroy {
 
   public savedChanges: boolean = false;
   public devToolsOpen: boolean = false;
+  public proMode: boolean = false;
   public eASICModel = eASICModel;
   public ASICModel!: eASICModel;
 
