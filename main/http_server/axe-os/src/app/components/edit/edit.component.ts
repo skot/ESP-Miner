@@ -23,6 +23,8 @@ export class EditComponent implements OnInit, OnDestroy {
   public settingsUnlocked: boolean = false;
   public eASICModel = eASICModel;
   public ASICModel!: eASICModel;
+  public restrictedModels: eASICModel[] = Object.values(eASICModel)
+    .filter((v): v is eASICModel => typeof v === 'number');
 
   @Input() uri = '';
 
