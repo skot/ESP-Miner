@@ -1,6 +1,6 @@
 <ng-container *ngIf="form != null">
     <form [formGroup]="form">
-        <ng-container *ngIf="!devToolsOpen && [eASICModel.BM1366, eASICModel.BM1368, eASICModel.BM1370, eASICModel.BM1397].includes(ASICModel)">
+        <ng-container *ngIf="!settingsUnlocked && [eASICModel.BM1366, eASICModel.BM1368, eASICModel.BM1370, eASICModel.BM1397].includes(ASICModel)">
             <div class="field grid p-fluid">
                 <label class="col-12 mb-2 md:col-2 md:mb-0" htmlFor="frequency">Frequency</label>
                 <div class="col-12 md:col-10">
@@ -16,7 +16,7 @@
             </div>
         </ng-container>
 
-        <ng-container *ngIf="devToolsOpen === true">
+        <ng-container *ngIf="settingsUnlocked === true">
 
             <div class="field grid p-fluid">
                 <label htmlFor="frequency" class="col-12 mb-2 md:col-2 md:mb-0">Frequency</label>
