@@ -80,6 +80,10 @@ The firmware hosts a small web server on port 80 for administrative purposes. On
 
 In the event that the admin web front end is inaccessible, for example because of an unsuccessful firmware update (`www.bin`), a recovery page can be accessed at `http://<IP>/recovery`.
 
+### Unlock Settings
+
+In order to unlock the Input fields for ASIC Mhz and ASIC Voltage you need to open up your Browser console (mostly done by pressing F12). If you submit the command `unlockSettings()` your input fields for ASIC Mhz and ASIC Voltage will be unlocked and you can place other values out of the predefined scope into them.
+
 ## Development
 
 ### Prerequisites
