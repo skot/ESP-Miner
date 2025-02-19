@@ -133,10 +133,9 @@ void app_main(void)
         GLOBAL_STATE.ASIC_initalized = true;
         GLOBAL_STATE.current_connection_id = 0;
 
-        xTaskCreate(stratum_task_primary, "stratum primary task", 8192, (void *) &GLOBAL_STATE, 5, NULL);
+        xTaskCreate(stratum_task_primary, "stratum primary task", 8192, (void *) &GLOBAL_STATE, 8, NULL);
         xTaskCreate(stratum_task_secondary, "stratum secondary task", 8192, (void *) &GLOBAL_STATE, 5, NULL);
         xTaskCreate(stratum_task_watchdog, "stratum watchdog", 8192, (void *) &GLOBAL_STATE, 5, NULL);
-        // xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
         xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);
         xTaskCreate(ASIC_task, "asic", 8192, (void *) &GLOBAL_STATE, 10, NULL);
         xTaskCreate(ASIC_result_task, "asic result", 8192, (void *) &GLOBAL_STATE, 15, NULL);

@@ -39,9 +39,7 @@ void ASIC_task(void *pvParameters)
         StratumConnection *current_connection = &GLOBAL_STATE->connections[next_bm_job->connection_id];
 
         if (next_bm_job->connection_id != GLOBAL_STATE->current_connection_id)
-        {
             continue;
-        }
 
         if (current_connection->state != STRATUM_CONNECTED)
         {
