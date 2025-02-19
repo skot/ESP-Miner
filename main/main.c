@@ -135,7 +135,7 @@ void app_main(void)
 
         xTaskCreate(stratum_task_primary, "stratum primary task", 8192, (void *) &GLOBAL_STATE, 8, NULL);
         xTaskCreate(stratum_task_secondary, "stratum secondary task", 8192, (void *) &GLOBAL_STATE, 5, NULL);
-        xTaskCreate(stratum_task_watchdog, "stratum watchdog", 8192, (void *) &GLOBAL_STATE, 5, NULL);
+        xTaskCreate(stratum_task_watchdog, "stratum watchdog", 4096, (void *) &GLOBAL_STATE, 5, NULL);
         xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);
         xTaskCreate(ASIC_task, "asic", 8192, (void *) &GLOBAL_STATE, 10, NULL);
         xTaskCreate(ASIC_result_task, "asic result", 8192, (void *) &GLOBAL_STATE, 15, NULL);
