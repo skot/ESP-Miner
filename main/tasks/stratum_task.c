@@ -98,6 +98,7 @@ void stratum_task_watchdog(void *pvParameters)
             GLOBAL_STATE->connections[0].state == STRATUM_CONNECTED)
         {
             GLOBAL_STATE->current_connection_id = 0;
+            GLOBAL_STATE->connections[0].abandon_work = 0;
             GLOBAL_STATE->connections[0].new_stratum_version_rolling_msg = true;
             GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback = false;
             ESP_LOGI(TAG, "Switching back to primary pool.");
@@ -127,6 +128,7 @@ void stratum_task_watchdog(void *pvParameters)
             if (GLOBAL_STATE->connections[i].state == STRATUM_CONNECTED)
             {
                 GLOBAL_STATE->current_connection_id = i;
+                GLOBAL_STATE->connections[i].abandon_work = 0;
                 GLOBAL_STATE->connections[i].new_stratum_version_rolling_msg = true;
                 ESP_LOGI(TAG, "Switching to pool: %s", GLOBAL_STATE->connections[i].host);
                 GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback = true;
@@ -302,12 +304,11 @@ void stratum_process(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumC
             if (GLOBAL_STATE->current_connection_id == connection->id)
                 SYSTEM_notify_new_ntime(GLOBAL_STATE, connection->message->mining_notification->ntime);
 
-            if (connection->message->should_abandon_work && connection->stratum_queue.count > 0)
+            if (connection->message->should_abandon_work &&
+                (connection->stratum_queue.count > 0 || GLOBAL_STATE->ASIC_jobs_queue.count > 0))
             {
                 ESP_LOGI(POOL_TAG, "Abandoning the Stratum queues.");
                 stratum_clear_queue(POOL_TAG, connection);
-                if (GLOBAL_STATE->current_connection_id == connection->id)
-                    ASIC_jobs_queue_clear(&GLOBAL_STATE->ASIC_jobs_queue);
             }
             if (connection->stratum_queue.count >= QUEUE_SIZE)
             {
