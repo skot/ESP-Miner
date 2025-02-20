@@ -24,7 +24,7 @@ export class EditComponent implements OnInit, OnDestroy {
   public eASICModel = eASICModel;
   public ASICModel!: eASICModel;
   public restrictedModels: eASICModel[] = Object.values(eASICModel)
-    .filter((v): v is eASICModel => typeof v === 'number');
+    .filter((v): v is eASICModel => typeof v === 'string');
 
   @Input() uri = '';
 
