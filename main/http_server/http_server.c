@@ -855,6 +855,7 @@ esp_err_t start_rest_server(void * pvParameters)
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.uri_match_fn = httpd_uri_match_wildcard;
+    config.stack_size = 8192;
     config.max_open_sockets = 10;
     config.max_uri_handlers = 20;
 
