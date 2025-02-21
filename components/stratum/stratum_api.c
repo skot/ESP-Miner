@@ -17,7 +17,6 @@
 static const char * TAG = "stratum_api";
 
 static void debug_stratum_tx(const char * POOL_TAG, const char *);
-int _parse_stratum_subscribe_result_message(const char * POOL_TAG, const char * result_json_str, char ** extranonce, int * extranonce2_len);
 
 
 StratumApiV1Buffer *STRATUM_V1_buffer_create() {
@@ -278,39 +277,6 @@ void STRATUM_V1_free_mining_notify(mining_notify * params)
     free(params->coinbase_2);
     free(params->merkle_branches);
     free(params);
-}
-
-int _parse_stratum_subscribe_result_message(const char * POOL_TAG, const char * result_json_str, char ** extranonce, int * extranonce2_len)
-{
-    cJSON * root = cJSON_Parse(result_json_str);
-    if (root == NULL) {
-        ESP_LOGE(POOL_TAG, "Unable to parse %s", result_json_str);
-        return -1;
-    }
-    cJSON * result = cJSON_GetObjectItem(root, "result");
-    if (result == NULL) {
-        ESP_LOGE(POOL_TAG, "Unable to parse subscribe result %s", result_json_str);
-        return -1;
-    }
-
-    cJSON * extranonce2_len_json = cJSON_GetArrayItem(result, 2);
-    if (extranonce2_len_json == NULL) {
-        ESP_LOGE(POOL_TAG, "Unable to parse extranonce2_len: %s", result->valuestring);
-        return -1;
-    }
-    *extranonce2_len = extranonce2_len_json->valueint;
-
-    cJSON * extranonce_json = cJSON_GetArrayItem(result, 1);
-    if (extranonce_json == NULL) {
-        ESP_LOGE(POOL_TAG, "Unable parse extranonce: %s", result->valuestring);
-        return -1;
-    }
-    *extranonce = malloc(strlen(extranonce_json->valuestring) + 1);
-    strcpy(*extranonce, extranonce_json->valuestring);
-
-    cJSON_Delete(root);
-
-    return 0;
 }
 
 int STRATUM_V1_subscribe(const char * POOL_TAG, int socket, int send_uid, char * model)
