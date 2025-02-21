@@ -6,6 +6,7 @@ import { startWith, Subject, takeUntil } from 'rxjs';
 import { LoadingService } from 'src/app/services/loading.service';
 import { SystemService } from 'src/app/services/system.service';
 import { eASICModel } from 'src/models/enum/eASICModel';
+import { LocalStorageService } from 'src/app/local-storage.service';
 
 @Component({
   selector: 'app-edit',
@@ -124,12 +125,46 @@ export class EditComponent implements OnInit, OnDestroy {
     private fb: FormBuilder,
     private systemService: SystemService,
     private toastr: ToastrService,
-    private loadingService: LoadingService
+    private loadingService: LoadingService,
+    private localStorageService: LocalStorageService
   ) {
-    // Add unlockSettings to window object for console access
+    // Check if settings are already unlocked in localStorage
+    this.settingsUnlocked = this.localStorageService.getBool('settingsUnlocked') || false;
+
+    // If settingsUnlocked is false, show a console message with clickable link
+    if (!this.settingsUnlocked) {
+      console.log('🔒 Here be dragons! Advanced settings are locked for your protection. \n' +
+        'Only the bravest miners dare to venture forth... \n' +
+        'If you wish to unlock dangerous overclocking powers, type: %cunlockSettings()', 
+        'color: #ff4400; text-decoration: underline; cursor: pointer; font-weight: bold;'
+      );
+    } else {
+      console.log('⚠️ Advanced settings are currently unlocked. \n' +
+        'To re-enable safety limits, type: %clockSettings()',
+        'color: #ff4400; text-decoration: underline; cursor: pointer; font-weight: bold;'
+      );
+    }
+
+    // Add unlockSettings and lockSettings to window object for console access
     (window as any).unlockSettings = () => {
       this.settingsUnlocked = true;
-      console.log('Settings unlocked. You can now set custom frequency and voltage values.');
+      this.localStorageService.setBool('settingsUnlocked', true);
+      console.log(
+        '🎉 The ancient seals have been broken!\n' +
+        '⚡ Unlimited power flows through your miner...\n' +
+        '🔧 You can now set custom frequency and voltage values.\n' +
+        '⚠️ Remember: with great power comes great responsibility!'
+      );
+    };
+
+    (window as any).lockSettings = () => {
+      this.settingsUnlocked = false;
+      this.localStorageService.setBool('settingsUnlocked', false);
+      console.log(
+        '🔒 Safety limits have been restored.\n' +
+        '✨ Your miner is now protected from dangerous settings.\n' +
+        '💡 Type unlockSettings() if you need to access advanced features again.'
+      );
     };
   }
 
