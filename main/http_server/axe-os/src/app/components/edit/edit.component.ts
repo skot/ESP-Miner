@@ -6,6 +6,7 @@ import { startWith, Subject, takeUntil } from 'rxjs';
 import { LoadingService } from 'src/app/services/loading.service';
 import { SystemService } from 'src/app/services/system.service';
 import { eASICModel } from 'src/models/enum/eASICModel';
+import { ActivatedRoute } from '@angular/router';
 
 @Component({
   selector: 'app-edit',
@@ -124,13 +125,28 @@ export class EditComponent implements OnInit, OnDestroy {
     private fb: FormBuilder,
     private systemService: SystemService,
     private toastr: ToastrService,
-    private loadingService: LoadingService
+    private loadingService: LoadingService,
+    private route: ActivatedRoute,
   ) {
-    // Add unlockSettings to window object for console access
-    (window as any).unlockSettings = () => {
-      this.settingsUnlocked = true;
-      console.log('Settings unlocked. You can now set custom frequency and voltage values.');
-    };
+    // Check URL parameter for settings unlock
+    this.route.queryParams.subscribe(params => {
+      this.settingsUnlocked = params['oc'] !== undefined;
+      if (this.settingsUnlocked) {
+        console.log(
+          '🎉 The ancient seals have been broken!\n' +
+          '⚡ Unlimited power flows through your miner...\n' +
+          '🔧 You can now set custom frequency and voltage values.\n' +
+          '⚠️ Remember: with great power comes great responsibility!'
+        );
+      } else {
+        console.log('🔒 Here be dragons! Advanced settings are locked for your protection. \n' +
+          'Only the bravest miners dare to venture forth... \n' +
+          'If you wish to unlock dangerous overclocking powers, add: %c?oc', 
+          'color: #ff4400; text-decoration: underline; cursor: pointer; font-weight: bold;',
+          'to the current URL'
+        );
+      }
+    });
   }
 
   ngOnInit(): void {
@@ -166,8 +182,6 @@ export class EditComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
-    // Remove unlockSettings from window object
-    delete (window as any).unlockSettings;
     this.destroy$.next();
     this.destroy$.complete();
   }

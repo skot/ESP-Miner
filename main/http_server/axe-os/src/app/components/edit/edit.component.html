@@ -1,5 +1,10 @@
 <ng-container *ngIf="form != null">
     <form [formGroup]="form">
+        
+        <p-message *ngIf="settingsUnlocked" severity="warn" styleClass="w-full mb-3 py-4 border-round-xl"
+            text="The heat sink and fan on the Bitaxe Supra / Gamma are only rated for the 'selectable' pre-set options within AxeOS. Any over clocking of this device beyond these to achieve a higher hash rate will require modifications to the device to prevent the device from going into overheat protection mode and or damaging your device, this includes changing out the heat sink on the device for a better one and using a PSU that can provide the extra power required (5v ONLY with higher amps).">
+        </p-message>
+
         <ng-container *ngIf="!settingsUnlocked && restrictedModels.includes(ASICModel)">
             <div class="field grid p-fluid">
                 <label class="col-12 mb-2 md:col-2 md:mb-0" htmlFor="frequency">Frequency</label>
