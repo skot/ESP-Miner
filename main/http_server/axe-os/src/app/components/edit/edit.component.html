@@ -2,7 +2,7 @@
     <form [formGroup]="form">
         
         <p-message *ngIf="settingsUnlocked" severity="warn" styleClass="w-full mb-3 py-4 border-round-xl"
-            text="Warning: Custom frequency and voltage settings can cause damage and system instability. Only modify these settings if you fully understand the risks and implications.">
+            text="Warning: Custom frequency & voltage settings can cause damage & system instability. Only modify these settings if you fully understand the risks & implications of running outside designed parameters.">
         </p-message>
 
         <ng-container *ngIf="!settingsUnlocked && restrictedModels.includes(ASICModel)">
