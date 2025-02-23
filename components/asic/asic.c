@@ -9,7 +9,7 @@
 
 #include "asic.h"
 
-//static const double NONCE_SPACE = 4294967296.0; //  2^32
+static const double NONCE_SPACE = 4294967296.0; //  2^32
 
 static const char *TAG = "asic";
 
@@ -169,6 +169,10 @@ esp_err_t ASIC_set_device_model(GlobalState * GLOBAL_STATE) {
     }
 
     if (strcmp(GLOBAL_STATE->device_model_str, "max") == 0) {
+        GLOBAL_STATE->asic_model = ASIC_BM1397;
+        GLOBAL_STATE->valid_model = true;
+        GLOBAL_STATE->asic_job_frequency_ms = (NONCE_SPACE / (double) (GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value * BM1397_SMALL_CORE_COUNT * 1000)) / (double) ASIC_get_asic_count(GLOBAL_STATE); // no version-rolling so same Nonce Space is splitted between Small Cores
+        GLOBAL_STATE->ASIC_difficulty = BM1397_ASIC_DIFFICULTY;
         ESP_LOGI(TAG, "DEVICE: bitaxeMax");
         ESP_LOGI(TAG, "ASIC: %dx BM1397 (%" PRIu64 " cores)", BITAXE_MAX_ASIC_COUNT, BM1397_CORE_COUNT);
         GLOBAL_STATE->device_model = DEVICE_MAX;
