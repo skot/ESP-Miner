@@ -1,8 +1,9 @@
 import { AfterViewChecked, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
-import { interval, map, Observable, shareReplay, startWith, Subscription, switchMap } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { interval, map, Observable, shareReplay, startWith, Subscription, switchMap, filter } from 'rxjs';
 import { SystemService } from 'src/app/services/system.service';
 import { WebsocketService } from 'src/app/services/web-socket.service';
-import { ISystemInfo } from 'src/models/ISystemInfo';
+import { ISystemInfo, DEFAULT_SYSTEM_INFO } from 'src/models/ISystemInfo';
 
 @Component({
   selector: 'app-logs',
@@ -27,11 +28,19 @@ export class LogsComponent implements OnDestroy, AfterViewChecked {
     private systemService: SystemService
   ) {
 
-
     this.info$ = interval(5000).pipe(
       startWith(() => this.systemService.getInfo()),
-      switchMap(() => {
-        return this.systemService.getInfo()
+      switchMap(() => this.systemService.getInfo()),
+      // filter((result): result is ISystemInfo => !(result instanceof HttpErrorResponse || result instanceof Error)),
+      map(result => {
+        if (result instanceof HttpErrorResponse || result instanceof Error) {
+          console.error('getInfo failed:', result.message || result);
+          return {
+            ...DEFAULT_SYSTEM_INFO,
+            error: result.message || String(result)
+          };
+        }
+        return result as ISystemInfo;
       }),
       map(info => {
         info.power = parseFloat(info.power.toFixed(1))

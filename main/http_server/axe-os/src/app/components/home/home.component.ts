@@ -1,10 +1,10 @@
 import { Component } from '@angular/core';
-import { interval, map, Observable, shareReplay, startWith, switchMap, tap } from 'rxjs';
+import { HttpErrorResponse } from '@angular/common/http';
+import { interval, map, Observable, shareReplay, startWith, switchMap, tap, filter } from 'rxjs';
 import { HashSuffixPipe } from 'src/app/pipes/hash-suffix.pipe';
 import { SystemService } from 'src/app/services/system.service';
 import { ThemeService } from 'src/app/services/theme.service';
-import { eASICModel } from 'src/models/enum/eASICModel';
-import { ISystemInfo } from 'src/models/ISystemInfo';
+import { ISystemInfo, DEFAULT_SYSTEM_INFO } from 'src/models/ISystemInfo';
 
 @Component({
   selector: 'app-home',
@@ -55,8 +55,6 @@ export class HomeComponent {
       this.chartData.datasets[0].borderColor = primaryColor;
       this.chartData.datasets[1].backgroundColor = primaryColor + '30';
       this.chartData.datasets[1].borderColor = primaryColor + '60';
-      this.chartData.datasets[2].backgroundColor = textColorSecondary;
-      this.chartData.datasets[2].borderColor = textColorSecondary;
     }
 
     // Update chart options
@@ -184,8 +182,17 @@ export class HomeComponent {
 
     this.info$ = interval(5000).pipe(
       startWith(() => this.systemService.getInfo()),
-      switchMap(() => {
-        return this.systemService.getInfo()
+      switchMap(() => this.systemService.getInfo()),
+      // filter((result): result is ISystemInfo => !(result instanceof HttpErrorResponse || result instanceof Error)),
+      map(result => {
+        if (result instanceof HttpErrorResponse || result instanceof Error) {
+          console.error('getInfo failed:', result.message || result);
+          return {
+            ...DEFAULT_SYSTEM_INFO,
+            error: result.message || String(result)
+          };
+        }
+        return result as ISystemInfo;
       }),
       tap(info => {
         this.hashrateData.push(info.hashRate * 1000000000);
