@@ -162,10 +162,11 @@ void stratum_clear_queue(const char * POOL_TAG, StratumConnection * connection)
     queue_clear(&connection->stratum_queue);
 
     pthread_mutex_lock(&connection->jobs_lock);
-    for (int i = 0; i < 128; i++) {
+    for (int i = 0; i < 128; i = i + 4) {
         connection->jobs[i] = 0;
     }
     pthread_mutex_unlock(&connection->jobs_lock);
+    taskYIELD();
 }
 
 void stratum_task_init_connection(StratumConnection * connection)
@@ -307,8 +308,8 @@ void stratum_process(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumC
             if (connection->message->should_abandon_work &&
                 (connection->stratum_queue.count > 0 || GLOBAL_STATE->ASIC_jobs_queue.count > 0))
             {
-                ESP_LOGI(POOL_TAG, "Abandoning the Stratum queues.");
                 stratum_clear_queue(POOL_TAG, connection);
+                ESP_LOGI(POOL_TAG, "Abandoning the Stratum queues.");
             }
             if (connection->stratum_queue.count >= QUEUE_SIZE)
             {

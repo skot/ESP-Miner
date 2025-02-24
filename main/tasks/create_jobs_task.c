@@ -50,7 +50,7 @@ void create_jobs_task(void *pvParameters)
         }
 
         uint32_t extranonce_2 = 0;
-        while (active_connection->stratum_queue.count < 1 && active_connection->abandon_work == 0)
+        while (active_connection->stratum_queue.count == 0 && active_connection->abandon_work == 0)
         {
             if (active_connection->state != STRATUM_CONNECTED)
                 break;
@@ -66,7 +66,7 @@ void create_jobs_task(void *pvParameters)
             }
             else
             {
-                vTaskDelay(100 / portTICK_PERIOD_MS);
+                vTaskDelay(10 / portTICK_PERIOD_MS);
             }
         }
 
