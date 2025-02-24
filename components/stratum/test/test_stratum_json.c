@@ -88,23 +88,6 @@ TEST_CASE("Parse stratum notify params", "[mining.notify]")
     TEST_ASSERT_EQUAL_UINT32(0x64495522, stratum_api_v1_message.mining_notification->ntime);
 }
 
-// 'private' function
-// TEST_CASE("Test mining.subcribe result parsing", "[mining.subscribe]")
-// {
-//     const char * json_string = "{\"result\":["
-//         "[[\"mining.set_difficulty\",\"731ec5e0649606ff\"],"
-//         "[\"mining.notify\",\"731ec5e0649606ff\"]],"
-//         "\"e9695791\",4],"
-//         "\"id\":1,\"error\":null}";
-
-//     char * extranonce = NULL;
-//     int extranonce2_len = 0;
-//     int result = _parse_stratum_subscribe_result_message(json_string, &extranonce, &extranonce2_len);
-//     TEST_ASSERT_EQUAL(result, 0);
-//     TEST_ASSERT_EQUAL_STRING(extranonce, "e9695791");
-//     TEST_ASSERT_EQUAL_INT(extranonce2_len, 4);
-// }
-
 TEST_CASE("Parse stratum mining.set_version_mask params", "[stratum]")
 {
     StratumApiV1Message stratum_api_v1_message = {};
