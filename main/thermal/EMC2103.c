@@ -150,9 +150,9 @@ float EMC2103_get_external_temp(void)
     // Convert the signed reading to temperature in Celsius
     temp2 = (float)signed_reading / 8.0;
 
-
     //debug the temps
     //ESP_LOGI(TAG, "Temp1: %.2f Temp2: %.2f", temp1, temp2);
 
-    return temp1;
+    //return the higher temp
+    return (temp1 > temp2) ? temp1 : temp2;
 }
