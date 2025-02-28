@@ -206,6 +206,14 @@ export class EditComponent implements OnInit, OnDestroy {
     this.updateSystem();
   }
 
+  public requiresRestart(): boolean {
+    if (!this.form) return false;
+    const flipscreen = this.form.get('flipscreen');
+    const invertscreen = this.form.get('invertscreen');
+    const invertfanpolarity = this.form.get('invertfanpolarity');
+    return (flipscreen?.dirty || invertscreen?.dirty || invertfanpolarity?.dirty) ?? false;
+  }
+
   public restart() {
     this.systemService.restart(this.uri)
       .pipe(this.loadingService.lockUIUntilComplete())

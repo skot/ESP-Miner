@@ -64,7 +64,7 @@ export class SystemService {
 
           boardtemp1: 30,
           boardtemp2: 40,
-          overheat_mode: 0
+          overheat_mode: 1
         }
       ).pipe(delay(1000));
     }
@@ -75,7 +75,11 @@ export class SystemService {
   }
 
   public updateSystem(uri: string = '', update: any) {
-    return this.httpClient.patch(`${uri}/api/system`, update);
+    if (environment.production) {
+      return this.httpClient.patch(`${uri}/api/system`, update);
+    } else {
+      return of(true);
+    }
   }
 
 
