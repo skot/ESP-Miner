@@ -49,20 +49,7 @@ export class LogsComponent implements OnDestroy, AfterViewChecked {
             });
           })
         )
-      ),      
-      // startWith(() => this.systemService.getInfo()),
-      // switchMap(() => this.systemService.getInfo()),
-      // // filter((result): result is ISystemInfo => !(result instanceof HttpErrorResponse || result instanceof Error)),
-      // map(result => {
-      //   if (result instanceof HttpErrorResponse || result instanceof Error) {
-      //     console.error('getInfo failed:', result.message || result);
-      //     return {
-      //       ...DEFAULT_SYSTEM_INFO,
-      //       error: result.message || String(result)
-      //     };
-      //   }
-      //   return result as ISystemInfo;
-      // }),
+      ),
       map(info => {
         info.power = parseFloat(info.power.toFixed(1))
         info.voltage = parseFloat((info.voltage / 1000).toFixed(1));
