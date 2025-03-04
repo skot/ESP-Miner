@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { interval, map, Observable, of, shareReplay, startWith, switchMap, tap, catchError } from 'rxjs';
+import { interval, map, Observable, of, shareReplay, startWith, switchMap, tap, catchError, Subscription } from 'rxjs';
 import { HashSuffixPipe } from 'src/app/pipes/hash-suffix.pipe';
 import { SystemService } from 'src/app/services/system.service';
 import { ThemeService } from 'src/app/services/theme.service';
@@ -16,7 +16,8 @@ export class HomeComponent {
   public quickLink$!: Observable<string | undefined>;
   public fallbackQuickLink$!: Observable<string | undefined>;
   public expectedHashRate$!: Observable<number | undefined>;
-
+  errorStartTime: number | null = null;
+  unreachableDuration: string = '';
 
   public chartOptions: any;
   public dataLabel: number[] = [];
@@ -202,31 +203,40 @@ export class HomeComponent {
         )
       ),
       tap(info => {
-        this.hashrateData.push(info.hashRate * 1000000000);
-        this.temperatureData.push(info.temp);
-        this.powerData.push(info.power);
-
-        this.dataLabel.push(new Date().getTime());
-
-        if (this.hashrateData.length >= 720) {
-          this.hashrateData.shift();
-          this.temperatureData.shift();
-          this.powerData.shift();
-          this.dataLabel.shift();
+        if (info.error) {
+          if (!this.errorStartTime) {
+            this.errorStartTime = Date.now();
+          }
+          this.unreachableDuration = this.formatDuration(Date.now() - this.errorStartTime);
+        } else {
+          this.errorStartTime = null;
+          this.unreachableDuration = '';
+      
+          this.hashrateData.push(info.hashRate * 1000000000);
+          this.temperatureData.push(info.temp);
+          this.powerData.push(info.power);
+  
+          this.dataLabel.push(new Date().getTime());
+  
+          if (this.hashrateData.length >= 720) {
+            this.hashrateData.shift();
+            this.temperatureData.shift();
+            this.powerData.shift();
+            this.dataLabel.shift();
+          }
+  
+          this.chartData.labels = this.dataLabel;
+          this.chartData.datasets[0].data = this.hashrateData;
+          this.chartData.datasets[1].data = this.temperatureData;
+  
+          this.chartData = {
+            ...this.chartData
+          };
+  
+          this.maxPower = Math.max(50, info.power);
+          this.maxTemp = Math.max(75, info.temp);
+          this.maxFrequency = Math.max(800, info.frequency);
         }
-
-        this.chartData.labels = this.dataLabel;
-        this.chartData.datasets[0].data = this.hashrateData;
-        this.chartData.datasets[1].data = this.temperatureData;
-
-        this.chartData = {
-          ...this.chartData
-        };
-
-        this.maxPower = Math.max(50, info.power);
-        this.maxTemp = Math.max(75, info.temp);
-        this.maxFrequency = Math.max(800, info.frequency);
-
       }),
       map(info => {
         info.power = parseFloat(info.power.toFixed(1))
@@ -253,6 +263,17 @@ export class HomeComponent {
       map(info => this.getQuickLink(info.fallbackStratumURL, info.fallbackStratumUser))
     );
 
+  }
+
+  private formatDuration(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+    
+    if (minutes > 0) {
+      return `${minutes}m ${remainingSeconds}s`;
+    }
+    return `${seconds}s`;
   }
 
   public calculateAverage(data: number[]): number {
