@@ -7,7 +7,11 @@
         text="Bitaxe has overheated - See settings">
     </p-message>
 
-    <p-message *ngIf="!info.frequency || info.frequency < 400" severity="warn" styleClass="w-full mb-4 py-4 border-round-xl"
+    <p-message *ngIf="info.error" severity="warn" styleClass="w-full mb-4 py-4 border-round-xl"
+        text="Can't connect to Bitaxe: {{info.error}}">
+    </p-message>
+
+    <p-message *ngIf="!info.error && (!info.frequency || info.frequency < 400)" severity="warn" styleClass="w-full mb-4 py-4 border-round-xl"
         text="Bitaxe frequency is set low - See settings">
     </p-message>
 

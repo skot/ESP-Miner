@@ -63,7 +63,7 @@ export const DEFAULT_SYSTEM_INFO: ISystemInfo = {
     hostname: 'N/A',
     macAddr: '00:00:00:00:00:00',
     ssid: 'N/A',
-    wifiStatus: 'disconnected',
+    wifiStatus: 'N/A',
     apEnabled: 0,
     sharesAccepted: 0,
     sharesRejected: 0,
@@ -87,8 +87,8 @@ export const DEFAULT_SYSTEM_INFO: ISystemInfo = {
     fanspeed: 0,
     fanrpm: 0,
     coreVoltageActual: 0,
-    boardtemp1: 0, // Optional, included with default
-    boardtemp2: 0, // Optional, included with default
+    boardtemp1: 0,
+    boardtemp2: 0,
     overheat_mode: 0,
-    error: '' // Default to empty string when no error
+    error: ''
   } as const;

@@ -1,6 +1,5 @@
 import { AfterViewChecked, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
-import { HttpErrorResponse } from '@angular/common/http';
-import { interval, map, Observable, shareReplay, startWith, Subscription, switchMap, filter } from 'rxjs';
+import { interval, map, Observable, shareReplay, startWith, Subscription, switchMap, catchError, of } from 'rxjs';
 import { SystemService } from 'src/app/services/system.service';
 import { WebsocketService } from 'src/app/services/web-socket.service';
 import { ISystemInfo, DEFAULT_SYSTEM_INFO } from 'src/models/ISystemInfo';
@@ -29,19 +28,41 @@ export class LogsComponent implements OnDestroy, AfterViewChecked {
   ) {
 
     this.info$ = interval(5000).pipe(
-      startWith(() => this.systemService.getInfo()),
-      switchMap(() => this.systemService.getInfo()),
-      // filter((result): result is ISystemInfo => !(result instanceof HttpErrorResponse || result instanceof Error)),
-      map(result => {
-        if (result instanceof HttpErrorResponse || result instanceof Error) {
-          console.error('getInfo failed:', result.message || result);
-          return {
-            ...DEFAULT_SYSTEM_INFO,
-            error: result.message || String(result)
-          };
-        }
-        return result as ISystemInfo;
-      }),
+      startWith(() =>
+        this.systemService.getInfo().pipe(
+          catchError(error => {
+            console.error('Initial getInfo failed:', error.message || error);
+            return of({
+              ...DEFAULT_SYSTEM_INFO,
+              error: error.message || String(error)
+            });
+          })
+        )
+      ),
+      switchMap(() =>
+        this.systemService.getInfo().pipe(
+          catchError(error => {
+            console.error('Polling getInfo failed:', error.message || error);
+            return of({
+              ...DEFAULT_SYSTEM_INFO,
+              error: error.message || String(error)
+            });
+          })
+        )
+      ),      
+      // startWith(() => this.systemService.getInfo()),
+      // switchMap(() => this.systemService.getInfo()),
+      // // filter((result): result is ISystemInfo => !(result instanceof HttpErrorResponse || result instanceof Error)),
+      // map(result => {
+      //   if (result instanceof HttpErrorResponse || result instanceof Error) {
+      //     console.error('getInfo failed:', result.message || result);
+      //     return {
+      //       ...DEFAULT_SYSTEM_INFO,
+      //       error: result.message || String(result)
+      //     };
+      //   }
+      //   return result as ISystemInfo;
+      // }),
       map(info => {
         info.power = parseFloat(info.power.toFixed(1))
         info.voltage = parseFloat((info.voltage / 1000).toFixed(1));
