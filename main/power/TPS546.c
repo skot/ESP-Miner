@@ -4,6 +4,9 @@
 #include <string.h>
 #include "esp_log.h"
 #include "esp_err.h"
+#include "esp_check.h"
+#include "driver/gpio.h"
+
 #include "pmbus_commands.h"
 
 #include "i2c_bitaxe.h"
@@ -22,6 +25,8 @@
 #define MAX_BLOCK_LEN  32
 
 #define SMBUS_DEFAULT_TIMEOUT (1000 / portTICK_PERIOD_MS)
+
+#define SMB_ALERT_PIN 13
 
 static const char *TAG = "TPS546";
 
@@ -969,5 +974,25 @@ void TPS546_show_voltage_settings(void)
     smb_read_word(PMBUS_VOUT_MIN, &u16_value);
     f_value = ulinear16_2_float(u16_value);
     ESP_LOGI(TAG, "read VOUT_MIN: %.2f V", f_value);
+}
+
+
+esp_err_t TPS546_init_fault_interrupt(void * isr_handler, void * global_state) {
+    gpio_config_t io_conf;
+
+    // Configure the GPIO pin as input
+    io_conf.intr_type = GPIO_INTR_ANYEDGE; // Trigger on both rising and falling edges
+    io_conf.pin_bit_mask = (1ULL << SMB_ALERT_PIN);
+    io_conf.mode = GPIO_MODE_INPUT;
+    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
+    gpio_config(&io_conf);
+
+    // Install ISR service and hook the interrupt handler
+    ESP_RETURN_ON_ERROR(gpio_install_isr_service(0), TAG, "Error installing ISR service");
+    ESP_RETURN_ON_ERROR(gpio_isr_handler_add(SMB_ALERT_PIN, (gpio_isr_t) isr_handler, global_state), TAG, "Error adding ISR handler");
+
+    ESP_LOGI(TAG, "SMB Alert interrupt initialized on pin %d", SMB_ALERT_PIN);
+
+    return ESP_OK;
 }
 

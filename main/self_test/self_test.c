@@ -204,7 +204,7 @@ esp_err_t test_screen(GlobalState * GLOBAL_STATE) {
 }
 
 esp_err_t init_voltage_regulator(GlobalState * GLOBAL_STATE) {
-    ESP_RETURN_ON_ERROR(VCORE_init(GLOBAL_STATE), TAG, "VCORE init failed!");
+    ESP_RETURN_ON_ERROR(VCORE_init(GLOBAL_STATE, NULL), TAG, "VCORE init failed!");
 
     ESP_RETURN_ON_ERROR(VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE), TAG, "VCORE set voltage failed!");
     

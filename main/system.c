@@ -42,6 +42,16 @@ static esp_err_t ensure_overheat_mode_config();
 static void _check_for_best_diff(GlobalState * GLOBAL_STATE, double diff, uint8_t job_id);
 static void _suffix_string(uint64_t val, char * buf, size_t bufsiz, int sigdigits);
 
+// ISR handler function
+static void IRAM_ATTR vreg_fault_isr(void* arg) {
+    //cast arg as GlobalState.SystemModule
+    GlobalState * GLOBAL_STATE = (GlobalState *) arg;
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+
+    //set power_fault flag
+    module->power_fault = 1;
+}
+
 void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
@@ -82,6 +92,9 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     module->overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
     ESP_LOGI(TAG, "Initial overheat_mode value: %d", module->overheat_mode);
 
+    //Initialize power_fault fault mode
+    module->power_fault = 0;
+
     // set the best diff string
     _suffix_string(module->best_nonce_diff, module->best_diff_string, DIFF_STRING_SIZE, 0);
     _suffix_string(module->best_session_nonce_diff, module->best_session_diff_string, DIFF_STRING_SIZE, 0);
@@ -95,7 +108,7 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
 
 void SYSTEM_init_peripherals(GlobalState * GLOBAL_STATE) {
     // Initialize the core voltage regulator
-    VCORE_init(GLOBAL_STATE);
+    VCORE_init(GLOBAL_STATE, vreg_fault_isr);
     VCORE_set_voltage(nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE) / 1000.0, GLOBAL_STATE);
 
     Thermal_init(GLOBAL_STATE->device_model, nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));

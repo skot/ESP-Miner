@@ -69,6 +69,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
     PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     power_management->frequency_multiplier = 1;
 
@@ -153,12 +154,17 @@ void POWER_MANAGEMENT_task(void * pvParameters)
         }
 
         // Check for changing of overheat mode
-        SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
         uint16_t new_overheat_mode = nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0);
         
         if (new_overheat_mode != module->overheat_mode) {
             module->overheat_mode = new_overheat_mode;
             ESP_LOGI(TAG, "Overheat mode updated to: %d", module->overheat_mode);
+        }
+
+        //check for power_fault mode
+        if (module->power_fault != 0) {
+            ESP_LOGE(TAG, "Power fault detected: %d", module->power_fault);
+            VCORE_get_fault(GLOBAL_STATE);
         }
 
         // looper:
