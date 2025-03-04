@@ -988,7 +988,6 @@ esp_err_t TPS546_init_fault_interrupt(void * isr_handler, void * global_state) {
     gpio_config(&io_conf);
 
     // Install ISR service and hook the interrupt handler
-    ESP_RETURN_ON_ERROR(gpio_install_isr_service(0), TAG, "Error installing ISR service");
     ESP_RETURN_ON_ERROR(gpio_isr_handler_add(SMB_ALERT_PIN, (gpio_isr_t) isr_handler, global_state), TAG, "Error adding ISR handler");
 
     ESP_LOGI(TAG, "SMB Alert interrupt initialized on pin %d", SMB_ALERT_PIN);
