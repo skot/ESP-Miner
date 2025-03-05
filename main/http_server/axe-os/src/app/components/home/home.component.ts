@@ -1,5 +1,5 @@
 import { Component } from '@angular/core';
-import { interval, map, Observable, of, shareReplay, startWith, switchMap, tap, catchError, Subscription } from 'rxjs';
+import { interval, map, Observable, shareReplay, startWith, switchMap, tap, catchError, of } from 'rxjs';
 import { HashSuffixPipe } from 'src/app/pipes/hash-suffix.pipe';
 import { SystemService } from 'src/app/services/system.service';
 import { ThemeService } from 'src/app/services/theme.service';
