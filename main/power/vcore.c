@@ -53,7 +53,7 @@ esp_err_t VCORE_init(GlobalState * GLOBAL_STATE, void * isr_function) {
         case DEVICE_SUPRA:
             if (GLOBAL_STATE->board_version >= 402 && GLOBAL_STATE->board_version <= 499) {
                 ESP_RETURN_ON_ERROR(TPS546_init(TPS546_CONFIG_GAMMA), TAG, "TPS546 init failed!"); //yes, it's a gamma as far as the TPS546 is concerned
-                TPS546_init_fault_interrupt(isr_function, GLOBAL_STATE);
+                //TPS546_init_fault_interrupt(isr_function, GLOBAL_STATE);
             } else {
                 ESP_RETURN_ON_ERROR(DS4432U_init(), TAG, "DS4432 init failed!");
                 ESP_RETURN_ON_ERROR(INA260_init(), TAG, "INA260 init failed!");
@@ -61,11 +61,11 @@ esp_err_t VCORE_init(GlobalState * GLOBAL_STATE, void * isr_function) {
             break;
         case DEVICE_GAMMA:
             ESP_RETURN_ON_ERROR(TPS546_init(TPS546_CONFIG_GAMMA), TAG, "TPS546 init failed!");
-            TPS546_init_fault_interrupt(isr_function, GLOBAL_STATE);
+            //TPS546_init_fault_interrupt(isr_function, GLOBAL_STATE);
             break;
         case DEVICE_GAMMATURBO:
             ESP_RETURN_ON_ERROR(TPS546_init(TPS546_CONFIG_GAMMATURBO), TAG, "TPS546 init failed!");
-            TPS546_init_fault_interrupt(isr_function, GLOBAL_STATE);
+            //TPS546_init_fault_interrupt(isr_function, GLOBAL_STATE);
             break;
         // case DEVICE_HEX:
         default:
@@ -145,23 +145,23 @@ int16_t VCORE_get_voltage_mv(GlobalState * global_state) {
     return -1;
 }
 
-void VCORE_get_fault(GlobalState * global_state) {
-    uint16_t status = 0;
+bool VCORE_check_fault(GlobalState * global_state) {
+
     switch (global_state->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
             if (global_state->board_version >= 402 && global_state->board_version <= 499) {
-                TPS546_check_status(&status);
-                TPS546_parse_status(status);
+                return TPS546_check_status();
             }
             break;
         case DEVICE_GAMMA:
         case DEVICE_GAMMATURBO:
-            TPS546_check_status(&status);
-            TPS546_parse_status(status);
+             return TPS546_check_status();
             break;
         // case DEVICE_HEX:
         default:
     }
+
+    return false;
 }

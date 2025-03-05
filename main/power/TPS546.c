@@ -12,7 +12,8 @@
 #include "i2c_bitaxe.h"
 #include "TPS546.h"
 
-//#define _DEBUG_LOG_ 1
+//#define DEBUG_TPS546_MEAS 1 //uncomment to debug TPS546 measurements
+#define DEBUG_TPS546_STATUS 1 //uncomment to debug TPS546 status bits
 
 #define I2C_MASTER_NUM 0 /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
 
@@ -39,9 +40,12 @@ static uint8_t MFR_REVISION[] = {0x00, 0x00, 0x01};
 
 //static uint8_t COMPENSATION_CONFIG[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
-static i2c_master_dev_handle_t tps546_dev_handle;
+static i2c_master_dev_handle_t tps546_i2c_handle;
+static i2c_master_dev_handle_t tps546_smbus_alrt_handle;
 
 static TPS546_CONFIG tps546_config;
+
+static esp_err_t TPS546_parse_status(uint16_t);
 
 /**
  * @brief SMBus read byte
@@ -50,8 +54,16 @@ static TPS546_CONFIG tps546_config;
  */
 static esp_err_t smb_read_byte(uint8_t command, uint8_t *data)
 {
-    return i2c_bitaxe_register_read(tps546_dev_handle, command, data, 1);
+    return i2c_bitaxe_register_read(tps546_i2c_handle, command, data, 1);
 }
+
+// /**
+//  * @brief SMBus clear Alert
+//  */
+// static esp_err_t smb_clear_alert(void)
+// {
+//     return i2c_bitaxe_register_write_byte(tps546_smbus_alrt_handle, 0x00, 0x00);
+// }
 
 /**
  * @brief SMBus write byte
@@ -60,7 +72,7 @@ static esp_err_t smb_read_byte(uint8_t command, uint8_t *data)
  */
 static esp_err_t smb_write_byte(uint8_t command, uint8_t data)
 {
-    return i2c_bitaxe_register_write_byte(tps546_dev_handle, command, data);
+    return i2c_bitaxe_register_write_byte(tps546_i2c_handle, command, data);
 }
 
 /**
@@ -69,7 +81,7 @@ static esp_err_t smb_write_byte(uint8_t command, uint8_t data)
  */
 static esp_err_t smb_write_addr(uint8_t command)
 {
-    return i2c_bitaxe_register_write_addr(tps546_dev_handle, command);
+    return i2c_bitaxe_register_write_addr(tps546_i2c_handle, command);
 }
 
 /**
@@ -80,7 +92,7 @@ static esp_err_t smb_write_addr(uint8_t command)
 static esp_err_t smb_read_word(uint8_t command, uint16_t *result)
 {
     uint8_t data[2];
-    if (i2c_bitaxe_register_read(tps546_dev_handle, command, data, 2) != ESP_OK) {
+    if (i2c_bitaxe_register_read(tps546_i2c_handle, command, data, 2) != ESP_OK) {
         return ESP_FAIL;
     } else {
         *result = (data[1] << 8) + data[0];
@@ -95,7 +107,7 @@ static esp_err_t smb_read_word(uint8_t command, uint16_t *result)
  */
 static esp_err_t smb_write_word(uint8_t command, uint16_t data)
 {
-    return i2c_bitaxe_register_write_word(tps546_dev_handle, command, data);
+    return i2c_bitaxe_register_write_word(tps546_i2c_handle, command, data);
 }
 
 /**
@@ -108,7 +120,7 @@ static esp_err_t smb_read_block(uint8_t command, uint8_t *data, uint8_t len)
 {
     //malloc a buffer len+1 to store the length byte
     uint8_t *buf = (uint8_t *)malloc(len+1);
-    if (i2c_bitaxe_register_read(tps546_dev_handle, command, buf, len+1) != ESP_OK) {
+    if (i2c_bitaxe_register_read(tps546_i2c_handle, command, buf, len+1) != ESP_OK) {
         free(buf);
         return ESP_FAIL;
     }
@@ -135,7 +147,7 @@ static esp_err_t smb_write_block(uint8_t command, uint8_t *data, uint8_t len)
     memcpy(buf+2, data, len);
 
     //write it all
-    if (i2c_bitaxe_register_write_bytes(tps546_dev_handle, buf, len+2) != ESP_OK) {
+    if (i2c_bitaxe_register_write_bytes(tps546_i2c_handle, buf, len+2) != ESP_OK) {
         free(buf);
         return ESP_FAIL;
     } else {
@@ -349,10 +361,8 @@ esp_err_t TPS546_init(TPS546_CONFIG config)
 
     ESP_LOGI(TAG, "Initializing the core voltage regulator");
 
-    if (i2c_bitaxe_add_device(TPS546_I2CADDR, &tps546_dev_handle, TAG) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to add I2C device");
-        return ESP_FAIL;
-    }
+    ESP_RETURN_ON_ERROR(i2c_bitaxe_add_device(TPS546_I2CADDR, &tps546_i2c_handle, TAG), TAG, "Failed to add TPS546 I2C");
+    //ESP_RETURN_ON_ERROR(i2c_bitaxe_add_device(TPS546_I2CADDR_ALERT, &tps546_smbus_alrt_handle, TAG), TAG, "Failed to add TPS546 SMBus Alert");
 
     /* Establish communication with regulator */
     smb_read_block(PMBUS_IC_DEVICE_ID, data, 6); //the DEVICE_ID block first byte is the length.
@@ -394,13 +404,7 @@ esp_err_t TPS546_init(TPS546_CONFIG config)
     /* Show voltage settings */
     TPS546_show_voltage_settings();
 
-    uint16_t status;
-    TPS546_check_status(&status);
-
-    if (status != 0) {
-        ESP_LOGE(TAG, "Status error: %04x", status);
-        TPS546_parse_status(status);
-    }
+    TPS546_check_status();
 
     ESP_LOGI(TAG, "-----------VOLTAGE/CURRENT---------------------");
     smb_read_word(PMBUS_READ_VIN, &u16_value);
@@ -458,11 +462,11 @@ esp_err_t TPS546_init(TPS546_CONFIG config)
 }
 
 esp_err_t TPS546_clear_faults(void) {
-    // if (smb_write_byte(PMBUS_CLEAR_FAULTS, 0xFF) != ESP_OK) {
-    if (smb_write_addr(PMBUS_CLEAR_FAULTS) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to clear faults");
-        return ESP_FAIL;
-    }
+
+    ESP_RETURN_ON_ERROR(smb_write_addr(PMBUS_CLEAR_FAULTS), TAG, "Failed to write address");
+
+    // acknowledge the SMBus fault to reset the SMBALERT pin
+    //ESP_RETURN_ON_ERROR(smb_clear_alert(), TAG, "Failed to clear alert"); //this doesn't seem to work?
 
     return ESP_OK;
 }
@@ -692,7 +696,7 @@ float TPS546_get_vin(void)
         return 0;
     } else {
         vin = slinear11_2_float(u16_value);
-        #ifdef _DEBUG_LOG_
+        #ifdef DEBUG_TPS546_MEAS
         ESP_LOGI(TAG, "Got Vin: %2.3f V", vin);
         #endif
         return vin;
@@ -711,7 +715,7 @@ float TPS546_get_iout(void)
     } else {
         iout = slinear11_2_float(u16_value);
 
-    #ifdef _DEBUG_LOG_
+    #ifdef DEBUG_TPS546_MEAS
         ESP_LOGI(TAG, "Got Iout: %2.3f A", iout);
     #endif
 
@@ -730,23 +734,37 @@ float TPS546_get_vout(void)
         return 0;
     } else {
         vout = ulinear16_2_float(u16_value);
-    #ifdef _DEBUG_LOG_
+    #ifdef DEBUG_TPS546_MEAS
         ESP_LOGI(TAG, "Got Vout: %2.3f V", vout);
     #endif
         return vout;
     }
 }
 
-esp_err_t TPS546_check_status(uint16_t *status) {
+uint16_t TPS546_check_status(void) {
 
-    if (smb_read_word(PMBUS_STATUS_WORD, status) != ESP_OK) {
+    uint16_t status;
+
+    if (smb_read_word(PMBUS_STATUS_WORD, &status) != ESP_OK) {
         ESP_LOGE(TAG, "Could not read STATUS_WORD");
-        return ESP_FAIL;
+        return 0;
     }
-    return ESP_OK;
+
+    #ifdef DEBUG_TPS546_STATUS
+    if (status != 0) {
+        TPS546_parse_status(status);
+    }
+    #endif
+
+    //all we really care about is if the TPS546 is off
+    if (status & TPS546_STATUS_OFF) {
+        return status;
+    }
+
+    return 0;
 }
 
-esp_err_t TPS546_parse_status(uint16_t status) {
+static esp_err_t TPS546_parse_status(uint16_t status) {
     uint8_t u8_value;
 
     if (status & TPS546_STATUS_BUSY) {
@@ -791,7 +809,7 @@ esp_err_t TPS546_parse_status(uint16_t status) {
     }
     
     if (status & TPS546_STATUS_NONE) {
-        ESP_LOGI(TAG, "TPS546 Status Word Error");
+        //ESP_LOGI(TAG, "TPS546 Status Word Error");
         //The host should check the STATUS_WORD for more information.
     } else {
         return ESP_OK;
@@ -800,7 +818,7 @@ esp_err_t TPS546_parse_status(uint16_t status) {
     //STATUS_WORD bits
 
     if (status & TPS546_STATUS_VOUT) {
-        ESP_LOGI(TAG, "TPS546 VOUT Status Error");
+        //ESP_LOGI(TAG, "TPS546 VOUT Status Error");
         //the host should check STATUS_VOUT for more information.
         if (smb_read_byte(PMBUS_STATUS_VOUT, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_VOUT");
@@ -810,7 +828,7 @@ esp_err_t TPS546_parse_status(uint16_t status) {
     }
 
     if (status & TPS546_STATUS_IOUT) {
-        ESP_LOGI(TAG, "TPS546 IOUT Status Error");
+        //ESP_LOGI(TAG, "TPS546 IOUT Status Error");
         //the host should check STATUS_IOUT for more information.
         if (smb_read_byte(PMBUS_STATUS_IOUT, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_IOUT");
@@ -820,7 +838,7 @@ esp_err_t TPS546_parse_status(uint16_t status) {
     }
 
     if (status & TPS546_STATUS_INPUT) {
-        ESP_LOGI(TAG, "TPS546 INPUT Status Error");
+        //ESP_LOGI(TAG, "TPS546 INPUT Status Error");
         //the host should check STATUS_INPUT for more information.
         if (smb_read_byte(PMBUS_STATUS_INPUT, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_INPUT");
@@ -830,7 +848,7 @@ esp_err_t TPS546_parse_status(uint16_t status) {
     }
 
     if (status & TPS546_STATUS_MFR) {
-        ESP_LOGI(TAG, "TPS546 MFR_SPECIFIC Status Error");
+        //ESP_LOGI(TAG, "TPS546 MFR_SPECIFIC Status Error");
         //the host should check STATUS_MFR_SPECIFIC for more information.
         if (smb_read_byte(PMBUS_STATUS_MFR_SPECIFIC, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_MFR_SPECIFIC");
@@ -844,7 +862,7 @@ esp_err_t TPS546_parse_status(uint16_t status) {
     }
 
     if (status & TPS546_STATUS_OTHER) {
-        ESP_LOGI(TAG, "TPS546 OTHER Status Error");
+        //ESP_LOGI(TAG, "TPS546 OTHER Status Error");
         //the host should check STATUS_OTHER for more information.
         if (smb_read_byte(PMBUS_STATUS_OTHER, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_OTHER");
@@ -990,7 +1008,7 @@ esp_err_t TPS546_init_fault_interrupt(void * isr_handler, void * global_state) {
     // Install ISR service and hook the interrupt handler
     ESP_RETURN_ON_ERROR(gpio_isr_handler_add(SMB_ALERT_PIN, (gpio_isr_t) isr_handler, global_state), TAG, "Error adding ISR handler");
 
-    ESP_LOGI(TAG, "SMB Alert interrupt initialized on pin %d", SMB_ALERT_PIN);
+    ESP_LOGI(TAG, "SMBus Alert interrupt initialized on pin %d", SMB_ALERT_PIN);
 
     return ESP_OK;
 }

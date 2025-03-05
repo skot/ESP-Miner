@@ -161,10 +161,11 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             ESP_LOGI(TAG, "Overheat mode updated to: %d", module->overheat_mode);
         }
 
-        //check for power_fault mode
-        if (module->power_fault != 0) {
-            ESP_LOGE(TAG, "Power fault detected: %d", module->power_fault);
-            VCORE_get_fault(GLOBAL_STATE);
+        if (VCORE_check_fault(GLOBAL_STATE)) {
+            ESP_LOGE(TAG, "VCORE fault detected");
+            module->power_fault = 1;
+        } else {
+            module->power_fault = 0;
         }
 
         // looper:

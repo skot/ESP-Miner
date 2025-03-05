@@ -3,10 +3,12 @@
 
 #include <stdint.h>
 #include <esp_err.h>
+#include <stdbool.h>
 
-#define TPS546_I2CADDR         0x24  //< TPS546 i2c address
-#define TPS546_MANUFACTURER_ID 0xFE  //< Manufacturer ID
-#define TPS546_REVISION        0xFF  //< Chip revision
+#define TPS546_I2CADDR         0x24  // TPS546 i2c address
+#define TPS546_I2CADDR_ALERT   0x0C  // TPS546 SMBus Alert address
+#define TPS546_MANUFACTURER_ID 0xFE  // Manufacturer ID
+#define TPS546_REVISION        0xFF  // Chip revision
 
 /*-------------------------*/
 /* These are the inital values for the voltage regulator configuration */
@@ -124,8 +126,7 @@ esp_err_t TPS546_set_vout(float volts);
 void TPS546_show_voltage_settings(void);
 void TPS546_print_status(void);
 
-esp_err_t TPS546_check_status(uint16_t *);
-esp_err_t TPS546_parse_status(uint16_t status);
+uint16_t TPS546_check_status(void);
 esp_err_t TPS546_clear_faults(void);
 
 #endif /* TPS546_H_ */
