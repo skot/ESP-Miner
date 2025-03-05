@@ -244,12 +244,22 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
 
     int chip_counter = 0;
     while (true) {
-        if(SERIAL_rx(asic_response_buffer, 11, 1000) > 0) {
-            chip_counter++;
-        } else {
+        if (SERIAL_rx(asic_response_buffer, 11, 1000) <= 0) {
             break;
         }
-    }
+
+        uint8_t checksum = crc5(asic_response_buffer, 10);
+        if (asic_response_buffer[10] != checksum) {
+            ESP_LOGW(TAG, "Checksum failed on CHIP_ID response (received %02x, expected %02x)", asic_response_buffer[10], checksum);
+            ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, 11);
+            continue;
+        }
+
+        if (memcmp(asic_response_buffer, "\xaa\x55\x13\x66\x00\x00", 6) == 0) {
+            chip_counter++;
+        }
+    }  
+    
     ESP_LOGI(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
 
     unsigned char init4[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0xA8, 0x00, 0x07, 0x00, 0x00, 0x03};

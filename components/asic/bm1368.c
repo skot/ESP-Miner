@@ -221,8 +221,15 @@ static int count_asic_chips(void) {
 
     int chip_counter = 0;
     while (true) {
-        if (SERIAL_rx(asic_response_buffer, 11, 5000) <= 0) {
+        if (SERIAL_rx(asic_response_buffer, 11, 1000) <= 0) {
             break;
+        }
+
+        uint8_t checksum = crc5(asic_response_buffer, 10);
+        if (asic_response_buffer[10] != checksum) {
+            ESP_LOGW(TAG, "Checksum failed on CHIP_ID response (received %02x, expected %02x)", asic_response_buffer[10], checksum);
+            ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, 11);
+            continue;
         }
 
         if (memcmp(asic_response_buffer, "\xaa\x55\x13\x68\x00\x00", 6) == 0) {
@@ -263,6 +270,8 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
         ESP_LOGE(TAG, "Chip count mismatch. Expected: %d, Actual: %d", asic_count, chip_counter);
         return 0;
     }
+
+    ESP_LOGI(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
 
     uint8_t init_cmds[][6] = {
         {0x00, 0xA8, 0x00, 0x07, 0x00, 0x00},
@@ -305,7 +314,6 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
     _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, (uint8_t[]){0x00, 0x10, 0x00, 0x00, 0x15, 0xa4}, 6, false);
     BM1368_set_version_mask(STRATUM_DEFAULT_VERSION_MASK);
 
-    ESP_LOGI(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
     return chip_counter;
 }
 
