@@ -234,6 +234,9 @@ static int count_asic_chips(void) {
 
         if (memcmp(asic_response_buffer, "\xaa\x55\x13\x68\x00\x00", 6) == 0) {
             chip_counter++;
+        } else {
+            ESP_LOGW(TAG, "CHIP_ID response mismatch");
+            ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, 11);
         }
     }
 

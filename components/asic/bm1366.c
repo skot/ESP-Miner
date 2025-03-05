@@ -257,6 +257,9 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
 
         if (memcmp(asic_response_buffer, "\xaa\x55\x13\x66\x00\x00", 6) == 0) {
             chip_counter++;
+        } else {
+            ESP_LOGW(TAG, "CHIP_ID response mismatch");
+            ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, 11);
         }
     }  
     
