@@ -143,11 +143,38 @@ void SYSTEM_notify_accepted_share(GlobalState * GLOBAL_STATE)
     module->shares_accepted++;
 }
 
-void SYSTEM_notify_rejected_share(GlobalState * GLOBAL_STATE)
+static int compare_rejected_reason_stats(const void *a, const void *b) {
+    const RejectedReasonStat *ea = a;
+    const RejectedReasonStat *eb = b;
+    return (eb->count > ea->count) - (ea->count > eb->count);
+}
+
+void SYSTEM_notify_rejected_share(GlobalState * GLOBAL_STATE, char * error_msg)
 {
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     module->shares_rejected++;
+
+    for (int i = 0; i < module->rejected_reason_stats_count; i++) {
+        if (strncmp(module->rejected_reason_stats[i].message, error_msg, sizeof(module->rejected_reason_stats[i].message) - 1) == 0) {
+            module->rejected_reason_stats[i].count++;
+            return;
+        }
+    }
+
+    if (module->rejected_reason_stats_count < sizeof(module->rejected_reason_stats)) {
+        strncpy(module->rejected_reason_stats[module->rejected_reason_stats_count].message, 
+                error_msg, 
+                sizeof(module->rejected_reason_stats[module->rejected_reason_stats_count].message) - 1);
+        module->rejected_reason_stats[module->rejected_reason_stats_count].message[sizeof(module->rejected_reason_stats[module->rejected_reason_stats_count].message) - 1] = '\0'; // Ensure null termination
+        module->rejected_reason_stats[module->rejected_reason_stats_count].count = 1;
+        module->rejected_reason_stats_count++;
+    }
+
+    if (module->rejected_reason_stats_count > 1) {
+        qsort(module->rejected_reason_stats, module->rejected_reason_stats_count, 
+            sizeof(module->rejected_reason_stats[0]), compare_rejected_reason_stats);
+    }    
 }
 
 void SYSTEM_notify_mining_started(GlobalState * GLOBAL_STATE)
