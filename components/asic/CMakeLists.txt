@@ -8,6 +8,7 @@ SRCS
     "crc.c"
     "common.c"
     "asic.c"
+    "frequency_transition.c"
 
 INCLUDE_DIRS 
     "include"

@@ -143,7 +143,31 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 
         if (asic_frequency != last_asic_frequency) {
             ESP_LOGI(TAG, "New ASIC frequency requested: %uMHz (current: %uMHz)", asic_frequency, last_asic_frequency);
-            if (do_frequency_transition((float)asic_frequency)) {
+            bool success = false;
+            
+            // Call the appropriate set_frequency function based on the ASIC model
+            switch (GLOBAL_STATE->asic_model) {
+                case ASIC_BM1366:
+                    success = BM1366_set_frequency((float)asic_frequency);
+                    break;
+                case ASIC_BM1368:
+                    success = BM1368_set_frequency((float)asic_frequency);
+                    break;
+                case ASIC_BM1370:
+                    success = BM1370_set_frequency((float)asic_frequency);
+                    break;
+                case ASIC_BM1397:
+                    // BM1397 doesn't have a set_frequency function yet
+                    ESP_LOGE(TAG, "Frequency transition not implemented for BM1397");
+                    success = false;
+                    break;
+                default:
+                    ESP_LOGE(TAG, "Unknown ASIC model, cannot set frequency");
+                    success = false;
+                    break;
+            }
+            
+            if (success) {
                 power_management->frequency_value = (float)asic_frequency;
                 ESP_LOGI(TAG, "Successfully transitioned to new ASIC frequency: %uMHz", asic_frequency);
             } else {

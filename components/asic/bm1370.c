@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "frequency_transition.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -197,24 +198,18 @@ void BM1370_send_hash_frequency(int id, float target_freq, float max_diff) {
 }
 
 static void do_frequency_ramp_up(float target_frequency) {
-    float current = 56.25;
-    float step = 6.25;
-
     if (target_frequency == 0) {
         ESP_LOGI(TAG, "Skipping frequency ramp");
         return;
     }
-
-    ESP_LOGI(TAG, "Ramping up frequency from %.2f MHz to %.2f MHz with step %.2f MHz", current, target_frequency, step);
-
-    BM1370_send_hash_frequency(-1, current, 0.001);
     
-    while (current < target_frequency) {
-        float next_step = fminf(step, target_frequency - current);
-        current += next_step;
-        BM1370_send_hash_frequency(-1, current, 0.001);
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
+    ESP_LOGI(TAG, "Ramping up frequency from 56.25 MHz to %.2f MHz", target_frequency);
+    do_frequency_transition(target_frequency, 1370);
+}
+
+// Add a public function for external use
+bool BM1370_set_frequency(float target_freq) {
+    return do_frequency_transition(target_freq, 1370);
 }
 
 static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
