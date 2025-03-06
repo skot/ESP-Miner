@@ -254,7 +254,8 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
             continue;
         }
 
-        if (memcmp(asic_response_buffer, "\xaa\x55\x13\x97\x00\x00", 6) != 0) {
+        // on BM1397, CORE_NUM should be 0x18
+        if (memcmp(asic_response_buffer, "\xaa\x55\x13\x97\x18\x00", 6) != 0) {
             ESP_LOGW(TAG, "CHIP_ID response mismatch");
             ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, 11);
             continue;
