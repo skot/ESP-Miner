@@ -93,7 +93,7 @@ esp_err_t receive_work(uint8_t * buffer, int buffer_size)
     int received = SERIAL_rx(buffer, buffer_size, 10000);
 
     if (received < 0) {
-        ESP_LOGE(TAG, "UART error in serial RX");
+        ESP_LOGD(TAG, "UART error in serial RX");
         return ESP_FAIL;
     }
 
