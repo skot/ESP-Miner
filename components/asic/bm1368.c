@@ -218,7 +218,7 @@ bool BM1368_set_frequency(float target_freq) {
     return do_frequency_transition(target_freq);
 }
 
-static int count_asic_chips(void) {
+static int count_asic_chips(uint16_t asic_count) {
     _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_READ, (uint8_t[]){0x00, 0x00}, 2, false);
 
     int chip_counter = 0;
@@ -281,7 +281,7 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
         BM1368_set_version_mask(STRATUM_DEFAULT_VERSION_MASK);
     }
 
-    int chip_counter = count_asic_chips();
+    int chip_counter = count_asic_chips(asic_count);
 
     if (chip_counter == 0) {
         return 0;
