@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <math.h>
+#include <arpa/inet.h>
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -14,6 +15,8 @@
 #include "crc.h"
 #include "mining.h"
 #include "global_state.h"
+
+#define BM1397_CHIP_ID 0x1397
 
 #ifdef CONFIG_GPIO_ASIC_RESET
 #define GPIO_ASIC_RESET CONFIG_GPIO_ASIC_RESET
@@ -49,23 +52,17 @@
 #define TICKET_MASK 0x14
 #define MISC_CONTROL 0x18
 
-#define BM1397_TIMEOUT_MS 10000
-#define BM1397_TIMEOUT_THRESHOLD 2
-
 typedef struct __attribute__((__packed__))
 {
-    uint8_t preamble[2];
+    uint16_t preamble;
     uint32_t nonce;
     uint8_t midstate_num;
     uint8_t job_id;
     uint8_t crc;
-} asic_result;
+} bm1397_asic_result_t;
 
 static const char *TAG = "bm1397Module";
 
-static const uint8_t BM1397_CHIP_ID_RESPONSE[] = {0x55, 0xAA, 0x13, 0x97};
-
-static uint8_t asic_response_buffer[SERIAL_BUF_SIZE];
 static uint32_t prev_nonce = 0;
 static task_result result;
 
@@ -143,7 +140,6 @@ void BM1397_set_version_mask(uint32_t version_mask) {
 // borrowed from cgminer driver-gekko.c calc_gsf_freq()
 void BM1397_send_hash_frequency(float frequency)
 {
-
     unsigned char prefreq1[9] = {0x00, 0x70, 0x0F, 0x0F, 0x0F, 0x00}; // prefreq - pll0_divider
 
     // default 200Mhz if it fails
@@ -235,41 +231,7 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     // send the init command
     _send_read_address();
 
-    int chip_counter = 0;
-    while (true) {
-        int16_t bytes_read = SERIAL_rx(asic_response_buffer, 11, 1000);
-        if (bytes_read == 0) break;
-
-        if (bytes_read == -1) {
-            ESP_LOGW(TAG, "Error reading CHIP_ID");
-            break;
-        }
-
-        if (bytes_read != 11) {
-            ESP_LOGW(TAG, "Invalid CHIP_ID response length");
-            break;
-        }
-
-        if (crc5(asic_response_buffer + 2, 9) != 0) {
-            ESP_LOGW(TAG, "Checksum failed on CHIP_ID response");
-            ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, 11);
-            continue;
-        }
-
-        if (memcmp(asic_response_buffer, BM1397_CHIP_ID_RESPONSE, 4) != 0) {
-            ESP_LOGW(TAG, "CHIP_ID response mismatch");
-            ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, 11);
-            continue;
-        }
-
-        ESP_LOGI(TAG, "Chip %d detected: CORE_NUM: %02x ADDR: %02x", chip_counter, asic_response_buffer[4], asic_response_buffer[5]);
-
-        chip_counter++;
-    }    
-    
-    if (chip_counter != asic_count) {
-        ESP_LOGW(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
-    }
+    int chip_counter = count_asic_chips(asic_count, BM1397_CHIP_ID);
 
     if (chip_counter == 0) {
         return 0;
@@ -329,8 +291,6 @@ static void _reset(void)
 uint8_t BM1397_init(uint64_t frequency, uint16_t asic_count)
 {
     ESP_LOGI(TAG, "Initializing BM1397");
-
-    memset(asic_response_buffer, 0, SERIAL_BUF_SIZE);
 
     esp_rom_gpio_pad_select_gpio(GPIO_ASIC_RESET);
     gpio_set_direction(GPIO_ASIC_RESET, GPIO_MODE_OUTPUT);
@@ -394,7 +354,6 @@ static uint8_t id = 0;
 
 void BM1397_send_work(void *pvParameters, bm_job *next_bm_job)
 {
-
     GlobalState *GLOBAL_STATE = (GlobalState *)pvParameters;
 
     job_packet job;
@@ -436,56 +395,19 @@ void BM1397_send_work(void *pvParameters, bm_job *next_bm_job)
     _send_BM1397((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(job_packet), BM1397_DEBUG_WORK);
 }
 
-asic_result *BM1397_receive_work(void)
+task_result *BM1397_process_work(void *pvParameters)
 {
+    bm1397_asic_result_t asic_result = {0};
 
-    // wait for a response
-    int received = SERIAL_rx(asic_response_buffer, 9, BM1397_TIMEOUT_MS);
-
-    bool uart_err = received < 0;
-    bool uart_timeout = received == 0;
-    uint8_t asic_timeout_counter = 0;
-
-    // handle response
-    if (uart_err) {
-        ESP_LOGI(TAG, "UART Error in serial RX");
-        return NULL;
-    } else if (uart_timeout) {
-        if (asic_timeout_counter >= BM1397_TIMEOUT_THRESHOLD) {
-            ESP_LOGE(TAG, "ASIC not sending data");
-            asic_timeout_counter = 0;
-        }
-        asic_timeout_counter++;
-        return NULL;
-    }
-
-    if (received != 9 || asic_response_buffer[0] != 0xAA || asic_response_buffer[1] != 0x55)
-    {
-        ESP_LOGI(TAG, "Serial RX invalid %i", received);
-        ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, received);
-        SERIAL_clear_buffer();
-        return NULL;
-    }
-
-    return (asic_result *)asic_response_buffer;
-}
-
-task_result *BM1397_proccess_work(void *pvParameters)
-{
-
-    asic_result *asic_result = BM1397_receive_work();
-
-    if (asic_result == NULL)
-    {
-        ESP_LOGI(TAG, "return null");
+    if (receive_work((uint8_t *)&asic_result, sizeof(asic_result)) == ESP_FAIL) {
         return NULL;
     }
 
     uint8_t nonce_found = 0;
     uint32_t first_nonce = 0;
 
-    uint8_t rx_job_id = asic_result->job_id & 0xfc;
-    uint8_t rx_midstate_index = asic_result->job_id & 0x03;
+    uint8_t rx_job_id = asic_result.job_id & 0xfc;
+    uint8_t rx_midstate_index = asic_result.job_id & 0x03;
 
     GlobalState *GLOBAL_STATE = (GlobalState *)pvParameters;
     if (GLOBAL_STATE->valid_jobs[rx_job_id] == 0)
@@ -505,26 +427,26 @@ task_result *BM1397_proccess_work(void *pvParameters)
     // most of the time it behavies however
     if (nonce_found == 0)
     {
-        first_nonce = asic_result->nonce;
+        first_nonce = asic_result.nonce;
         nonce_found = 1;
     }
-    else if (asic_result->nonce == first_nonce)
+    else if (asic_result.nonce == first_nonce)
     {
         // stop if we've already seen this nonce
         return NULL;
     }
 
-    if (asic_result->nonce == prev_nonce)
+    if (asic_result.nonce == prev_nonce)
     {
         return NULL;
     }
     else
     {
-        prev_nonce = asic_result->nonce;
+        prev_nonce = asic_result.nonce;
     }
 
     result.job_id = rx_job_id;
-    result.nonce = asic_result->nonce;
+    result.nonce = asic_result.nonce;
     result.rolled_version = rolled_version;
 
     return &result;

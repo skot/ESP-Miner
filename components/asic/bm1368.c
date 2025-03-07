@@ -14,6 +14,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
+
+#define BM1368_CHIP_ID 0x1368
 
 #ifdef CONFIG_GPIO_ASIC_RESET
 #define GPIO_ASIC_RESET CONFIG_GPIO_ASIC_RESET
@@ -49,23 +52,18 @@
 #define TICKET_MASK 0x14
 #define MISC_CONTROL 0x18
 
-#define BM1368_TIMEOUT_MS 10000
-#define BM1368_TIMEOUT_THRESHOLD 2
 typedef struct __attribute__((__packed__))
 {
-    uint8_t preamble[2];
+    uint16_t preamble;
     uint32_t nonce;
     uint8_t midstate_num;
     uint8_t job_id;
     uint16_t version;
     uint8_t crc;
-} asic_result;
+} bm1368_asic_result_t;
 
 static const char * TAG = "bm1368Module";
 
-static const uint8_t BM1368_CHIP_ID_RESPONSE[] = {0x55, 0xAA, 0x13, 0x68};
-
-static uint8_t asic_response_buffer[CHUNK_SIZE];
 static task_result result;
 
 static float current_frequency = 56.25;
@@ -218,48 +216,6 @@ bool BM1368_set_frequency(float target_freq) {
     return do_frequency_transition(target_freq);
 }
 
-static int count_asic_chips(uint16_t asic_count) {
-    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_READ, (uint8_t[]){0x00, 0x00}, 2, false);
-
-    int chip_counter = 0;
-    while (true) {
-        int16_t bytes_read = SERIAL_rx(asic_response_buffer, 11, 1000);
-        if (bytes_read == 0) break;
-
-        if (bytes_read == -1) {
-            ESP_LOGW(TAG, "Error reading CHIP_ID");
-            break;
-        }
-
-        if (bytes_read != 11) {
-            ESP_LOGW(TAG, "Invalid CHIP_ID response length");
-            break;
-        }
-
-        if (crc5(asic_response_buffer + 2, 9) != 0) {
-            ESP_LOGW(TAG, "Checksum failed on CHIP_ID response");
-            ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, 11);
-            continue;
-        }
-
-        if (memcmp(asic_response_buffer, BM1368_CHIP_ID_RESPONSE, 4) != 0) {
-            ESP_LOGW(TAG, "CHIP_ID response mismatch");
-            ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, 11);
-            continue;
-        }
-
-        ESP_LOGI(TAG, "Chip %d detected: CORE_NUM: %02x ADDR: %02x", chip_counter, asic_response_buffer[4], asic_response_buffer[5]);
-
-        chip_counter++;
-    }    
-    
-    if (chip_counter != asic_count) {
-        ESP_LOGW(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
-    }
-
-    return chip_counter;
-}
-
 static void do_frequency_ramp_up(float target_frequency) {
     ESP_LOGI(TAG, "Ramping up frequency from %.2f MHz to %.2f MHz", current_frequency, target_frequency);
     do_frequency_transition(target_frequency);
@@ -268,8 +224,6 @@ static void do_frequency_ramp_up(float target_frequency) {
 uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
 {
     ESP_LOGI(TAG, "Initializing BM1368");
-
-    memset(asic_response_buffer, 0, CHUNK_SIZE);
 
     esp_rom_gpio_pad_select_gpio(GPIO_ASIC_RESET);
     gpio_set_direction(GPIO_ASIC_RESET, GPIO_MODE_OUTPUT);
@@ -281,7 +235,9 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
         BM1368_set_version_mask(STRATUM_DEFAULT_VERSION_MASK);
     }
 
-    int chip_counter = count_asic_chips(asic_count);
+    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_READ, (uint8_t[]){0x00, 0x00}, 2, false);
+
+    int chip_counter = count_asic_chips(asic_count, BM1368_CHIP_ID);
 
     if (chip_counter == 0) {
         return 0;
@@ -399,63 +355,18 @@ void BM1368_send_work(void * pvParameters, bm_job * next_bm_job)
     _send_BM1368((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(BM1368_job), BM1368_DEBUG_WORK);
 }
 
-asic_result * BM1368_receive_work(void)
+task_result * BM1368_process_work(void * pvParameters)
 {
-    // wait for a response
-    int received = SERIAL_rx(asic_response_buffer, 11, BM1368_TIMEOUT_MS);
+    bm1368_asic_result_t asic_result = {0};
 
-    bool uart_err = received < 0;
-    bool uart_timeout = received == 0;
-    uint8_t asic_timeout_counter = 0;
-
-    // handle response
-    if (uart_err) {
-        ESP_LOGI(TAG, "UART Error in serial RX");
-        return NULL;
-    } else if (uart_timeout) {
-        if (asic_timeout_counter >= BM1368_TIMEOUT_THRESHOLD) {
-            ESP_LOGE(TAG, "ASIC not sending data");
-            asic_timeout_counter = 0;
-        }
-        asic_timeout_counter++;
+    if (receive_work((uint8_t *)&asic_result, sizeof(asic_result)) == ESP_FAIL) {
         return NULL;
     }
 
-    if (received != 11 || asic_response_buffer[0] != 0xAA || asic_response_buffer[1] != 0x55) {
-        ESP_LOGE(TAG, "Serial RX invalid %i", received);
-        ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, received);
-        SERIAL_clear_buffer();
-        return NULL;
-    }
-
-    return (asic_result *) asic_response_buffer;
-}
-
-static uint16_t reverse_uint16(uint16_t num)
-{
-    return (num >> 8) | (num << 8);
-}
-
-static uint32_t reverse_uint32(uint32_t val)
-{
-    return ((val >> 24) & 0xff) |
-           ((val << 8) & 0xff0000) |
-           ((val >> 8) & 0xff00) |
-           ((val << 24) & 0xff000000);
-}
-
-task_result * BM1368_proccess_work(void * pvParameters)
-{
-    asic_result * asic_result = BM1368_receive_work();
-
-    if (asic_result == NULL) {
-        return NULL;
-    }
-
-    uint8_t job_id = (asic_result->job_id & 0xf0) >> 1;
-    uint8_t core_id = (uint8_t)((reverse_uint32(asic_result->nonce) >> 25) & 0x7f);
-    uint8_t small_core_id = asic_result->job_id & 0x0f;
-    uint32_t version_bits = (reverse_uint16(asic_result->version) << 13);
+    uint8_t job_id = (asic_result.job_id & 0xf0) >> 1;
+    uint8_t core_id = (uint8_t)((ntohl(asic_result.nonce) >> 25) & 0x7f);
+    uint8_t small_core_id = asic_result.job_id & 0x0f;
+    uint32_t version_bits = (ntohs(asic_result.version) << 13);
     ESP_LOGI(TAG, "Job ID: %02X, Core: %d/%d, Ver: %08" PRIX32, job_id, core_id, small_core_id, version_bits);
 
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
@@ -468,7 +379,7 @@ task_result * BM1368_proccess_work(void * pvParameters)
     uint32_t rolled_version = GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->version | version_bits;
 
     result.job_id = job_id;
-    result.nonce = asic_result->nonce;
+    result.nonce = asic_result.nonce;
     result.rolled_version = rolled_version;
 
     return &result;

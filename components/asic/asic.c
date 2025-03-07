@@ -65,18 +65,18 @@ uint16_t ASIC_get_small_core_count(GlobalState * GLOBAL_STATE) {
     return 0;
 }
 
-// .receive_result_fn = BM1366_proccess_work,
-task_result * ASIC_proccess_work(GlobalState * GLOBAL_STATE) {
+// .receive_result_fn = BM1366_process_work,
+task_result * ASIC_process_work(GlobalState * GLOBAL_STATE) {
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
-            return BM1397_proccess_work(GLOBAL_STATE);
+            return BM1397_process_work(GLOBAL_STATE);
         case DEVICE_ULTRA:
-            return BM1366_proccess_work(GLOBAL_STATE);
+            return BM1366_process_work(GLOBAL_STATE);
         case DEVICE_SUPRA:
-            return BM1368_proccess_work(GLOBAL_STATE);
+            return BM1368_process_work(GLOBAL_STATE);
         case DEVICE_GAMMA:
         case DEVICE_GAMMATURBO:
-            return BM1370_proccess_work(GLOBAL_STATE);
+            return BM1370_process_work(GLOBAL_STATE);
         default:
     }
     return NULL;
