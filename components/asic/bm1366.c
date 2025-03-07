@@ -65,6 +65,8 @@ static float current_frequency = 56.25;
 
 static const char * TAG = "bm1366Module";
 
+static const uint8_t BM1366_CHIP_ID_RESPONSE[] = {0x55, 0xAA, 0x13, 0x66};
+
 static uint8_t asic_response_buffer[SERIAL_BUF_SIZE];
 static task_result result;
 
@@ -263,16 +265,24 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
             continue;
         }
 
-        if (memcmp(asic_response_buffer, "\xaa\x55\x13\x66\x00\x00", 6) != 0) {
+        if (memcmp(asic_response_buffer, BM1366_CHIP_ID_RESPONSE, 4) != 0) {
             ESP_LOGW(TAG, "CHIP_ID response mismatch");
             ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, 11);
             continue;
         }
 
+        ESP_LOGI(TAG, "Chip %d detected: CORE_NUM: %02x ADDR: %02x", chip_counter, asic_response_buffer[4], asic_response_buffer[5]);
+
         chip_counter++;
-    }  
+    }    
     
-    ESP_LOGI(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
+    if (chip_counter != asic_count) {
+        ESP_LOGW(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
+    }
+
+    if (chip_counter == 0) {
+        return 0;
+    }
 
     unsigned char init4[11] = {0x55, 0xAA, 0x51, 0x09, 0x00, 0xA8, 0x00, 0x07, 0x00, 0x00, 0x03};
     _send_simple(init4, 11);
