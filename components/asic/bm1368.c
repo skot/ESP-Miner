@@ -133,7 +133,7 @@ static void _reset(void)
     vTaskDelay(100 / portTICK_PERIOD_MS);
 }
 
-bool BM1368_send_hash_frequency(float target_freq) {
+void BM1368_send_hash_frequency(float target_freq) {
     float max_diff = 0.001;
     uint8_t freqbuf[6] = {0x00, 0x08, 0x40, 0xA0, 0x02, 0x41};
     uint8_t postdiv_min = 255;
@@ -169,7 +169,7 @@ bool BM1368_send_hash_frequency(float target_freq) {
 
     if (!found) {
         ESP_LOGE(TAG, "Didn't find PLL settings for target frequency %.2f", target_freq);
-        return false;
+        return;
     }
 
     freqbuf[2] = (best_fbdiv * 25 / best_refdiv >= 2400) ? 0x50 : 0x40;
@@ -181,11 +181,10 @@ bool BM1368_send_hash_frequency(float target_freq) {
 
     ESP_LOGI(TAG, "Setting Frequency to %.2fMHz (%.2f)", target_freq, best_freq);
     current_frequency = target_freq;
-    return true;
 }
 
 bool BM1368_set_frequency(float target_freq) {
-    return do_frequency_transition(target_freq, 1368);
+    return do_frequency_transition(target_freq, BM1368_send_hash_frequency, 1368);
 }
 
 static int count_asic_chips(void) {
@@ -210,7 +209,7 @@ static int count_asic_chips(void) {
 
 static void do_frequency_ramp_up(float target_frequency) {
     ESP_LOGI(TAG, "Ramping up frequency from %.2f MHz to %.2f MHz", current_frequency, target_frequency);
-    do_frequency_transition(target_frequency, 1368);
+    do_frequency_transition(target_frequency, BM1368_send_hash_frequency, 1368);
 }
 
 uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)

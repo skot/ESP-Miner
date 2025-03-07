@@ -1,7 +1,4 @@
 #include "frequency_transition.h"
-#include "bm1366.h"
-#include "bm1368.h"
-#include "bm1370.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -11,27 +8,15 @@ const char *FREQUENCY_TRANSITION_TAG = "frequency_transition";
 
 static float current_frequency = 56.25;
 
-
-bool do_frequency_transition(float target_frequency, int asic_type) {
-    float step = 6.25;
-    float current;
-    float target = target_frequency;
-
-    // Select the appropriate current frequency based on ASIC type
-    switch (asic_type) {
-        case 1366:
-            current = current_frequency;
-            break;
-        case 1368:
-            current = current_frequency;
-            break;
-        case 1370:
-            current = current_frequency;
-            break;
-        default:
-            ESP_LOGE(FREQUENCY_TRANSITION_TAG, "Unknown ASIC type: %d", asic_type);
-            return false;
+bool do_frequency_transition(float target_frequency, set_hash_frequency_fn set_frequency_fn, int asic_type) {
+    if (set_frequency_fn == NULL) {
+        ESP_LOGE(FREQUENCY_TRANSITION_TAG, "Invalid function pointer provided");
+        return false;
     }
+
+    float step = 6.25;
+    float current = current_frequency;
+    float target = target_frequency;
 
     float direction = (target > current) ? step : -step;
 
@@ -45,18 +30,8 @@ bool do_frequency_transition(float target_frequency, int asic_type) {
         }
         current = next_dividable;
         
-        // Call the appropriate send_hash_frequency function based on ASIC type
-        switch (asic_type) {
-            case 1366:
-                BM1366_send_hash_frequency(current);
-                break;
-            case 1368:
-                BM1368_send_hash_frequency(current);
-                break;
-            case 1370:
-                BM1370_send_hash_frequency(-1, current, 0.001);
-                break;
-        }
+        // Call the provided hash frequency function
+        set_frequency_fn(current);
         
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
@@ -66,37 +41,15 @@ bool do_frequency_transition(float target_frequency, int asic_type) {
         float next_step = fmin(fabs(direction), fabs(target - current));
         current += direction > 0 ? next_step : -next_step;
         
-        // Call the appropriate send_hash_frequency function based on ASIC type
-        switch (asic_type) {
-            case 1366:
-                BM1366_send_hash_frequency(current);
-                break;
-            case 1368:
-                BM1368_send_hash_frequency(current);
-                break;
-            case 1370:
-                BM1370_send_hash_frequency(-1, current, 0.001);
-                break;
-        }
+        // Call the provided hash frequency function
+        set_frequency_fn(current);
         
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
     
     // Set the final target frequency
-    switch (asic_type) {
-        case 1366:
-            BM1366_send_hash_frequency(target);
-            current_frequency = target;
-            break;
-        case 1368:
-            BM1368_send_hash_frequency(target);
-            current_frequency = target;
-            break;
-        case 1370:
-            BM1370_send_hash_frequency(-1, target, 0.001);
-            current_frequency = target;
-            break;
-    }
+    set_frequency_fn(target);
+    current_frequency = target;
     
     ESP_LOGI(FREQUENCY_TRANSITION_TAG, "Successfully transitioned ASIC type %d to %.2f MHz", asic_type, target);
     return true;

@@ -203,12 +203,12 @@ void BM1366_send_hash_frequency(float target_freq)
 
 static void do_frequency_ramp_up(float target_frequency) {
     ESP_LOGI(TAG, "Ramping up frequency from %.2f MHz to %.2f MHz", current_frequency, target_frequency);
-    do_frequency_transition(target_frequency, 1366);
+    do_frequency_transition(target_frequency, BM1366_send_hash_frequency, 1366);
 }
 
 // Add a public function for external use
 bool BM1366_set_frequency(float target_freq) {
-    return do_frequency_transition(target_freq, 1366);
+    return do_frequency_transition(target_freq, BM1366_send_hash_frequency, 1366);
 }
 
 

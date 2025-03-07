@@ -6,15 +6,26 @@
 extern const char *FREQUENCY_TRANSITION_TAG;
 
 /**
+ * @brief Function pointer type for ASIC hash frequency setting functions
+ * 
+ * This type defines the signature for functions that set the hash frequency
+ * for different ASIC types.
+ * 
+ * @param frequency The frequency to set in MHz
+ */
+typedef void (*set_hash_frequency_fn)(float frequency);
+
+/**
  * @brief Transition the ASIC frequency to a target value
  * 
  * This function gradually adjusts the ASIC frequency to reach the target value,
  * stepping up or down in increments to ensure stability.
  * 
  * @param target_frequency The target frequency in MHz
- * @param asic_type The type of ASIC chip (1366, 1368, 1370)
+ * @param set_frequency_fn Function pointer to the appropriate ASIC's set_hash_frequency function
+ * @param asic_type The type of ASIC chip (for logging purposes only)
  * @return bool True if the transition was successful, false otherwise
  */
-bool do_frequency_transition(float target_frequency, int asic_type);
+bool do_frequency_transition(float target_frequency, set_hash_frequency_fn set_frequency_fn, int asic_type);
 
 #endif // FREQUENCY_TRANSITION_H
