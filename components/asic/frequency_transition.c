@@ -9,10 +9,8 @@
 
 const char *FREQUENCY_TRANSITION_TAG = "frequency_transition";
 
-// Track current frequency for each ASIC type
-static float current_frequency_1366 = 56.25;
-static float current_frequency_1368 = 56.25;
-static float current_frequency_1370 = 56.25;
+static float current_frequency = 56.25;
+
 
 bool do_frequency_transition(float target_frequency, int asic_type) {
     float step = 6.25;
@@ -22,13 +20,13 @@ bool do_frequency_transition(float target_frequency, int asic_type) {
     // Select the appropriate current frequency based on ASIC type
     switch (asic_type) {
         case 1366:
-            current = current_frequency_1366;
+            current = current_frequency;
             break;
         case 1368:
-            current = current_frequency_1368;
+            current = current_frequency;
             break;
         case 1370:
-            current = current_frequency_1370;
+            current = current_frequency;
             break;
         default:
             ESP_LOGE(FREQUENCY_TRANSITION_TAG, "Unknown ASIC type: %d", asic_type);
@@ -88,15 +86,15 @@ bool do_frequency_transition(float target_frequency, int asic_type) {
     switch (asic_type) {
         case 1366:
             BM1366_send_hash_frequency(target);
-            current_frequency_1366 = target;
+            current_frequency = target;
             break;
         case 1368:
             BM1368_send_hash_frequency(target);
-            current_frequency_1368 = target;
+            current_frequency = target;
             break;
         case 1370:
             BM1370_send_hash_frequency(-1, target, 0.001);
-            current_frequency_1370 = target;
+            current_frequency = target;
             break;
     }
     
