@@ -43,10 +43,10 @@ static const char * CORS_TAG = "CORS";
 static esp_err_t GET_wifi_scan(httpd_req_t *req)
 {
     httpd_resp_set_type(req, "application/json");
-    
+
     // Give some time for the connected flag to take effect
     vTaskDelay(100 / portTICK_PERIOD_MS);
-    
+
     wifi_ap_record_simple_t ap_records[20];
     uint16_t ap_count = 0;
 
@@ -374,6 +374,11 @@ static esp_err_t handle_options_request(httpd_req_t * req)
     return ESP_OK;
 }
 
+static bool is_valid_json_string(cJSON *root, cJSON **item, const char *key) {
+    *item = cJSON_GetObjectItem(root, key);
+    return (*item) != NULL && (*item)->type != cJSON_NULL && (*item)->valuestring != NULL;
+}
+
 static esp_err_t PATCH_update_settings(httpd_req_t * req)
 {
 
@@ -408,28 +413,28 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     buf[total_len] = '\0';
 
     cJSON * root = cJSON_Parse(buf);
-    cJSON * item;
+    cJSON * item = NULL;
     if (root == NULL) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
         return ESP_OK;
     }
 
-    if ((item = cJSON_GetObjectItem(root, "stratumURL")) != NULL) {
+    if (is_valid_json_string(root, &item, "stratumURL")) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_URL, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "fallbackStratumURL")) != NULL) {
+    if (is_valid_json_string(root, &item, "fallbackStratumURL")) {
         nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_URL, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "stratumUser")) != NULL) {
+    if (is_valid_json_string(root, &item, "stratumUser")) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_USER, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "stratumPassword")) != NULL) {
+    if (is_valid_json_string(root, &item, "stratumPassword")) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_PASS, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "fallbackStratumUser")) != NULL) {
+    if (is_valid_json_string(root, &item, "fallbackStratumUser")) {
         nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_USER, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "fallbackStratumPassword")) != NULL) {
+    if (is_valid_json_string(root, &item, "fallbackStratumPassword")) {
         nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_PASS, item->valuestring);
     }
     if ((item = cJSON_GetObjectItem(root, "stratumPort")) != NULL) {
@@ -438,13 +443,13 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "fallbackStratumPort")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_FALLBACK_STRATUM_PORT, item->valueint);
     }
-    if ((item = cJSON_GetObjectItem(root, "ssid")) != NULL) {
+    if (is_valid_json_string(root, &item, "ssid")) {
         nvs_config_set_string(NVS_CONFIG_WIFI_SSID, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "wifiPass")) != NULL) {
+    if (is_valid_json_string(root, &item, "wifiPass")) {
         nvs_config_set_string(NVS_CONFIG_WIFI_PASS, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "hostname")) != NULL) {
+    if (is_valid_json_string(root, &item, "hostname")) {
         nvs_config_set_string(NVS_CONFIG_HOSTNAME, item->valuestring);
     }
     if ((item = cJSON_GetObjectItem(root, "coreVoltage")) != NULL && item->valueint > 0) {
