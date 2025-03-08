@@ -41,7 +41,8 @@ void BM1370_set_job_difficulty_mask(int);
 void BM1370_set_version_mask(uint32_t version_mask);
 int BM1370_set_max_baud(void);
 int BM1370_set_default_baud(void);
-void BM1370_send_hash_frequency(int, float, float);
+void BM1370_send_hash_frequency(float frequency);
+bool BM1370_set_frequency(float target_freq);
 task_result * BM1370_proccess_work(void * GLOBAL_STATE);
 
 #endif /* BM1370_H_ */

@@ -1,6 +1,5 @@
 #include <string.h>
 #include "INA260.h"
-#include "bm1397.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -13,6 +12,7 @@
 #include "vcore.h"
 #include "thermal.h"
 #include "power.h"
+#include "asic.h"
 
 #define POLL_RATE 2000
 #define MAX_TEMP 90.0
@@ -143,12 +143,13 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 
         if (asic_frequency != last_asic_frequency) {
             ESP_LOGI(TAG, "New ASIC frequency requested: %uMHz (current: %uMHz)", asic_frequency, last_asic_frequency);
-            if (do_frequency_transition((float)asic_frequency)) {
+            
+            bool success = ASIC_set_frequency(GLOBAL_STATE, (float)asic_frequency);
+            
+            if (success) {
                 power_management->frequency_value = (float)asic_frequency;
-                ESP_LOGI(TAG, "Successfully transitioned to new ASIC frequency: %uMHz", asic_frequency);
-            } else {
-                ESP_LOGE(TAG, "Failed to transition to new ASIC frequency: %uMHz", asic_frequency);
             }
+            
             last_asic_frequency = asic_frequency;
         }
 
