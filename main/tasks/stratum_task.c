@@ -357,8 +357,8 @@ void stratum_process(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumC
             }
             else
             {
-                ESP_LOGW(POOL_TAG, "message result rejected: %s", connection->message->error_str ? connection->message->error_str : "unknown");
-                SYSTEM_notify_rejected_share(GLOBAL_STATE);
+                ESP_LOGW(POOL_TAG, "message result rejected: %s", connection->message->error_str);
+                SYSTEM_notify_rejected_share(GLOBAL_STATE, connection->message->error_str);
             }
         }
         else if (connection->message->method == STRATUM_RESULT_SETUP)
@@ -372,7 +372,7 @@ void stratum_process(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumC
             }
             else
             {
-                ESP_LOGE(POOL_TAG, "setup message rejected: %s", connection->message->error_str ? connection->message->error_str : "unknown");
+                ESP_LOGE(POOL_TAG, "setup message rejected: %s", connection->message->error_str);
             }
         }
     }
