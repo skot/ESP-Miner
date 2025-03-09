@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "frequency_transition_bmXX.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -145,76 +146,76 @@ void BM1370_set_version_mask(uint32_t version_mask)
     _send_BM1370(TYPE_CMD | GROUP_ALL | CMD_WRITE, version_cmd, 6, BM1370_SERIALTX_DEBUG);
 }
 
-void BM1370_send_hash_frequency(int id, float target_freq, float max_diff) {
-    uint8_t freqbuf[6] = {0x00, 0x08, 0x40, 0xA0, 0x02, 0x41};
-    uint8_t postdiv_min = 255;
-    uint8_t postdiv2_min = 255;
-    float best_freq = 0;
-    uint8_t best_refdiv = 0, best_fbdiv = 0, best_postdiv1 = 0, best_postdiv2 = 0;
+void BM1370_send_hash_frequency(float target_freq) {
+    // default 200Mhz if it fails
+    unsigned char freqbuf[6] = {0x00, 0x08, 0x40, 0xA0, 0x02, 0x41}; // freqbuf - pll0_parameter
+    float newf = 200.0;
 
-    for (uint8_t refdiv = 2; refdiv > 0; refdiv--) {
-        for (uint8_t postdiv1 = 7; postdiv1 > 0; postdiv1--) {
-            for (uint8_t postdiv2 = 7; postdiv2 > 0; postdiv2--) {
-                uint16_t fb_divider = round(target_freq / 25.0 * (refdiv * postdiv2 * postdiv1));
-                float newf = 25.0 * fb_divider / (refdiv * postdiv2 * postdiv1);
-                
-                if (fb_divider >= 0xa0 && fb_divider <= 0xef &&
-                    fabs(target_freq - newf) < max_diff &&
-                    postdiv1 >= postdiv2 &&
-                    postdiv1 * postdiv2 < postdiv_min &&
-                    postdiv2 <= postdiv2_min) {
-                    
-                    postdiv2_min = postdiv2;
-                    postdiv_min = postdiv1 * postdiv2;
-                    best_freq = newf;
-                    best_refdiv = refdiv;
-                    best_fbdiv = fb_divider;
-                    best_postdiv1 = postdiv1;
-                    best_postdiv2 = postdiv2;
+    uint8_t fb_divider = 0;
+    uint8_t post_divider1 = 0, post_divider2 = 0;
+    uint8_t ref_divider = 0;
+    float min_difference = 10;
+    float max_diff = 1.0;
+
+    // refdiver is 2 or 1
+    // postdivider 2 is 1 to 7
+    // postdivider 1 is 1 to 7 and greater than or equal to postdivider 2
+    // fbdiv is 0xa0 to 0xef
+    for (uint8_t refdiv_loop = 2; refdiv_loop > 0 && fb_divider == 0; refdiv_loop--) {
+        for (uint8_t postdiv1_loop = 7; postdiv1_loop > 0 && fb_divider == 0; postdiv1_loop--) {
+            for (uint8_t postdiv2_loop = 7; postdiv2_loop > 0 && fb_divider == 0; postdiv2_loop--) {
+                if (postdiv1_loop >= postdiv2_loop) {
+                    int temp_fb_divider = round(((float) (postdiv1_loop * postdiv2_loop * target_freq * refdiv_loop) / 25.0));
+
+                    if (temp_fb_divider >= 0xa0 && temp_fb_divider <= 0xef) {
+                        float temp_freq = 25.0 * (float) temp_fb_divider / (float) (refdiv_loop * postdiv2_loop * postdiv1_loop);
+                        float freq_diff = fabs(target_freq - temp_freq);
+
+                        if (freq_diff < min_difference && freq_diff < max_diff) {
+                            fb_divider = temp_fb_divider;
+                            post_divider1 = postdiv1_loop;
+                            post_divider2 = postdiv2_loop;
+                            ref_divider = refdiv_loop;
+                            min_difference = freq_diff;
+                            newf = temp_freq;
+                        }
+                    }
                 }
             }
         }
     }
 
-    if (best_fbdiv == 0) {
+    if (fb_divider == 0) {
         ESP_LOGE(TAG, "Failed to find PLL settings for target frequency %.2f", target_freq);
         return;
     }
 
-    freqbuf[2] = (best_fbdiv * 25 / best_refdiv >= 2400) ? 0x50 : 0x40;
-    freqbuf[3] = best_fbdiv;
-    freqbuf[4] = best_refdiv;
-    freqbuf[5] = (((best_postdiv1 - 1) & 0xf) << 4) | ((best_postdiv2 - 1) & 0xf);
+    freqbuf[3] = fb_divider;
+    freqbuf[4] = ref_divider;
+    freqbuf[5] = (((post_divider1 - 1) & 0xf) << 4) + ((post_divider2 - 1) & 0xf);
 
-    if (id != -1) {
-        freqbuf[0] = id * 2;
-        _send_BM1370(TYPE_CMD | GROUP_SINGLE | CMD_WRITE, freqbuf, 6, BM1370_SERIALTX_DEBUG);
-    } else {
-        _send_BM1370(TYPE_CMD | GROUP_ALL | CMD_WRITE, freqbuf, 6, BM1370_SERIALTX_DEBUG);
+    if (fb_divider * 25 / (float) ref_divider >= 2400) {
+        freqbuf[2] = 0x50;
     }
 
-    ESP_LOGI(TAG, "Setting Frequency to %.2fMHz (%.2f)", target_freq, best_freq);
+    _send_BM1370(TYPE_CMD | GROUP_ALL | CMD_WRITE, freqbuf, 6, BM1370_SERIALTX_DEBUG);
+
+    ESP_LOGI(TAG, "Setting Frequency to %.2fMHz (%.2f)", target_freq, newf);
 }
 
 static void do_frequency_ramp_up(float target_frequency) {
-    float current = 56.25;
-    float step = 6.25;
-
     if (target_frequency == 0) {
         ESP_LOGI(TAG, "Skipping frequency ramp");
         return;
     }
-
-    ESP_LOGI(TAG, "Ramping up frequency from %.2f MHz to %.2f MHz with step %.2f MHz", current, target_frequency, step);
-
-    BM1370_send_hash_frequency(-1, current, 0.001);
     
-    while (current < target_frequency) {
-        float next_step = fminf(step, target_frequency - current);
-        current += next_step;
-        BM1370_send_hash_frequency(-1, current, 0.001);
-        vTaskDelay(pdMS_TO_TICKS(100));
-    }
+    ESP_LOGI(TAG, "Ramping up frequency from 56.25 MHz to %.2f MHz", target_frequency);
+    do_frequency_transition(target_frequency, BM1370_send_hash_frequency, 1370);
+}
+
+// Add a public function for external use
+bool BM1370_set_frequency(float target_freq) {
+    return do_frequency_transition(target_freq, BM1370_send_hash_frequency, 1370);
 }
 
 static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
