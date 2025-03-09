@@ -15,7 +15,7 @@ static const char *TAG = "create_jobs_task";
 #define QUEUE_LOW_WATER_MARK 10 // Adjust based on your requirements
 
 static bool should_generate_more_work(GlobalState *GLOBAL_STATE);
-static void generate_work(GlobalState *GLOBAL_STATE, mining_notify *notification, uint32_t extranonce_2);
+static void generate_work(GlobalState *GLOBAL_STATE, StratumConnection *active_connection, mining_notify *notification, uint32_t extranonce_2);
 
 void create_jobs_task(void *pvParameters)
 {
@@ -23,42 +23,56 @@ void create_jobs_task(void *pvParameters)
 
     while (1)
     {
-        mining_notify *mining_notification = (mining_notify *)queue_dequeue(&GLOBAL_STATE->stratum_queue);
-        if (mining_notification == NULL) {
+        uint16_t current_connection_id = GLOBAL_STATE->current_connection_id;
+        StratumConnection *active_connection = &GLOBAL_STATE->connections[current_connection_id];
+
+        if (active_connection->state != STRATUM_CONNECTED)
+        {
+            ESP_LOGD(TAG, "Connection ID %d not ready.", current_connection_id);
+            vTaskDelay(1000 / portTICK_PERIOD_MS);
+            continue;
+        }
+
+        mining_notify *mining_notification = (mining_notify *)queue_dequeue(&active_connection->stratum_queue);
+        if (mining_notification == NULL)
+        {
             ESP_LOGE(TAG, "Failed to dequeue mining notification");
-            vTaskDelay(100 / portTICK_PERIOD_MS); // Wait a bit before trying again
+            vTaskDelay(100 / portTICK_PERIOD_MS);
             continue;
         }
 
         ESP_LOGI(TAG, "New Work Dequeued %s", mining_notification->job_id);
 
-        if (GLOBAL_STATE->new_stratum_version_rolling_msg) {
-            ESP_LOGI(TAG, "Set chip version rolls %i", (int)(GLOBAL_STATE->version_mask >> 13));
-            //(GLOBAL_STATE->ASIC_functions.set_version_mask)(GLOBAL_STATE->version_mask);
-            ASIC_set_version_mask(GLOBAL_STATE, GLOBAL_STATE->version_mask);
-            GLOBAL_STATE->new_stratum_version_rolling_msg = false;
+        if (active_connection->new_stratum_version_rolling_msg) {
+            ESP_LOGI(TAG, "Set chip version rolls %i", (int)(active_connection->version_mask >> 13));
+            ASIC_set_version_mask(GLOBAL_STATE, active_connection->version_mask);
+            active_connection->new_stratum_version_rolling_msg = false;
         }
 
         uint32_t extranonce_2 = 0;
-        while (GLOBAL_STATE->stratum_queue.count < 1 && GLOBAL_STATE->abandon_work == 0)
+        while (active_connection->stratum_queue.count == 0 && active_connection->abandon_work == 0)
         {
+            if (active_connection->state != STRATUM_CONNECTED)
+                break;
+            else if (current_connection_id != GLOBAL_STATE->current_connection_id)
+                break;
+
             if (should_generate_more_work(GLOBAL_STATE))
             {
-                generate_work(GLOBAL_STATE, mining_notification, extranonce_2);
+                generate_work(GLOBAL_STATE, active_connection, mining_notification, extranonce_2);
 
                 // Increase extranonce_2 for the next job.
                 extranonce_2++;
             }
             else
             {
-                // If no more work needed, wait a bit before checking again.
-                vTaskDelay(100 / portTICK_PERIOD_MS);
+                vTaskDelay(10 / portTICK_PERIOD_MS);
             }
         }
 
-        if (GLOBAL_STATE->abandon_work == 1)
+        if (active_connection->abandon_work == 1)
         {
-            GLOBAL_STATE->abandon_work = 0;
+            active_connection->abandon_work = 0;
             ASIC_jobs_queue_clear(&GLOBAL_STATE->ASIC_jobs_queue);
             xSemaphoreGive(GLOBAL_STATE->ASIC_TASK_MODULE.semaphore);
         }
@@ -72,15 +86,21 @@ static bool should_generate_more_work(GlobalState *GLOBAL_STATE)
     return GLOBAL_STATE->ASIC_jobs_queue.count < QUEUE_LOW_WATER_MARK;
 }
 
-static void generate_work(GlobalState *GLOBAL_STATE, mining_notify *notification, uint32_t extranonce_2)
+static void generate_work(GlobalState *GLOBAL_STATE, StratumConnection *active_connection, mining_notify *notification, uint32_t extranonce_2)
 {
-    char *extranonce_2_str = extranonce_2_generate(extranonce_2, GLOBAL_STATE->extranonce_2_len);
+    char *extranonce_2_str = extranonce_2_generate(extranonce_2, active_connection->extranonce_2_len);
     if (extranonce_2_str == NULL) {
         ESP_LOGE(TAG, "Failed to generate extranonce_2");
         return;
     }
 
-    char *coinbase_tx = construct_coinbase_tx(notification->coinbase_1, notification->coinbase_2, GLOBAL_STATE->extranonce_str, extranonce_2_str);
+    if (active_connection->extranonce_str == NULL)
+    {
+        ESP_LOGW(TAG, "active_connection->extranonce_str == NULL");
+        return;
+    }
+
+    char *coinbase_tx = construct_coinbase_tx(notification->coinbase_1, notification->coinbase_2, active_connection->extranonce_str, extranonce_2_str);
     if (coinbase_tx == NULL) {
         ESP_LOGE(TAG, "Failed to construct coinbase_tx");
         free(extranonce_2_str);
@@ -95,7 +115,7 @@ static void generate_work(GlobalState *GLOBAL_STATE, mining_notify *notification
         return;
     }
 
-    bm_job next_job = construct_bm_job(notification, merkle_root, GLOBAL_STATE->version_mask);
+    bm_job next_job = construct_bm_job(notification, merkle_root, active_connection->version_mask);
 
     bm_job *queued_next_job = malloc(sizeof(bm_job));
     if (queued_next_job == NULL) {
@@ -109,7 +129,7 @@ static void generate_work(GlobalState *GLOBAL_STATE, mining_notify *notification
     memcpy(queued_next_job, &next_job, sizeof(bm_job));
     queued_next_job->extranonce2 = extranonce_2_str; // Transfer ownership
     queued_next_job->jobid = strdup(notification->job_id);
-    queued_next_job->version_mask = GLOBAL_STATE->version_mask;
+    queued_next_job->version_mask = active_connection->version_mask;
 
     queue_enqueue(&GLOBAL_STATE->ASIC_jobs_queue, queued_next_job);
 
