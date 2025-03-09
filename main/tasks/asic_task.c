@@ -49,7 +49,7 @@ void ASIC_task(void *pvParameters)
 
         if (current_connection->stratum_difficulty != next_bm_job->pool_diff)
         {
-            ESP_LOGI(TAG, "New pool difficulty %lu", next_bm_job->pool_diff);
+            ESP_LOGI(TAG, "New pool difficulty %lu (previous difficulty: %lu) ", next_bm_job->pool_diff, current_connection->stratum_difficulty);
             current_connection->stratum_difficulty = next_bm_job->pool_diff;
         }
 

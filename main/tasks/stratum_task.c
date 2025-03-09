@@ -154,7 +154,7 @@ void stratum_close_connection(StratumConnection * connection)
     close(connection->sock);
 }
 
-void stratum_clear_queue(const char * POOL_TAG, StratumConnection * connection)
+void stratum_clear_queue(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumConnection * connection)
 {
     ESP_LOGD(POOL_TAG, "Clearing queues for connection.");
 
@@ -162,6 +162,8 @@ void stratum_clear_queue(const char * POOL_TAG, StratumConnection * connection)
     queue_clear(&connection->stratum_queue);
 
     pthread_mutex_lock(&connection->jobs_lock);
+    if (GLOBAL_STATE->current_connection_id == connection->id)
+        ASIC_jobs_queue_clear(&GLOBAL_STATE->ASIC_jobs_queue);
     for (int i = 0; i < 128; i = i + 4) {
         connection->jobs[i] = 0;
     }
@@ -190,7 +192,7 @@ void stratum_task_init_connection(StratumConnection * connection)
     }
 }
 
-void stratum_handle_disconnect(const char * POOL_TAG, StratumConnection * connection)
+void stratum_handle_disconnect(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumConnection * connection)
 {
     stratum_close_connection(connection);
 
@@ -199,7 +201,7 @@ void stratum_handle_disconnect(const char * POOL_TAG, StratumConnection * connec
         ESP_LOGE(POOL_TAG, "Pool disconnected.");
     }
 
-    stratum_clear_queue(POOL_TAG, connection);
+    stratum_clear_queue(POOL_TAG, GLOBAL_STATE, connection);
 
     connection->retry_attempts++;
 
@@ -234,7 +236,7 @@ void stratum_task(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumConn
         struct hostent *dns_addr = gethostbyname(connection->host);
         if (dns_addr == NULL) {
             ESP_LOGE(POOL_TAG, "Unable to resolve DNS.");
-            stratum_handle_disconnect(POOL_TAG, connection);
+            stratum_handle_disconnect(POOL_TAG, GLOBAL_STATE, connection);
             continue;
         }
 
@@ -249,7 +251,7 @@ void stratum_task(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumConn
         if (connection->sock < 0) {
             ESP_LOGE(POOL_TAG, "Unable to create the socket.");
             close(connection->sock);
-            stratum_handle_disconnect(POOL_TAG, connection);
+            stratum_handle_disconnect(POOL_TAG, GLOBAL_STATE, connection);
             continue;
         }
 
@@ -258,7 +260,7 @@ void stratum_task(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumConn
         {
             ESP_LOGE(POOL_TAG, "Unable to connect to socket.");
             close(connection->sock);
-            stratum_handle_disconnect(POOL_TAG, connection);
+            stratum_handle_disconnect(POOL_TAG, GLOBAL_STATE, connection);
             continue;
         }
 
@@ -280,9 +282,6 @@ void stratum_task(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumConn
         connection->abandon_work = 0;
 
         stratum_process(POOL_TAG, GLOBAL_STATE, connection);
-
-        if (GLOBAL_STATE->current_connection_id == connection->id)
-            ASIC_jobs_queue_clear(&GLOBAL_STATE->ASIC_jobs_queue);
     }
 }
 
@@ -292,7 +291,7 @@ void stratum_process(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumC
         char * line = STRATUM_V1_receive_jsonrpc_line(POOL_TAG, connection->sock, connection->buf);
         if (!line) {
             ESP_LOGE(POOL_TAG, "Failed to receive JSON-RPC line, reconnecting...");
-            stratum_handle_disconnect(POOL_TAG, connection);
+            stratum_handle_disconnect(POOL_TAG, GLOBAL_STATE, connection);
             break;
         }
 
@@ -308,7 +307,7 @@ void stratum_process(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumC
             if (connection->message->should_abandon_work &&
                 (connection->stratum_queue.count > 0 || GLOBAL_STATE->ASIC_jobs_queue.count > 0))
             {
-                stratum_clear_queue(POOL_TAG, connection);
+                stratum_clear_queue(POOL_TAG, GLOBAL_STATE, connection);
                 ESP_LOGI(POOL_TAG, "Abandoning the Stratum queues.");
             }
             if (connection->stratum_queue.count >= QUEUE_SIZE)
@@ -344,7 +343,7 @@ void stratum_process(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumC
         else if (connection->message->method == CLIENT_RECONNECT)
         {
             ESP_LOGE(POOL_TAG, "Pool requested client reconnect...");
-            stratum_clear_queue(POOL_TAG, connection);
+            stratum_clear_queue(POOL_TAG, GLOBAL_STATE, connection);
             stratum_close_connection(connection);
             break;
         }
