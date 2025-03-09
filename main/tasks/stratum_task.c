@@ -162,6 +162,8 @@ void stratum_clear_queue(const char * POOL_TAG, GlobalState * GLOBAL_STATE, Stra
     queue_clear(&connection->stratum_queue);
 
     pthread_mutex_lock(&connection->jobs_lock);
+
+    // Only clear the ASIC queue if we are the primary connection.
     if (GLOBAL_STATE->current_connection_id == connection->id)
         ASIC_jobs_queue_clear(&GLOBAL_STATE->ASIC_jobs_queue);
     for (int i = 0; i < 128; i = i + 4) {
