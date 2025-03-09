@@ -417,8 +417,6 @@ task_result * BM1366_process_work(void * pvParameters)
 {
     bm1366_asic_result_t asic_result = {0};
 
-    asic_result * asic_result = BM1366_receive_work();
-
     if (receive_work((uint8_t *)&asic_result, sizeof(asic_result)) == ESP_FAIL) {
         return NULL;
     }
