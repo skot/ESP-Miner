@@ -1,3 +1,4 @@
+#include <pthread.h>
 
 #include "esp_event.h"
 #include "esp_log.h"
@@ -23,10 +24,6 @@
 #include "asic.h"
 
 static GlobalState GLOBAL_STATE = {
-    .extranonce_str = NULL, 
-    .extranonce_2_len = 0, 
-    .abandon_work = 0, 
-    .version_mask = 0,
     .ASIC_initalized = false
 };
 
@@ -123,12 +120,9 @@ void app_main(void)
     free(wifi_pass);
     free(hostname);
 
-    GLOBAL_STATE.new_stratum_version_rolling_msg = false;
-
     wifi_softap_off();
 
     if (GLOBAL_STATE.valid_model) {
-        queue_init(&GLOBAL_STATE.stratum_queue);
         queue_init(&GLOBAL_STATE.ASIC_jobs_queue);
 
         SERIAL_init();
@@ -137,8 +131,11 @@ void app_main(void)
         SERIAL_clear_buffer();
 
         GLOBAL_STATE.ASIC_initalized = true;
+        GLOBAL_STATE.current_connection_id = 0;
 
-        xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL);
+        xTaskCreate(stratum_task_primary, "stratum primary task", 8192, (void *) &GLOBAL_STATE, 8, NULL);
+        xTaskCreate(stratum_task_secondary, "stratum secondary task", 8192, (void *) &GLOBAL_STATE, 5, NULL);
+        xTaskCreate(stratum_task_watchdog, "stratum watchdog", 4096, (void *) &GLOBAL_STATE, 5, NULL);
         xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 10, NULL);
         xTaskCreate(ASIC_task, "asic", 8192, (void *) &GLOBAL_STATE, 10, NULL);
         xTaskCreate(ASIC_result_task, "asic result", 8192, (void *) &GLOBAL_STATE, 15, NULL);

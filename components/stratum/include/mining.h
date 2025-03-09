@@ -15,6 +15,8 @@ typedef struct
     uint32_t target; // aka difficulty, aka nbits
     uint32_t starting_nonce;
 
+    uint8_t connection_id;
+
     uint8_t num_midstates;
     uint8_t midstate[32];
     uint8_t midstate1[32];

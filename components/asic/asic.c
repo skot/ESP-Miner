@@ -120,23 +120,19 @@ void ASIC_set_job_difficulty_mask(GlobalState * GLOBAL_STATE, uint8_t mask) {
 }
 
 // .send_work_fn = BM1366_send_work,
-void ASIC_send_work(GlobalState * GLOBAL_STATE, void * next_job) {
+int ASIC_send_work(GlobalState * GLOBAL_STATE, void * next_job) {
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
-            BM1397_send_work(GLOBAL_STATE, next_job);
-            break;
+            return BM1397_send_work(GLOBAL_STATE, next_job);
         case DEVICE_ULTRA:
-            BM1366_send_work(GLOBAL_STATE, next_job);
-            break;
+            return BM1366_send_work(GLOBAL_STATE, next_job);
         case DEVICE_SUPRA:
-            BM1368_send_work(GLOBAL_STATE, next_job);
-            break;
+            return BM1368_send_work(GLOBAL_STATE, next_job);
         case DEVICE_GAMMA:
         case DEVICE_GAMMATURBO:
-            BM1370_send_work(GLOBAL_STATE, next_job);
-            break;
+            return BM1370_send_work(GLOBAL_STATE, next_job);
         default:
-    return;
+    return -1;
     }
 }
 
@@ -159,6 +155,40 @@ void ASIC_set_version_mask(GlobalState * GLOBAL_STATE, uint32_t mask) {
         default:
     return;
     }
+}
+
+bool ASIC_set_frequency(GlobalState * GLOBAL_STATE, float target_frequency) {
+    ESP_LOGI(TAG, "Setting ASIC frequency to %.2f MHz", target_frequency);
+    bool success = false;
+    
+    switch (GLOBAL_STATE->asic_model) {
+        case ASIC_BM1366:
+            success = BM1366_set_frequency(target_frequency);
+            break;
+        case ASIC_BM1368:
+            success = BM1368_set_frequency(target_frequency);
+            break;
+        case ASIC_BM1370:
+            success = BM1370_set_frequency(target_frequency);
+            break;
+        case ASIC_BM1397:
+            // BM1397 doesn't have a set_frequency function yet
+            ESP_LOGE(TAG, "Frequency transition not implemented for BM1397");
+            success = false;
+            break;
+        default:
+            ESP_LOGE(TAG, "Unknown ASIC model, cannot set frequency");
+            success = false;
+            break;
+    }
+    
+    if (success) {
+        ESP_LOGI(TAG, "Successfully transitioned to new ASIC frequency: %.2f MHz", target_frequency);
+    } else {
+        ESP_LOGE(TAG, "Failed to transition to new ASIC frequency: %.2f MHz", target_frequency);
+    }
+    
+    return success;
 }
 
 esp_err_t ASIC_set_device_model(GlobalState * GLOBAL_STATE) {
