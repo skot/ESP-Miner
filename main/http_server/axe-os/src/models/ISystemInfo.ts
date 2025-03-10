@@ -73,6 +73,7 @@ export const DEFAULT_SYSTEM_INFO: ISystemInfo = {
     apEnabled: 0,
     sharesAccepted: 0,
     sharesRejected: 0,
+    sharesRejectedReasons: [],
     uptimeSeconds: 0,
     asicCount: 0,
     smallCoreCount: 0,
