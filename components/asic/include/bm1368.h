@@ -7,7 +7,6 @@
 
 #define ASIC_BM1368_JOB_FREQUENCY_MS 500
 
-#define CRC5_MASK 0x1F
 #define BM1368_ASIC_DIFFICULTY 256
 
 #define BM1368_SERIALTX_DEBUG false
@@ -43,6 +42,6 @@ int BM1368_set_max_baud(void);
 int BM1368_set_default_baud(void);
 void BM1368_send_hash_frequency(float frequency);
 bool BM1368_set_frequency(float target_freq);
-task_result * BM1368_proccess_work(void * GLOBAL_STATE);
+task_result * BM1368_process_work(void * GLOBAL_STATE);
 
 #endif /* BM1368_H_ */

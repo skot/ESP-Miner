@@ -7,7 +7,6 @@
 
 #define ASIC_BM1397_JOB_FREQUENCY_MS 20 //not currently used
 
-#define CRC5_MASK 0x1F
 #define BM1397_ASIC_DIFFICULTY 256
 
 #define BM1937_SERIALTX_DEBUG false
@@ -56,6 +55,6 @@ void BM1397_set_version_mask(uint32_t version_mask);
 int BM1397_set_max_baud(void);
 int BM1397_set_default_baud(void);
 void BM1397_send_hash_frequency(float frequency);
-task_result * BM1397_proccess_work(void * GLOBAL_STATE);
+task_result * BM1397_process_work(void * GLOBAL_STATE);
 
 #endif /* BM1397_H_ */
