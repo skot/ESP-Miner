@@ -162,7 +162,7 @@ void stratum_clear_queue(const char * POOL_TAG, StratumConnection * connection)
     queue_clear(&connection->stratum_queue);
 
     pthread_mutex_lock(&connection->jobs_lock);
-    for (int i = 0; i < 128; i = i + 4) {
+    for (int i = 0; i < 128; i++) {
         connection->jobs[i] = 0;
     }
     pthread_mutex_unlock(&connection->jobs_lock);
@@ -323,11 +323,15 @@ void stratum_process(const char * POOL_TAG, GlobalState * GLOBAL_STATE, StratumC
         }
         else if (connection->message->method == MINING_SET_DIFFICULTY)
         {
+            pthread_mutex_lock(&connection->jobs_lock);
+
             if (connection->stratum_difficulty != connection->message->new_difficulty)
             {
                 connection->stratum_difficulty = connection->message->new_difficulty;
                 ESP_LOGI(POOL_TAG, "Set stratum difficulty: %ld", connection->stratum_difficulty);
             }
+
+            pthread_mutex_unlock(&connection->jobs_lock);
         }
         else if (connection->message->method == MINING_SET_VERSION_MASK ||
                 connection->message->method == STRATUM_RESULT_VERSION_MASK)
