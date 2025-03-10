@@ -12,7 +12,6 @@
 #include "power_management_task.h"
 #include "serial.h"
 #include "stratum_api.h"
-#include "stratum_task.h"
 #include "work_queue.h"
 
 #define STRATUM_USER CONFIG_STRATUM_USER
@@ -46,7 +45,7 @@ typedef enum
 //     task_result * (*receive_result_fn)(void * GLOBAL_STATE);
 //     int (*set_max_baud_fn)(void);
 //     void (*set_difficulty_mask_fn)(int);
-//     int (*send_work_fn)(void * GLOBAL_STATE, bm_job * next_bm_job);
+//     void (*send_work_fn)(void * GLOBAL_STATE, bm_job * next_bm_job);
 //     void (*set_version_mask)(uint32_t);
 // } AsicFunctions;
 
@@ -115,15 +114,31 @@ typedef struct
     double asic_job_frequency_ms;
     uint32_t ASIC_difficulty;
 
+    work_queue stratum_queue;
+    work_queue ASIC_jobs_queue;
+
     bm1397Module BM1397_MODULE;
     SystemModule SYSTEM_MODULE;
     AsicTaskModule ASIC_TASK_MODULE;
     PowerManagementModule POWER_MANAGEMENT_MODULE;
     SelfTestModule SELF_TEST_MODULE;
 
-    work_queue ASIC_jobs_queue;
-    StratumConnection connections[MAX_STRATUM_POOLS];
-    uint8_t current_connection_id;
+    char * extranonce_str;
+    int extranonce_2_len;
+    int abandon_work;
+
+    uint8_t * valid_jobs;
+    pthread_mutex_t valid_jobs_lock;
+
+    uint32_t stratum_difficulty;
+    uint32_t version_mask;
+    bool new_stratum_version_rolling_msg;
+
+    int sock;
+
+    // A message ID that must be unique per request that expects a response.
+    // For requests not expecting a response (called notifications), this is null.
+    int send_uid;
 
     bool ASIC_initalized;
     bool psram_is_available;
