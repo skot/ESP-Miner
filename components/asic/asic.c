@@ -120,19 +120,23 @@ void ASIC_set_job_difficulty_mask(GlobalState * GLOBAL_STATE, uint8_t mask) {
 }
 
 // .send_work_fn = BM1366_send_work,
-int ASIC_send_work(GlobalState * GLOBAL_STATE, void * next_job) {
+void ASIC_send_work(GlobalState * GLOBAL_STATE, void * next_job) {
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
-            return BM1397_send_work(GLOBAL_STATE, next_job);
+            BM1397_send_work(GLOBAL_STATE, next_job);
+            break;
         case DEVICE_ULTRA:
-            return BM1366_send_work(GLOBAL_STATE, next_job);
+            BM1366_send_work(GLOBAL_STATE, next_job);
+            break;
         case DEVICE_SUPRA:
-            return BM1368_send_work(GLOBAL_STATE, next_job);
+            BM1368_send_work(GLOBAL_STATE, next_job);
+            break;
         case DEVICE_GAMMA:
         case DEVICE_GAMMATURBO:
-            return BM1370_send_work(GLOBAL_STATE, next_job);
+            BM1370_send_work(GLOBAL_STATE, next_job);
+            break;
         default:
-    return -1;
+    return;
     }
 }
 
