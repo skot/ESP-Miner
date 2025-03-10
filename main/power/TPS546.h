@@ -45,7 +45,13 @@ typedef struct
 // #define TPS546_INIT_VIN_OFF 10.5  /* V */
 // #define TPS546_INIT_VIN_UV_WARN_LIMIT 14.0 /* V */
 // #define TPS546_INIT_VIN_OV_FAULT_LIMIT 15.0 /* V */
-#define TPS546_INIT_VIN_OV_FAULT_RESPONSE 0xB7  /* retry 6 times */
+
+//VIN_OV_FAULT_RESPONSE pg98
+//0xB7 -> 1011 0111
+//10 -> Immediate Shutdown. Shut down and restart according to VIN_OV_RETRY.
+//110 -> After shutting down, wait one HICCUP period, and attempt to restart up to 6 times. After 6 failed restart attempts, do not attempt to restart (latch off).
+//111 -> Shutdown delay of seven PWM_CLK, HICCUP equal to 7 times TON_RISE
+#define TPS546_INIT_VIN_OV_FAULT_RESPONSE 0xB7
 
   /* vout voltage */
 //#define TPS546_INIT_SCALE_LOOP 0.25  /* Voltage Scale factor */
@@ -62,12 +68,24 @@ typedef struct
   /* iout current */
 // #define TPS546_INIT_IOUT_OC_WARN_LIMIT  50.00 /* A */
 // #define TPS546_INIT_IOUT_OC_FAULT_LIMIT 55.00 /* A */
+
+//IOUT_OC_FAULT_RESPONSE - pg91
+//0xC0 -> 1100 0000
+//11 -> Shutdown Immediately
+//000 -> Do not attempt to restart (latch off).
+//000 -> Shutdown delay of one PWM_CLK, HICCUP equal to TON_RISE
 #define TPS546_INIT_IOUT_OC_FAULT_RESPONSE 0xC0  /* shut down, no retries */
 
   /* temperature */
 // It is better to set the temperature warn limit for TPS546 more higher than Ultra 
 #define TPS546_INIT_OT_WARN_LIMIT  105 /* degrees C */
 #define TPS546_INIT_OT_FAULT_LIMIT 145 /* degrees C */
+
+//OT_FAULT_RESPONSE - pg94
+//0xFF -> 1111 1111
+//11 -> Shutdown until Temperature is below OT_WARN_LIMIT, then restart according to OT_RETRY*.
+//111 -> After shutting down, wait one HICCUP period, and attempt to restart indefinitely, until commanded OFF or a successful start-up occurs.
+//111 -> Shutdown delay of 7 ms, HICCUP equal to 4 times TON_RISE
 #define TPS546_INIT_OT_FAULT_RESPONSE 0xFF /* wait for cooling, and retry */
 
   /* timing */
