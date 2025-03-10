@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "frequency_transition_bmXX.h"
 
 #include <math.h>
 #include <stdint.h>
@@ -132,7 +133,7 @@ static void _reset(void)
     vTaskDelay(100 / portTICK_PERIOD_MS);
 }
 
-bool BM1368_send_hash_frequency(float target_freq) {
+void BM1368_send_hash_frequency(float target_freq) {
     float max_diff = 0.001;
     uint8_t freqbuf[6] = {0x00, 0x08, 0x40, 0xA0, 0x02, 0x41};
     uint8_t postdiv_min = 255;
@@ -168,7 +169,7 @@ bool BM1368_send_hash_frequency(float target_freq) {
 
     if (!found) {
         ESP_LOGE(TAG, "Didn't find PLL settings for target frequency %.2f", target_freq);
-        return false;
+        return;
     }
 
     freqbuf[2] = (best_fbdiv * 25 / best_refdiv >= 2400) ? 0x50 : 0x40;
@@ -180,40 +181,10 @@ bool BM1368_send_hash_frequency(float target_freq) {
 
     ESP_LOGI(TAG, "Setting Frequency to %.2fMHz (%.2f)", target_freq, best_freq);
     current_frequency = target_freq;
-    return true;
-}
-
-bool do_frequency_transition(float target_frequency) {
-    float step = 6.25;
-    float current = current_frequency;
-    float target = target_frequency;
-
-    float direction = (target > current) ? step : -step;
-
-    if (fmod(current, step) != 0) {
-        float next_dividable;
-        if (direction > 0) {
-            next_dividable = ceil(current / step) * step;
-        } else {
-            next_dividable = floor(current / step) * step;
-        }
-        current = next_dividable;
-        BM1368_send_hash_frequency(current);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-    }
-
-    while ((direction > 0 && current < target) || (direction < 0 && current > target)) {
-        float next_step = fmin(fabs(direction), fabs(target - current));
-        current += direction > 0 ? next_step : -next_step;
-        BM1368_send_hash_frequency(current);
-        vTaskDelay(100 / portTICK_PERIOD_MS);
-    }
-    BM1368_send_hash_frequency(target);
-    return true;
 }
 
 bool BM1368_set_frequency(float target_freq) {
-    return do_frequency_transition(target_freq);
+    return do_frequency_transition(target_freq, BM1368_send_hash_frequency, 1368);
 }
 
 static int count_asic_chips(void) {
@@ -238,7 +209,7 @@ static int count_asic_chips(void) {
 
 static void do_frequency_ramp_up(float target_frequency) {
     ESP_LOGI(TAG, "Ramping up frequency from %.2f MHz to %.2f MHz", current_frequency, target_frequency);
-    do_frequency_transition(target_frequency);
+    do_frequency_transition(target_frequency, BM1368_send_hash_frequency, 1368);
 }
 
 uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
