@@ -1,5 +1,10 @@
 import { eASICModel } from './enum/eASICModel';
 
+interface ISharesRejectedStat {
+    message: string;
+    count: number;
+}
+
 export interface ISystemInfo {
     flipscreen: number;
     invertscreen: number;
@@ -20,6 +25,7 @@ export interface ISystemInfo {
     apEnabled: number,
     sharesAccepted: number,
     sharesRejected: number,
+    sharesRejectedReasons: ISharesRejectedStat[];
     uptimeSeconds: number,
     asicCount: number,
     smallCoreCount: number,
