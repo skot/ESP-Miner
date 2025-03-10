@@ -1,8 +1,8 @@
 import { AfterViewChecked, Component, ElementRef, OnDestroy, ViewChild } from '@angular/core';
-import { interval, map, Observable, shareReplay, startWith, Subscription, switchMap } from 'rxjs';
+import { interval, map, Observable, shareReplay, startWith, Subscription, switchMap, catchError, of } from 'rxjs';
 import { SystemService } from 'src/app/services/system.service';
 import { WebsocketService } from 'src/app/services/web-socket.service';
-import { ISystemInfo } from 'src/models/ISystemInfo';
+import { ISystemInfo, DEFAULT_SYSTEM_INFO } from 'src/models/ISystemInfo';
 
 @Component({
   selector: 'app-logs',
@@ -27,12 +27,29 @@ export class LogsComponent implements OnDestroy, AfterViewChecked {
     private systemService: SystemService
   ) {
 
-
     this.info$ = interval(5000).pipe(
-      startWith(() => this.systemService.getInfo()),
-      switchMap(() => {
-        return this.systemService.getInfo()
-      }),
+      startWith(() =>
+        this.systemService.getInfo().pipe(
+          catchError(error => {
+            console.error('Initial getInfo failed:', error.message || error);
+            return of({
+              ...DEFAULT_SYSTEM_INFO,
+              error: error.message || String(error)
+            });
+          })
+        )
+      ),
+      switchMap(() =>
+        this.systemService.getInfo().pipe(
+          catchError(error => {
+            console.error('Polling getInfo failed:', error.message || error);
+            return of({
+              ...DEFAULT_SYSTEM_INFO,
+              error: error.message || String(error)
+            });
+          })
+        )
+      ),
       map(info => {
         info.power = parseFloat(info.power.toFixed(1))
         info.voltage = parseFloat((info.voltage / 1000).toFixed(1));
