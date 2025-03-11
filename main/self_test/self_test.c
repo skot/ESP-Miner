@@ -30,6 +30,8 @@
 #define TESTS_FAILED 0
 #define TESTS_PASSED 1
 
+//#define MEGA_FAIL_BUS 1 // Set to fail
+
 /////Test Constants/////
 //Test Fan Speed
 #define FAN_SPEED_TARGET_MIN 1000 //RPM
@@ -534,6 +536,11 @@ void self_test(void * pvParameters)
 
 static void tests_done(GlobalState * GLOBAL_STATE, bool test_result) 
 {
+
+#if MEGA_FAIL_BUS
+    test_result = TESTS_FAILED;
+#endif
+
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
@@ -546,7 +553,7 @@ static void tests_done(GlobalState * GLOBAL_STATE, bool test_result)
     }
 
     if (test_result == TESTS_FAILED) {
-        ESP_LOGI(TAG, "SELF TESTS FAIL -- Press RESET to continue");  
+        ESP_LOGE(TAG, "-- SELFTEST FAIL --");  
         while (1) {
             // Wait here forever until reset_self_test() gives the BootSemaphore
             if (xSemaphoreTake(BootSemaphore, portMAX_DELAY) == pdTRUE) {
@@ -558,7 +565,7 @@ static void tests_done(GlobalState * GLOBAL_STATE, bool test_result)
         }
     } else {
         nvs_config_set_u16(NVS_CONFIG_SELF_TEST, 0);
-        ESP_LOGI(TAG, "Self Tests Passed!!!");
+        ESP_LOGI(TAG, "-- SELFTEST PASS!!! --");
     }
 
 }
