@@ -18,6 +18,7 @@
 #include <arpa/inet.h>
 
 #define BM1366_CHIP_ID 0x1366
+#define BM1366_CHIP_ID_RESPONSE_LENGTH 11
 
 #ifdef CONFIG_GPIO_ASIC_RESET
 #define GPIO_ASIC_RESET CONFIG_GPIO_ASIC_RESET
@@ -223,7 +224,7 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     unsigned char init3[7] = {0x55, 0xAA, 0x52, 0x05, 0x00, 0x00, 0x0A};
     _send_simple(init3, 7);
 
-    int chip_counter = count_asic_chips(asic_count, BM1366_CHIP_ID);
+    int chip_counter = count_asic_chips(asic_count, BM1366_CHIP_ID, BM1366_CHIP_ID_RESPONSE_LENGTH);
 
     if (chip_counter == 0) {
         return 0;

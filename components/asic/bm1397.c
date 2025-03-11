@@ -17,6 +17,7 @@
 #include "global_state.h"
 
 #define BM1397_CHIP_ID 0x1397
+#define BM1397_CHIP_ID_RESPONSE_LENGTH 9
 
 #ifdef CONFIG_GPIO_ASIC_RESET
 #define GPIO_ASIC_RESET CONFIG_GPIO_ASIC_RESET
@@ -231,7 +232,7 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     // send the init command
     _send_read_address();
 
-    int chip_counter = count_asic_chips(asic_count, BM1397_CHIP_ID);
+    int chip_counter = count_asic_chips(asic_count, BM1397_CHIP_ID, BM1397_CHIP_ID_RESPONSE_LENGTH);
 
     if (chip_counter == 0) {
         return 0;

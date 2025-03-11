@@ -36,36 +36,36 @@ int _largest_power_of_two(int num)
     return 1 << power;
 }
 
-int count_asic_chips(uint16_t asic_count, uint16_t chip_id)
+int count_asic_chips(uint16_t asic_count, uint16_t chip_id, int chip_id_response_length)
 {
     uint8_t buffer[11] = {0};
 
     int chip_counter = 0;
     while (true) {
-        int received = SERIAL_rx(buffer, 11, 1000);
+        int received = SERIAL_rx(buffer, chip_id_response_length, 1000);
         if (received == 0) break;
 
         if (received == -1) {
-            ESP_LOGW(TAG, "Error reading CHIP_ID");
+            ESP_LOGE(TAG, "Error reading CHIP_ID");
             break;
         }
 
-        if (received != 11) {
-            ESP_LOGW(TAG, "Invalid CHIP_ID response length");
+        if (received != chip_id_response_length) {
+            ESP_LOGE(TAG, "Invalid CHIP_ID response length: expected %d, got %d", chip_id_response_length, received);
             ESP_LOG_BUFFER_HEX(TAG, buffer, received);
             break;
         }
 
         uint16_t received_preamble = (buffer[0] << 8) | buffer[1];
         if (received_preamble != PREAMBLE) {
-            ESP_LOGW(TAG, "Preamble mismatch: got 0x%04x, expected 0x%04x", received_preamble, PREAMBLE);
+            ESP_LOGW(TAG, "Preamble mismatch: expected 0x%04x, got 0x%04x", PREAMBLE, received_preamble);
             ESP_LOG_BUFFER_HEX(TAG, buffer, received);
             continue;
         }
 
         uint16_t received_chip_id = (buffer[2] << 8) | buffer[3];
         if (received_chip_id != chip_id) {
-            ESP_LOGW(TAG, "CHIP_ID response mismatch: got 0x%04x, expected 0x%04x", received_chip_id, chip_id);
+            ESP_LOGW(TAG, "CHIP_ID response mismatch: expected 0x%04x, got 0x%04x", chip_id, received_chip_id);
             ESP_LOG_BUFFER_HEX(TAG, buffer, received);
             continue;
         }
