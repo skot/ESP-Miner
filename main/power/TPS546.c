@@ -764,8 +764,19 @@ uint16_t TPS546_check_status(void) {
     return 0;
 }
 
+// Global variable to store the TPS error message for the UI
+static char tps_error_message[128] = {0};
+
+const char* TPS546_get_error_message() {
+    return tps_error_message;
+}
+
+
 static esp_err_t TPS546_parse_status(uint16_t status) {
     uint8_t u8_value;
+    
+    // Clear previous error message
+    tps_error_message[0] = '\0';
 
     if (status & TPS546_STATUS_BUSY) {
         ESP_LOGI(TAG, "TPS546 is busy");
@@ -774,22 +785,27 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
     
     if (status & TPS546_STATUS_OFF) {
         ESP_LOGI(TAG, "TPS546 is off");
+        strcat(tps_error_message, "TPS546 is off. ");
     }
     
     if (status & TPS546_STATUS_VOUT_OV) {
         ESP_LOGI(TAG, "TPS546 VOUT is out of range");
+        strcat(tps_error_message, "VOUT is out of range. ");
     }
     
     if (status & TPS546_STATUS_IOUT_OC) {
         ESP_LOGI(TAG, "TPS546 IOUT is out of range");
+        strcat(tps_error_message, "IOUT is out of range. ");
     }
     
     if (status & TPS546_STATUS_VIN_UV) {
         ESP_LOGI(TAG, "TPS546 VIN is out of range");
+        strcat(tps_error_message, "VIN is out of range. ");
     }
     
     if (status & TPS546_STATUS_TEMP) {
         ESP_LOGI(TAG, "TPS546 TEMP Status Error");
+        strcat(tps_error_message, "Temperature error. ");
         //the host should check STATUS_TEMPERATURE for more information.
         if (smb_read_byte(PMBUS_STATUS_TEMPERATURE, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_TEMPERATURE");
@@ -800,6 +816,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
     
     if (status & TPS546_STATUS_CML) {
         ESP_LOGI(TAG, "TPS546 CML Status Error");
+        strcat(tps_error_message, "Communication error. ");
         //the host should check STATUS_CML for more information.
         if (smb_read_byte(PMBUS_STATUS_CML, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_CML");
@@ -1012,4 +1029,3 @@ esp_err_t TPS546_init_fault_interrupt(void * isr_handler, void * global_state) {
 
     return ESP_OK;
 }
-

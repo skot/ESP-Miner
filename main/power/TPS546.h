@@ -147,4 +147,6 @@ void TPS546_print_status(void);
 uint16_t TPS546_check_status(void);
 esp_err_t TPS546_clear_faults(void);
 
+const char* TPS546_get_error_message(void); //Get the current TPS error message
+
 #endif /* TPS546_H_ */

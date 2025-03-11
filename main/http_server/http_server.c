@@ -16,6 +16,7 @@
 #include "nvs_config.h"
 #include "vcore.h"
 #include "connect.h"
+#include "../power/TPS546.h"
 #include <fcntl.h>
 #include <string.h>
 #include <sys/param.h>
@@ -585,6 +586,11 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
     cJSON_AddNumberToObject(root, "fanspeed", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc);
     cJSON_AddNumberToObject(root, "fanrpm", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_rpm);
+    
+    const char* tps_error = TPS546_get_error_message();
+    if (tps_error != NULL) {
+        cJSON_AddStringToObject(root, "tps_error", tps_error);
+    }
 
     free(ssid);
     free(hostname);
