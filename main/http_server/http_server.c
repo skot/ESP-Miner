@@ -472,6 +472,9 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "fanspeed")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, item->valueint);
     }
+    if ((item = cJSON_GetObjectItem(root, "overclockEnabled")) != NULL) {
+        nvs_config_set_u16(NVS_CONFIG_OVERCLOCK_ENABLED, item->valueint);
+    }
 
     cJSON_Delete(root);
     httpd_resp_send_chunk(req, NULL, 0);
@@ -590,6 +593,7 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
     cJSON_AddNumberToObject(root, "flipscreen", nvs_config_get_u16(NVS_CONFIG_FLIP_SCREEN, 1));
     cJSON_AddNumberToObject(root, "overheat_mode", nvs_config_get_u16(NVS_CONFIG_OVERHEAT_MODE, 0));
+    cJSON_AddNumberToObject(root, "overclockEnabled", nvs_config_get_u16(NVS_CONFIG_OVERCLOCK_ENABLED, 0));
     cJSON_AddNumberToObject(root, "invertscreen", nvs_config_get_u16(NVS_CONFIG_INVERT_SCREEN, 0));
 
     cJSON_AddNumberToObject(root, "invertfanpolarity", nvs_config_get_u16(NVS_CONFIG_INVERT_FAN_POLARITY, 1));
