@@ -44,5 +44,6 @@ export interface ISystemInfo {
 
     boardtemp1?: number,
     boardtemp2?: number,
-    overheat_mode: number
+    overheat_mode: number,
+    overclockEnabled?: number
 }
