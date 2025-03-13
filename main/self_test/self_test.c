@@ -464,7 +464,7 @@ void self_test(void * pvParameters)
 
     ESP_LOGI(TAG, "Hashrate: %f", hash_rate);
 
-    float expected_hashrate_mhs = GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value;
+    float expected_hashrate_mhs = (float)GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value;
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
             expected_hashrate_mhs *= BM1397_CORE_COUNT * 4;
