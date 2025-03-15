@@ -15,6 +15,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <arpa/inet.h>
+
+#define BM1370_CHIP_ID 0x1370
+#define BM1370_CHIP_ID_RESPONSE_LENGTH 11
 
 #ifdef CONFIG_GPIO_ASIC_RESET
 #define GPIO_ASIC_RESET CONFIG_GPIO_ASIC_RESET
@@ -50,23 +54,18 @@
 #define TICKET_MASK 0x14
 #define MISC_CONTROL 0x18
 
-#define BM1370_TIMEOUT_MS 10000
-#define BM1370_TIMEOUT_THRESHOLD 2
-
 typedef struct __attribute__((__packed__))
 {
-    uint8_t preamble[2];
+    uint16_t preamble;
     uint32_t nonce;
     uint8_t midstate_num;
     uint8_t job_id;
     uint16_t version;
     uint8_t crc;
-} asic_result;
+} bm1370_asic_result_t;
 
 static const char * TAG = "bm1370Module";
 
-
-static uint8_t asic_response_buffer[SERIAL_BUF_SIZE];
 static task_result result;
 
 /// @brief
@@ -229,15 +228,11 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     unsigned char init3[7] = {0x55, 0xAA, 0x52, 0x05, 0x00, 0x00, 0x0A};
     _send_simple(init3, 7);
 
-    int chip_counter = 0;
-    while (true) {
-        if (SERIAL_rx(asic_response_buffer, 11, 1000) > 0) {
-            chip_counter++;
-        } else {
-            break;
-        }
+    int chip_counter = count_asic_chips(asic_count, BM1370_CHIP_ID, BM1370_CHIP_ID_RESPONSE_LENGTH);
+
+    if (chip_counter == 0) {
+        return 0;
     }
-    ESP_LOGI(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
 
     // set version mask
     BM1370_set_version_mask(STRATUM_DEFAULT_VERSION_MASK);
@@ -358,8 +353,6 @@ uint8_t BM1370_init(uint64_t frequency, uint16_t asic_count)
 {
     ESP_LOGI(TAG, "Initializing BM1370");
 
-    memset(asic_response_buffer, 0, SERIAL_BUF_SIZE);
-
     esp_rom_gpio_pad_select_gpio(GPIO_ASIC_RESET);
     gpio_set_direction(GPIO_ASIC_RESET, GPIO_MODE_OUTPUT);
 
@@ -454,71 +447,25 @@ void BM1370_send_work(void * pvParameters, bm_job * next_bm_job)
     _send_BM1370((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(BM1370_job), BM1370_DEBUG_WORK);
 }
 
-asic_result * BM1370_receive_work(void)
+task_result * BM1370_process_work(void * pvParameters)
 {
-    // wait for a response
-    int received = SERIAL_rx(asic_response_buffer, 11, BM1370_TIMEOUT_MS);
+    bm1370_asic_result_t asic_result = {0};
 
-    bool uart_err = received < 0;
-    bool uart_timeout = received == 0;
-    uint8_t asic_timeout_counter = 0;
-
-    // handle response
-    if (uart_err) {
-        ESP_LOGI(TAG, "UART Error in serial RX");
-        return NULL;
-    } else if (uart_timeout) {
-        if (asic_timeout_counter >= BM1370_TIMEOUT_THRESHOLD) {
-            ESP_LOGE(TAG, "ASIC not sending data");
-            asic_timeout_counter = 0;
-        }
-        asic_timeout_counter++;
+    if (receive_work((uint8_t *)&asic_result, sizeof(asic_result)) == ESP_FAIL) {
         return NULL;
     }
 
-    if (received != 11 || asic_response_buffer[0] != 0xAA || asic_response_buffer[1] != 0x55) {
-        ESP_LOGI(TAG, "Serial RX invalid %i", received);
-        ESP_LOG_BUFFER_HEX(TAG, asic_response_buffer, received);
-        SERIAL_clear_buffer();
-        return NULL;
-    }
-
-    return (asic_result *) asic_response_buffer;
-}
-
-static uint16_t reverse_uint16(uint16_t num)
-{
-    return (num >> 8) | (num << 8);
-}
-
-static uint32_t reverse_uint32(uint32_t val)
-{
-    return ((val >> 24) & 0xff) |      // Move byte 3 to byte 0
-           ((val << 8) & 0xff0000) |   // Move byte 1 to byte 2
-           ((val >> 8) & 0xff00) |     // Move byte 2 to byte 1
-           ((val << 24) & 0xff000000); // Move byte 0 to byte 3
-}
-
-task_result * BM1370_proccess_work(void * pvParameters)
-{
-
-    asic_result * asic_result = BM1370_receive_work();
-
-    if (asic_result == NULL) {
-        return NULL;
-    }
-
-    // uint8_t job_id = asic_result->job_id;
+    // uint8_t job_id = asic_result.job_id;
     // uint8_t rx_job_id = ((int8_t)job_id & 0xf0) >> 1;
     // ESP_LOGI(TAG, "Job ID: %02X, RX: %02X", job_id, rx_job_id);
 
-    // uint8_t job_id = asic_result->job_id & 0xf8;
-    // ESP_LOGI(TAG, "Job ID: %02X, Core: %01X", job_id, asic_result->job_id & 0x07);
+    // uint8_t job_id = asic_result.job_id & 0xf8;
+    // ESP_LOGI(TAG, "Job ID: %02X, Core: %01X", job_id, asic_result.job_id & 0x07);
 
-    uint8_t job_id = (asic_result->job_id & 0xf0) >> 1;
-    uint8_t core_id = (uint8_t)((reverse_uint32(asic_result->nonce) >> 25) & 0x7f); // BM1370 has 80 cores, so it should be coded on 7 bits
-    uint8_t small_core_id = asic_result->job_id & 0x0f; // BM1370 has 16 small cores, so it should be coded on 4 bits
-    uint32_t version_bits = (reverse_uint16(asic_result->version) << 13); // shift the 16 bit value left 13
+    uint8_t job_id = (asic_result.job_id & 0xf0) >> 1;
+    uint8_t core_id = (uint8_t)((ntohl(asic_result.nonce) >> 25) & 0x7f); // BM1370 has 80 cores, so it should be coded on 7 bits
+    uint8_t small_core_id = asic_result.job_id & 0x0f; // BM1370 has 16 small cores, so it should be coded on 4 bits
+    uint32_t version_bits = (ntohs(asic_result.version) << 13); // shift the 16 bit value left 13
     ESP_LOGI(TAG, "Job ID: %02X, Core: %d/%d, Ver: %08" PRIX32, job_id, core_id, small_core_id, version_bits);
 
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
@@ -531,7 +478,7 @@ task_result * BM1370_proccess_work(void * pvParameters)
     uint32_t rolled_version = GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->version | version_bits;
 
     result.job_id = job_id;
-    result.nonce = asic_result->nonce;
+    result.nonce = asic_result.nonce;
     result.rolled_version = rolled_version;
 
     return &result;

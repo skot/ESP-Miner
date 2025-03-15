@@ -51,6 +51,8 @@ export interface ISystemInfo {
     boardtemp2?: number,
     overheat_mode: number,
     error?: string; // Optional field for error messages
+    overclockEnabled?: number
+
 }
 
 export const DEFAULT_SYSTEM_INFO: ISystemInfo = {
