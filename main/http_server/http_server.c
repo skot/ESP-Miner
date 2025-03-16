@@ -415,22 +415,22 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
         return ESP_OK;
     }
 
-    if ((item = cJSON_GetObjectItem(root, "stratumURL")) != NULL) {
+    if (cJSON_IsString(item = cJSON_GetObjectItem(root, "stratumURL"))) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_URL, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "fallbackStratumURL")) != NULL) {
+    if (cJSON_IsString(item = cJSON_GetObjectItem(root, "fallbackStratumURL"))) {
         nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_URL, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "stratumUser")) != NULL) {
+    if (cJSON_IsString(item = cJSON_GetObjectItem(root, "stratumUser"))) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_USER, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "stratumPassword")) != NULL) {
+    if (cJSON_IsString(item = cJSON_GetObjectItem(root, "stratumPassword"))) {
         nvs_config_set_string(NVS_CONFIG_STRATUM_PASS, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "fallbackStratumUser")) != NULL) {
+    if (cJSON_IsString(item = cJSON_GetObjectItem(root, "fallbackStratumUser"))) {
         nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_USER, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "fallbackStratumPassword")) != NULL) {
+    if (cJSON_IsString(item = cJSON_GetObjectItem(root, "fallbackStratumPassword"))) {
         nvs_config_set_string(NVS_CONFIG_FALLBACK_STRATUM_PASS, item->valuestring);
     }
     if ((item = cJSON_GetObjectItem(root, "stratumPort")) != NULL) {
@@ -439,13 +439,13 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     if ((item = cJSON_GetObjectItem(root, "fallbackStratumPort")) != NULL) {
         nvs_config_set_u16(NVS_CONFIG_FALLBACK_STRATUM_PORT, item->valueint);
     }
-    if ((item = cJSON_GetObjectItem(root, "ssid")) != NULL) {
+    if (cJSON_IsString(item = cJSON_GetObjectItem(root, "ssid"))) {
         nvs_config_set_string(NVS_CONFIG_WIFI_SSID, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "wifiPass")) != NULL) {
+    if (cJSON_IsString(item = cJSON_GetObjectItem(root, "wifiPass"))) {
         nvs_config_set_string(NVS_CONFIG_WIFI_PASS, item->valuestring);
     }
-    if ((item = cJSON_GetObjectItem(root, "hostname")) != NULL) {
+    if (cJSON_IsString(item = cJSON_GetObjectItem(root, "hostname"))) {
         nvs_config_set_string(NVS_CONFIG_HOSTNAME, item->valuestring);
     }
     if ((item = cJSON_GetObjectItem(root, "coreVoltage")) != NULL && item->valueint > 0) {
