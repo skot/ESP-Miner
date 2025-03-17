@@ -33,7 +33,7 @@ static TPS546_CONFIG TPS546_CONFIG_GAMMA = {
     .TPS546_INIT_VIN_ON = 4.8,
     .TPS546_INIT_VIN_OFF = 4.5,
     .TPS546_INIT_VIN_UV_WARN_LIMIT = 0, //Set to 0 to ignore. TI Bug in this register
-    .TPS546_INIT_VIN_OV_FAULT_LIMIT = 5.5,
+    .TPS546_INIT_VIN_OV_FAULT_LIMIT = 6.5,
     /* vout voltage */
     .TPS546_INIT_SCALE_LOOP = 0.25,
     .TPS546_INIT_VOUT_MIN = 1,
