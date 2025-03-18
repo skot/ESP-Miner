@@ -5,7 +5,6 @@
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_check.h"
-#include "driver/gpio.h"
 
 #include "pmbus_commands.h"
 
@@ -27,8 +26,6 @@
 
 #define SMBUS_DEFAULT_TIMEOUT (1000 / portTICK_PERIOD_MS)
 
-#define SMB_ALERT_PIN 13
-
 static const char *TAG = "TPS546";
 
 static uint8_t DEVICE_ID1[] = {0x54, 0x49, 0x54, 0x6B, 0x24, 0x41}; // TPS546D24A
@@ -41,11 +38,12 @@ static uint8_t MFR_REVISION[] = {0x00, 0x00, 0x01};
 //static uint8_t COMPENSATION_CONFIG[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
 static i2c_master_dev_handle_t tps546_i2c_handle;
-static i2c_master_dev_handle_t tps546_smbus_alrt_handle;
 
 static TPS546_CONFIG tps546_config;
 
+#ifdef DEBUG_TPS546_STATUS
 static esp_err_t TPS546_parse_status(uint16_t);
+#endif
 
 /**
  * @brief SMBus read byte
@@ -56,14 +54,6 @@ static esp_err_t smb_read_byte(uint8_t command, uint8_t *data)
 {
     return i2c_bitaxe_register_read(tps546_i2c_handle, command, data, 1);
 }
-
-// /**
-//  * @brief SMBus clear Alert
-//  */
-// static esp_err_t smb_clear_alert(void)
-// {
-//     return i2c_bitaxe_register_write_byte(tps546_smbus_alrt_handle, 0x00, 0x00);
-// }
 
 /**
  * @brief SMBus write byte
@@ -362,7 +352,6 @@ esp_err_t TPS546_init(TPS546_CONFIG config)
     ESP_LOGI(TAG, "Initializing the core voltage regulator");
 
     ESP_RETURN_ON_ERROR(i2c_bitaxe_add_device(TPS546_I2CADDR, &tps546_i2c_handle, TAG), TAG, "Failed to add TPS546 I2C");
-    //ESP_RETURN_ON_ERROR(i2c_bitaxe_add_device(TPS546_I2CADDR_ALERT, &tps546_smbus_alrt_handle, TAG), TAG, "Failed to add TPS546 SMBus Alert");
 
     /* Establish communication with regulator */
     smb_read_block(PMBUS_IC_DEVICE_ID, data, 6); //the DEVICE_ID block first byte is the length.
@@ -785,6 +774,7 @@ const char* TPS546_get_error_message() {
 }
 
 
+#ifdef DEBUG_TPS546_STATUS
 static esp_err_t TPS546_parse_status(uint16_t status) {
     uint8_t u8_value;
     
@@ -906,6 +896,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
 
     return ESP_OK;
 }
+#endif //DEBUG_TPS546_STATUS
 
 /**
  * @brief Sets the core voltage
@@ -1038,21 +1029,3 @@ void TPS546_show_voltage_settings(void)
     ESP_LOGI(TAG, "read VOUT_MIN: %.2f V", f_value);
 }
 
-
-esp_err_t TPS546_init_fault_interrupt(void * isr_handler, void * global_state) {
-    gpio_config_t io_conf;
-
-    // Configure the GPIO pin as input
-    io_conf.intr_type = GPIO_INTR_ANYEDGE; // Trigger on both rising and falling edges
-    io_conf.pin_bit_mask = (1ULL << SMB_ALERT_PIN);
-    io_conf.mode = GPIO_MODE_INPUT;
-    io_conf.pull_up_en = GPIO_PULLUP_ENABLE;
-    gpio_config(&io_conf);
-
-    // Install ISR service and hook the interrupt handler
-    ESP_RETURN_ON_ERROR(gpio_isr_handler_add(SMB_ALERT_PIN, (gpio_isr_t) isr_handler, global_state), TAG, "Error adding ISR handler");
-
-    ESP_LOGI(TAG, "SMBus Alert interrupt initialized on pin %d", SMB_ALERT_PIN);
-
-    return ESP_OK;
-}

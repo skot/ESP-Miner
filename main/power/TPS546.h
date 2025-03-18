@@ -129,7 +129,6 @@ typedef struct
 
 /* public functions */
 esp_err_t TPS546_init(TPS546_CONFIG config);
-esp_err_t TPS546_init_fault_interrupt(void * isr_handler, void *);
 
 void TPS546_read_mfr_info(uint8_t *);
 void TPS546_set_mfr_info(void);

@@ -3,7 +3,7 @@
 
 #include "global_state.h"
 
-esp_err_t VCORE_init(GlobalState * global_state, void *);
+esp_err_t VCORE_init(GlobalState * global_state);
 esp_err_t VCORE_set_voltage(float core_voltage, GlobalState * global_state);
 int16_t VCORE_get_voltage_mv(GlobalState * global_state);
 bool VCORE_check_fault(GlobalState * global_state);
