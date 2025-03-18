@@ -13,7 +13,7 @@
 #include "TPS546.h"
 
 //#define DEBUG_TPS546_MEAS 1 //uncomment to debug TPS546 measurements
-#define DEBUG_TPS546_STATUS 1 //uncomment to debug TPS546 status bits
+//#define DEBUG_TPS546_STATUS 1 //uncomment to debug TPS546 status bits
 
 #define I2C_MASTER_NUM 0 /*!< I2C master i2c port number, the number of i2c peripheral interfaces available will depend on the chip */
 
@@ -767,16 +767,18 @@ uint16_t TPS546_check_status(void) {
     }
     #endif
 
-    //all we really care about is if the TPS546 is off
-    if (status & TPS546_STATUS_OFF) {
+    //determine if this is a fault we care about
+    if (status & (TPS546_STATUS_OFF | TPS546_STATUS_VOUT_OV | TPS546_STATUS_IOUT_OC | TPS546_STATUS_VIN_UV | TPS546_STATUS_TEMP)) {
+        ESP_LOGW(TAG, "Status: 0x%04X", status);
         return status;
     }
+
 
     return 0;
 }
 
 // Global variable to store the TPS error message for the UI
-static char tps_error_message[128] = {0};
+static char tps_error_message[256] = "Power Fault Detected.";
 
 const char* TPS546_get_error_message() {
     return tps_error_message;

@@ -162,7 +162,9 @@ void POWER_MANAGEMENT_task(void * pvParameters)
         }
 
         if (VCORE_check_fault(GLOBAL_STATE)) {
-            ESP_LOGE(TAG, "VCORE fault detected");
+            if (module->power_fault == 0) {
+                ESP_LOGE(TAG, "VCORE fault detected");
+            }
             module->power_fault = 1;
         } else {
             module->power_fault = 0;
