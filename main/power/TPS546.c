@@ -374,12 +374,16 @@ esp_err_t TPS546_init(TPS546_CONFIG config)
         return ESP_FAIL;
     }
 
+    //write operation register to turn off power
+    u8_value = OPERATION_OFF;
+    ESP_LOGI(TAG, "Power config-OPERATION: %02X", u8_value);
+    smb_write_byte(PMBUS_OPERATION, u8_value);
+
     /* Make sure power is turned off until commanded */
-    u8_value = ON_OFF_CONFIG_CMD | ON_OFF_CONFIG_PU | ON_OFF_CONFIG_CP |
-            ON_OFF_CONFIG_POLARITY | ON_OFF_CONFIG_DELAY;
-    ESP_LOGI(TAG, "Power config-ON_OFF_CONFIG: %02x", u8_value);
+    u8_value = (ON_OFF_CONFIG_DELAY | ON_OFF_CONFIG_POLARITY | ON_OFF_CONFIG_CP | ON_OFF_CONFIG_CMD | ON_OFF_CONFIG_PU);
+    ESP_LOGI(TAG, "Power config-ON_OFF_CONFIG: %02X", u8_value);
     smb_write_byte(PMBUS_ON_OFF_CONFIG, u8_value);
- 
+
     /* Read version number and see if it matches */
     TPS546_read_mfr_info(read_mfr_revision);
     // if (memcmp(read_mfr_revision, MFR_REVISION, 3) != 0) {
@@ -443,6 +447,12 @@ esp_err_t TPS546_init(TPS546_CONFIG config)
     ESP_LOGI(TAG, "read INTERLEAVE: %04x", u16_value);
     smb_read_byte(PMBUS_CAPABILITY, &u8_value);
     ESP_LOGI(TAG, "read CAPABILITY: %02x", u8_value);
+    ESP_LOGI(TAG, "---------OPERATION------------------");
+    smb_read_byte(PMBUS_OPERATION, &u8_value);
+    ESP_LOGI(TAG, "read OPERATION: %02x", u8_value);
+    smb_read_byte(PMBUS_ON_OFF_CONFIG, &u8_value);
+    ESP_LOGI(TAG, "read ON_OFF_CONFIG: %02x", u8_value);
+
 
 
     // Read the compensation config registers
@@ -457,6 +467,7 @@ esp_err_t TPS546_init(TPS546_CONFIG config)
 
     ESP_LOGI(TAG, "Clearing faults");
     TPS546_clear_faults();
+    TPS546_check_status();
 
     return ESP_OK;
 }
@@ -522,11 +533,11 @@ void TPS546_write_entire_config(void)
 {
     ESP_LOGI(TAG, "---Writing new config values to TPS546---");
     /* set up the ON_OFF_CONFIG */
-    ESP_LOGI(TAG, "Setting ON_OFF_CONFIG: %02X", TPS546_INIT_ON_OFF_CONFIG);
-    if (smb_write_byte(PMBUS_ON_OFF_CONFIG, TPS546_INIT_ON_OFF_CONFIG) != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to write ON_OFF_CONFIG");
-        return;
-    }
+    // ESP_LOGI(TAG, "Setting ON_OFF_CONFIG: %02X", TPS546_INIT_ON_OFF_CONFIG);
+    // if (smb_write_byte(PMBUS_ON_OFF_CONFIG, TPS546_INIT_ON_OFF_CONFIG) != ESP_OK) {
+    //     ESP_LOGE(TAG, "Failed to write ON_OFF_CONFIG");
+    //     return;
+    // }
 
     /* Phase */
     ESP_LOGI(TAG, "Setting PHASE: %02X", TPS546_INIT_PHASE);
@@ -778,33 +789,36 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
     // Clear previous error message
     tps_error_message[0] = '\0';
 
+    //print the status word
+    ESP_LOGI(TAG, "TPS546 Status Word: %04X", status);
+
     if (status & TPS546_STATUS_BUSY) {
-        ESP_LOGI(TAG, "TPS546 is busy");
+        ESP_LOGE(TAG, "TPS546 is busy");
         return ESP_OK;
     }
     
     if (status & TPS546_STATUS_OFF) {
-        ESP_LOGI(TAG, "TPS546 is off");
+        ESP_LOGE(TAG, "TPS546 is off");
         strcat(tps_error_message, "TPS546 is off. ");
     }
     
     if (status & TPS546_STATUS_VOUT_OV) {
-        ESP_LOGI(TAG, "TPS546 VOUT is out of range");
+        ESP_LOGE(TAG, "TPS546 VOUT is out of range");
         strcat(tps_error_message, "VOUT is out of range. ");
     }
     
     if (status & TPS546_STATUS_IOUT_OC) {
-        ESP_LOGI(TAG, "TPS546 IOUT is out of range");
+        ESP_LOGE(TAG, "TPS546 IOUT is out of range");
         strcat(tps_error_message, "IOUT is out of range. ");
     }
     
     if (status & TPS546_STATUS_VIN_UV) {
-        ESP_LOGI(TAG, "TPS546 VIN is out of range");
+        ESP_LOGE(TAG, "TPS546 VIN is out of range");
         strcat(tps_error_message, "VIN is out of range. ");
     }
     
     if (status & TPS546_STATUS_TEMP) {
-        ESP_LOGI(TAG, "TPS546 TEMP Status Error");
+        ESP_LOGE(TAG, "TPS546 TEMP Status Error");
         strcat(tps_error_message, "Temperature error. ");
         //the host should check STATUS_TEMPERATURE for more information.
         if (smb_read_byte(PMBUS_STATUS_TEMPERATURE, &u8_value) != ESP_OK) {
@@ -901,6 +915,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
 **/
 esp_err_t TPS546_set_vout(float volts) {
     uint16_t value;
+    uint8_t value8;
 
     if (volts == 0) {
         /* turn off output */
@@ -927,6 +942,16 @@ esp_err_t TPS546_set_vout(float volts) {
            if (smb_write_byte(PMBUS_OPERATION, OPERATION_ON) != ESP_OK) {
                 ESP_LOGE(TAG, "Could not turn on Vout");
                 return ESP_FAIL;
+            }
+
+            //make sure operation was written correctly
+            if (smb_read_byte(PMBUS_OPERATION, &value8) != ESP_OK) {
+                ESP_LOGE(TAG, "Could not read OPERATION");
+                return ESP_FAIL;
+            }
+
+            if (value8 != OPERATION_ON) {
+                ESP_LOGE(TAG, "Operation not set to ON: %02X", value8);
             }
 
         }

@@ -15,7 +15,7 @@
 /* when the config revision stored in the TPS546 doesn't match, these values are used */
 
 
-#define TPS546_INIT_ON_OFF_CONFIG 0x18 /* use ON_OFF command to control power */
+//#define TPS546_INIT_ON_OFF_CONFIG 0x18 /* use ON_OFF command to control power */
 #define OPERATION_OFF 0x00
 #define OPERATION_ON  0x80
 
@@ -57,7 +57,7 @@ typedef struct
 //#define TPS546_INIT_SCALE_LOOP 0.25  /* Voltage Scale factor */
 //#define TPS546_INIT_VOUT_MAX 3 /* V */
 #define TPS546_INIT_VOUT_OV_FAULT_LIMIT 1.25 /* %/100 above VOUT_COMMAND */
-#define TPS546_INIT_VOUT_OV_WARN_LIMIT  1.1 /* %/100 above VOUT_COMMAND */
+#define TPS546_INIT_VOUT_OV_WARN_LIMIT  1.16 /* %/100 above VOUT_COMMAND */
 #define TPS546_INIT_VOUT_MARGIN_HIGH 1.1 /* %/100 above VOUT */
 //#define TPS546_INIT_VOUT_COMMAND 1.2  /* V absolute value */
 #define TPS546_INIT_VOUT_MARGIN_LOW 0.90 /* %/100 below VOUT */
@@ -103,11 +103,11 @@ typedef struct
 /*-------------------------*/
 
 /* PMBUS_ON_OFF_CONFIG initialization values */
-#define ON_OFF_CONFIG_PU 0x10   // turn on PU bit
-#define ON_OFF_CONFIG_CMD 0x08  // turn on CMD bit
-#define ON_OFF_CONFIG_CP 0x00   // turn off CP bit
-#define ON_OFF_CONFIG_POLARITY 0x00 // turn off POLARITY bit
-#define ON_OFF_CONFIG_DELAY 0x00 // turn off DELAY bit
+#define ON_OFF_CONFIG_PU        0x10 // Act on CONTROL. (01h) OPERATION command to start/stop power conversion, or both.
+#define ON_OFF_CONFIG_CMD       0x08 // Act on (01h) OPERATION Command (and CONTROL pin if configured by CP) to start/stop power conversion.
+#define ON_OFF_CONFIG_CP        0x04 // Act on CONTROL pin (and (01h) OPERATION Command if configured by bit [3]) to start/stop power conversion.
+#define ON_OFF_CONFIG_POLARITY  0x02 // CONTROL pin has active high polarity.
+#define ON_OFF_CONFIG_DELAY     0x01 // When power conversion is commanded OFF by the CONTROL pin (must be configured to respect the CONTROL pin as above), stop power conversion immediately.
 
 //// STATUS_WORD Offsets
 #define TPS546_STATUS_VOUT    0x8000 //bit 15

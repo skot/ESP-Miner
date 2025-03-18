@@ -11,8 +11,8 @@
         text="Bitaxe frequency is set low - See settings">
     </p-message>
 
-    <p-message *ngIf="info.tps_error" severity="error" styleClass="w-full mb-4 py-4 border-round-xl"
-        text="TPS546 Error: {{info.tps_error}} Make sure to check your Power Supply.">
+    <p-message *ngIf="info.power_fault" severity="error" styleClass="w-full mb-4 py-4 border-round-xl"
+        text="TPS546 Error: {{info.power_fault}} Make sure to check your Power Supply.">
     </p-message>
 
     <div class="grid" *ngIf="info$ | async as info; else loading">

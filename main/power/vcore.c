@@ -165,3 +165,23 @@ bool VCORE_check_fault(GlobalState * global_state) {
 
     return false;
 }
+
+const char* VCORE_get_fault_string(GlobalState * global_state) {
+    switch (global_state->device_model) {
+        case DEVICE_MAX:
+        case DEVICE_ULTRA:
+        case DEVICE_SUPRA:
+            if (global_state->board_version >= 402 && global_state->board_version <= 499) {
+                return TPS546_get_error_message();
+            }
+            break;
+        case DEVICE_GAMMA:
+        case DEVICE_GAMMATURBO:
+            return TPS546_get_error_message();
+            break;
+        // case DEVICE_HEX:
+        default:
+    }
+    return NULL;
+}
+

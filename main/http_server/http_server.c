@@ -587,9 +587,8 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "fanspeed", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_perc);
     cJSON_AddNumberToObject(root, "fanrpm", GLOBAL_STATE->POWER_MANAGEMENT_MODULE.fan_rpm);
     
-    const char* tps_error = TPS546_get_error_message();
-    if (tps_error != NULL) {
-        cJSON_AddStringToObject(root, "tps_error", tps_error);
+    if (GLOBAL_STATE->SYSTEM_MODULE.power_fault > 0) {
+        cJSON_AddStringToObject(root, "power_fault", VCORE_get_fault_string(GLOBAL_STATE));
     }
 
     free(ssid);
