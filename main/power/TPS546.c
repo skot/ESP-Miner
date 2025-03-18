@@ -785,6 +785,12 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
             return ESP_FAIL;
         } else {
             ESP_LOGE(TAG, "TPS546 Temperature Status: %02X", u8_value);
+            if (u8_value & TPS546_STATUS_TEMP_OTF) {
+                ESP_LOGE(TAG, "Overtemperature fault");
+            }
+            if (u8_value & TPS546_STATUS_TEMP_OTW) {
+                ESP_LOGE(TAG, "Overtemperature warning");
+            }
         }
     }
     
@@ -797,6 +803,24 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
             return ESP_FAIL;
         } else {
             ESP_LOGE(TAG, "TPS546 CML Status: %02X", u8_value);
+            if (u8_value & TPS546_STATUS_CML_IVC) {
+                ESP_LOGE(TAG, "invalid or unsupported command was received");
+            }
+            if (u8_value & TPS546_STATUS_CML_IVD) {
+                ESP_LOGE(TAG, "invalid or unsupported data was received");
+            }
+            if (u8_value & TPS546_STATUS_CML_PEC) {
+                ESP_LOGE(TAG, "packet error check has failed");
+            }
+            if (u8_value & TPS546_STATUS_CML_MEM) {
+                ESP_LOGE(TAG, "memory error was detected");
+            }
+            if (u8_value & TPS546_STATUS_CML_PROC) {
+                ESP_LOGE(TAG, "logic core error was detected");
+            }
+            if (u8_value & TPS546_STATUS_CML_COMM) {
+                ESP_LOGE(TAG, "communication error detected");
+            }
         }
     }
     
@@ -816,7 +840,26 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
             ESP_LOGE(TAG, "Could not read STATUS_VOUT");
             return ESP_FAIL;
         } else {
-            ESP_LOGE(TAG, "TPS546 VOUT Status: %02X", u8_value);
+            ESP_LOGE(TAG, "VOUT Status: %02X", u8_value);
+
+            if (u8_value & TPS546_STATUS_VOUT_OVF) {
+                ESP_LOGE(TAG, "VOUT Overvoltage Fault");
+            }
+            if (u8_value & TPS546_STATUS_VOUT_OVW) {
+                ESP_LOGE(TAG, "VOUT Undervoltage Warning");
+            }
+            if (u8_value & TPS546_STATUS_VOUT_UVW) {
+                ESP_LOGE(TAG, "VOUT Undervoltage Warning");
+            }
+            if (u8_value & TPS546_STATUS_VOUT_UVF) {
+                ESP_LOGE(TAG, "VOUT Undervoltage Warning");
+            }
+            if (u8_value & TPS546_STATUS_VOUT_MIN_MAX) {
+                ESP_LOGE(TAG, "VOUT Outside Min/Max Range");
+            }
+            if (u8_value & TPS546_STATUS_VOUT_TON_MAX) {
+                ESP_LOGE(TAG, "VOUT Did not reach target output in time");
+            }
         }
     }
 
@@ -828,6 +871,12 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
             return ESP_FAIL;
         } else {
             ESP_LOGI(TAG, "TPS546 IOUT Status: %02X", u8_value);
+            if (u8_value & TPS546_STATUS_IOUT_OCF) {
+                ESP_LOGE(TAG, "IOUT Overcurrent Fault");
+            }
+            if (u8_value & TPS546_STATUS_IOUT_OCW) {
+                ESP_LOGE(TAG, "IOUT Overcurrent Warning");
+            }
         }
     }
 
@@ -839,6 +888,15 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
             return ESP_FAIL;
         } else {
             ESP_LOGE(TAG, "TPS546 INPUT Status: %02X", u8_value);
+            if (u8_value & TPS546_STATUS_VIN_OVF) {
+                ESP_LOGE(TAG, "VIN Overvoltage Fault");
+            }
+            if (u8_value & TPS546_STATUS_VIN_UVW) {
+                ESP_LOGE(TAG, "VIN Undervoltage Warning");
+            }
+            if (u8_value & TPS546_STATUS_VIN_LOW_VIN) {
+                ESP_LOGE(TAG, "VIN Low Voltage");
+            }
         }
     }
 
@@ -850,6 +908,21 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
             return ESP_FAIL;
         } else {
             ESP_LOGE(TAG, "TPS546 MFR_SPECIFIC Status: %02X", u8_value);
+            if (u8_value & TPS546_STATUS_MFR_POR) {
+                ESP_LOGE(TAG, "A Power-On Reset Fault has been detected.");
+            }
+            if (u8_value & TPS546_STATUS_MFR_SELF) {
+                ESP_LOGE(TAG, "Power-On Self-Check is in progress. One or more BCX slaves have not responded.");
+            }
+            if (u8_value & TPS546_STATUS_MFR_RESET) {
+                ESP_LOGE(TAG, "A RESET_VOUT event has occurred.");
+            }
+            if (u8_value & TPS546_STATUS_MFR_BCX) {
+                ESP_LOGE(TAG, "A BCX fault event has occurred.");
+            }
+            if (u8_value & TPS546_STATUS_MFR_SYNC) {
+                ESP_LOGE(TAG, "A SYNC fault has been detected.");
+            }
         }
     }
 
@@ -865,6 +938,9 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
             return ESP_FAIL;
         } else {
             ESP_LOGE(TAG, "TPS546 OTHER Status: %02X", u8_value);
+            if (u8_value & TPS546_STATUS_OTHER_FIRST) {
+                ESP_LOGE(TAG, "this device was the first to assert SMBALERT");
+            }
         }
     }
 
