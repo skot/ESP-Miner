@@ -756,47 +756,47 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
     ESP_LOGE(TAG, "Status: 0x%04X", status);
 
     if (status & TPS546_STATUS_BUSY) {
-        ESP_LOGE(TAG, "TPS546 is busy");
+        ESP_LOGE(TAG, "Voltage regulator was busy and unable to respond");
         return ESP_OK;
     }
     
     if (status & TPS546_STATUS_OFF) {
-        ESP_LOGE(TAG, "TPS546 is off");
+        ESP_LOGE(TAG, "The voltage regulator is turned off");
     }
     
     if (status & TPS546_STATUS_VOUT_OV) {
-        ESP_LOGE(TAG, "TPS546 VOUT is out of range");
+        ESP_LOGE(TAG, "An output overvoltage fault has occurred");
     }
     
     if (status & TPS546_STATUS_IOUT_OC) {
-        ESP_LOGE(TAG, "TPS546 IOUT is out of range");
+        ESP_LOGE(TAG, "An output overcurrent fault has occurred");
     }
     
     if (status & TPS546_STATUS_VIN_UV) {
-        ESP_LOGE(TAG, "TPS546 VIN is out of range");
+        ESP_LOGE(TAG, "An input undervoltage fault has occurred");
     }
     
     if (status & TPS546_STATUS_TEMP) {
-        ESP_LOGE(TAG, "TPS546 TEMP Status Error");
-        strcat(tps_error_message, "Temperature error. ");
+        ESP_LOGE(TAG, "A temperature fault/warning has occurred");
+
         //the host should check STATUS_TEMPERATURE for more information.
         if (smb_read_byte(PMBUS_STATUS_TEMPERATURE, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_TEMPERATURE");
             return ESP_FAIL;
         } else {
-            ESP_LOGI(TAG, "TPS546 Temperature Status: %02X", u8_value);
+            ESP_LOGE(TAG, "TPS546 Temperature Status: %02X", u8_value);
         }
     }
     
     if (status & TPS546_STATUS_CML) {
-        ESP_LOGI(TAG, "TPS546 CML Status Error");
-        strcat(tps_error_message, "Communication error. ");
+        ESP_LOGE(TAG, "A communication, memory, logic fault has occurred");
+
         //the host should check STATUS_CML for more information.
         if (smb_read_byte(PMBUS_STATUS_CML, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_CML");
             return ESP_FAIL;
         } else {
-            ESP_LOGI(TAG, "TPS546 CML Status: %02X", u8_value);
+            ESP_LOGE(TAG, "TPS546 CML Status: %02X", u8_value);
         }
     }
     
@@ -816,7 +816,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
             ESP_LOGE(TAG, "Could not read STATUS_VOUT");
             return ESP_FAIL;
         } else {
-            ESP_LOGI(TAG, "TPS546 VOUT Status: %02X", u8_value);
+            ESP_LOGE(TAG, "TPS546 VOUT Status: %02X", u8_value);
         }
     }
 
@@ -838,7 +838,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
             ESP_LOGE(TAG, "Could not read STATUS_INPUT");
             return ESP_FAIL;
         } else {
-            ESP_LOGI(TAG, "TPS546 INPUT Status: %02X", u8_value);
+            ESP_LOGE(TAG, "TPS546 INPUT Status: %02X", u8_value);
         }
     }
 
@@ -849,12 +849,12 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
             ESP_LOGE(TAG, "Could not read STATUS_MFR_SPECIFIC");
             return ESP_FAIL;
         } else {
-            ESP_LOGI(TAG, "TPS546 MFR_SPECIFIC Status: %02X", u8_value);
+            ESP_LOGE(TAG, "TPS546 MFR_SPECIFIC Status: %02X", u8_value);
         }
     }
 
     if (status & TPS546_STATUS_PGOOD) {
-        ESP_LOGI(TAG, "TPS546 PGOOD Status Error");
+        ESP_LOGE(TAG, "The output voltage is NOT within the regulation window. PGOOD pin is asserted.");
     }
 
     if (status & TPS546_STATUS_OTHER) {
@@ -864,7 +864,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
             ESP_LOGE(TAG, "Could not read STATUS_OTHER");
             return ESP_FAIL;
         } else {
-            ESP_LOGI(TAG, "TPS546 OTHER Status: %02X", u8_value);
+            ESP_LOGE(TAG, "TPS546 OTHER Status: %02X", u8_value);
         }
     }
 
