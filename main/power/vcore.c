@@ -142,25 +142,24 @@ int16_t VCORE_get_voltage_mv(GlobalState * global_state) {
     return -1;
 }
 
-bool VCORE_check_fault(GlobalState * global_state) {
+esp_err_t VCORE_check_fault(GlobalState * global_state) {
 
     switch (global_state->device_model) {
         case DEVICE_MAX:
         case DEVICE_ULTRA:
         case DEVICE_SUPRA:
             if (global_state->board_version >= 402 && global_state->board_version <= 499) {
-                return TPS546_check_status();
+                ESP_RETURN_ON_ERROR(TPS546_check_status(global_state), TAG, "TPS546 check status failed!");
             }
             break;
         case DEVICE_GAMMA:
         case DEVICE_GAMMATURBO:
-             return TPS546_check_status();
+        ESP_RETURN_ON_ERROR(TPS546_check_status(global_state), TAG, "TPS546 check status failed!");
             break;
         // case DEVICE_HEX:
         default:
     }
-
-    return false;
+    return ESP_OK;
 }
 
 const char* VCORE_get_fault_string(GlobalState * global_state) {

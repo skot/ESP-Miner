@@ -36,9 +36,7 @@ static i2c_master_dev_handle_t tps546_i2c_handle;
 
 static TPS546_CONFIG tps546_config;
 
-#ifdef DEBUG_TPS546_STATUS
 static esp_err_t TPS546_parse_status(uint16_t);
-#endif
 
 /**
  * @brief SMBus read byte
@@ -392,7 +390,8 @@ esp_err_t TPS546_init(TPS546_CONFIG config)
     /* Show voltage settings */
     TPS546_show_voltage_settings();
 
-    TPS546_check_status();
+    smb_read_word(PMBUS_STATUS_WORD, &u16_value);
+    ESP_LOGI(TAG, "read STATUS_WORD: %04x", u16_value);
 
     ESP_LOGI(TAG, "-----------VOLTAGE/CURRENT---------------------");
     smb_read_word(PMBUS_READ_VIN, &u16_value);
@@ -451,7 +450,9 @@ esp_err_t TPS546_init(TPS546_CONFIG config)
 
     ESP_LOGI(TAG, "Clearing faults");
     TPS546_clear_faults();
-    TPS546_check_status();
+
+    smb_read_word(PMBUS_STATUS_WORD, &u16_value);
+    ESP_LOGI(TAG, "read STATUS_WORD: %04x", u16_value);
 
     return ESP_OK;
 }
@@ -722,29 +723,22 @@ float TPS546_get_vout(void)
     }
 }
 
-uint16_t TPS546_check_status(void) {
+esp_err_t TPS546_check_status(GlobalState * global_state) {
 
     uint16_t status;
+    SystemModule * sys_module = &global_state->SYSTEM_MODULE;
 
-    if (smb_read_word(PMBUS_STATUS_WORD, &status) != ESP_OK) {
-        ESP_LOGE(TAG, "Could not read STATUS_WORD");
-        return 0;
-    }
-
-    #ifdef DEBUG_TPS546_STATUS
-    if (status != 0) {
-        TPS546_parse_status(status);
-    }
-    #endif
-
+    ESP_RETURN_ON_ERROR(smb_read_word(PMBUS_STATUS_WORD, &status), TAG, "Failed to read STATUS_WORD");
     //determine if this is a fault we care about
     if (status & (TPS546_STATUS_OFF | TPS546_STATUS_VOUT_OV | TPS546_STATUS_IOUT_OC | TPS546_STATUS_VIN_UV | TPS546_STATUS_TEMP)) {
-        ESP_LOGW(TAG, "Status: 0x%04X", status);
-        return status;
+        if (sys_module->power_fault == 0) {
+            ESP_RETURN_ON_ERROR(TPS546_parse_status(status), TAG, "Failed to parse STATUS_WORD");
+            sys_module->power_fault = 1;
+        }
+    } else {
+        sys_module->power_fault = 0;
     }
-
-
-    return 0;
+    return ESP_OK;
 }
 
 // Global variable to store the TPS error message for the UI
@@ -755,15 +749,11 @@ const char* TPS546_get_error_message() {
 }
 
 
-#ifdef DEBUG_TPS546_STATUS
 static esp_err_t TPS546_parse_status(uint16_t status) {
     uint8_t u8_value;
-    
-    // Clear previous error message
-    tps_error_message[0] = '\0';
 
     //print the status word
-    ESP_LOGI(TAG, "TPS546 Status Word: %04X", status);
+    ESP_LOGE(TAG, "Status: 0x%04X", status);
 
     if (status & TPS546_STATUS_BUSY) {
         ESP_LOGE(TAG, "TPS546 is busy");
@@ -772,22 +762,18 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
     
     if (status & TPS546_STATUS_OFF) {
         ESP_LOGE(TAG, "TPS546 is off");
-        strcat(tps_error_message, "TPS546 is off. ");
     }
     
     if (status & TPS546_STATUS_VOUT_OV) {
         ESP_LOGE(TAG, "TPS546 VOUT is out of range");
-        strcat(tps_error_message, "VOUT is out of range. ");
     }
     
     if (status & TPS546_STATUS_IOUT_OC) {
         ESP_LOGE(TAG, "TPS546 IOUT is out of range");
-        strcat(tps_error_message, "IOUT is out of range. ");
     }
     
     if (status & TPS546_STATUS_VIN_UV) {
         ESP_LOGE(TAG, "TPS546 VIN is out of range");
-        strcat(tps_error_message, "VIN is out of range. ");
     }
     
     if (status & TPS546_STATUS_TEMP) {
@@ -796,6 +782,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
         //the host should check STATUS_TEMPERATURE for more information.
         if (smb_read_byte(PMBUS_STATUS_TEMPERATURE, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_TEMPERATURE");
+            return ESP_FAIL;
         } else {
             ESP_LOGI(TAG, "TPS546 Temperature Status: %02X", u8_value);
         }
@@ -807,6 +794,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
         //the host should check STATUS_CML for more information.
         if (smb_read_byte(PMBUS_STATUS_CML, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_CML");
+            return ESP_FAIL;
         } else {
             ESP_LOGI(TAG, "TPS546 CML Status: %02X", u8_value);
         }
@@ -826,6 +814,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
         //the host should check STATUS_VOUT for more information.
         if (smb_read_byte(PMBUS_STATUS_VOUT, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_VOUT");
+            return ESP_FAIL;
         } else {
             ESP_LOGI(TAG, "TPS546 VOUT Status: %02X", u8_value);
         }
@@ -836,6 +825,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
         //the host should check STATUS_IOUT for more information.
         if (smb_read_byte(PMBUS_STATUS_IOUT, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_IOUT");
+            return ESP_FAIL;
         } else {
             ESP_LOGI(TAG, "TPS546 IOUT Status: %02X", u8_value);
         }
@@ -846,6 +836,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
         //the host should check STATUS_INPUT for more information.
         if (smb_read_byte(PMBUS_STATUS_INPUT, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_INPUT");
+            return ESP_FAIL;
         } else {
             ESP_LOGI(TAG, "TPS546 INPUT Status: %02X", u8_value);
         }
@@ -856,6 +847,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
         //the host should check STATUS_MFR_SPECIFIC for more information.
         if (smb_read_byte(PMBUS_STATUS_MFR_SPECIFIC, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_MFR_SPECIFIC");
+            return ESP_FAIL;
         } else {
             ESP_LOGI(TAG, "TPS546 MFR_SPECIFIC Status: %02X", u8_value);
         }
@@ -870,6 +862,7 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
         //the host should check STATUS_OTHER for more information.
         if (smb_read_byte(PMBUS_STATUS_OTHER, &u8_value) != ESP_OK) {
             ESP_LOGE(TAG, "Could not read STATUS_OTHER");
+            return ESP_FAIL;
         } else {
             ESP_LOGI(TAG, "TPS546 OTHER Status: %02X", u8_value);
         }
@@ -877,7 +870,6 @@ static esp_err_t TPS546_parse_status(uint16_t status) {
 
     return ESP_OK;
 }
-#endif //DEBUG_TPS546_STATUS
 
 /**
  * @brief Sets the core voltage
