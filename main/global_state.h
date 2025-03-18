@@ -49,6 +49,11 @@ typedef enum
 //     void (*set_version_mask)(uint32_t);
 // } AsicFunctions;
 
+typedef struct {
+    char message[64];
+    uint32_t count;
+} RejectedReasonStat;
+
 typedef struct
 {
     double duration_start;
@@ -60,6 +65,8 @@ typedef struct
     int64_t start_time;
     uint64_t shares_accepted;
     uint64_t shares_rejected;
+    RejectedReasonStat rejected_reason_stats[10];
+    int rejected_reason_stats_count;
     int screen_page;
     uint64_t best_nonce_diff;
     char best_diff_string[DIFF_STRING_SIZE];

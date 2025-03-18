@@ -1,5 +1,10 @@
 <ng-container *ngIf="form != null">
     <form [formGroup]="form">
+
+        <p-message *ngIf="settingsUnlocked" severity="warn" styleClass="w-full mb-3 py-4 border-round-xl"
+            text="Custom settings can cause damage & system instability. Only modify these settings if you understand the risks of running outside designed parameters.">
+        </p-message>
+
         <ng-container *ngIf="!settingsUnlocked && restrictedModels.includes(ASICModel)">
             <div class="field grid p-fluid">
                 <label class="col-12 mb-2 md:col-2 md:mb-0" htmlFor="frequency">Frequency</label>
@@ -86,6 +91,11 @@
 
         <div class="mt-2">
             <button pButton [disabled]="!savedChanges" (click)="restart()">Restart</button>
+
+            <button *ngIf="settingsUnlocked" pButton pButton="p-button-danger" (click)="toggleOverclockMode(false)"
+                    class="p-button-danger" pTooltip="Return to safe preset values only">
+                Disable Overclock Mode
+            </button>
         </div>
 
 
