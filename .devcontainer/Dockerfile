@@ -16,7 +16,7 @@ RUN apt-get update \
 RUN update-alternatives --install /usr/local/bin/usbip usbip `ls /usr/lib/linux-tools/*/usbip | tail -n1` 20
 
 # Node.js and npm (v20 is required)
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
 RUN apt-get update && apt-get install -y nodejs
 
 # QEMU
