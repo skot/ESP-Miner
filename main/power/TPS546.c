@@ -24,16 +24,11 @@
 #define NACK_VALUE     0x1
 #define MAX_BLOCK_LEN  32
 
-#define SMBUS_DEFAULT_TIMEOUT (1000 / portTICK_PERIOD_MS)
-
 static const char *TAG = "TPS546";
 
 static uint8_t DEVICE_ID1[] = {0x54, 0x49, 0x54, 0x6B, 0x24, 0x41}; // TPS546D24A
 static uint8_t DEVICE_ID2[] = {0x54, 0x49, 0x54, 0x6D, 0x24, 0x41}; // TPS546D24A
 static uint8_t DEVICE_ID3[] = {0x54, 0x49, 0x54, 0x6D, 0x24, 0x62}; // TPS546D24S
-static uint8_t MFR_ID[] = {'B', 'A', 'X'};
-static uint8_t MFR_MODEL[] = {'H', 'E', 'X'};
-static uint8_t MFR_REVISION[] = {0x00, 0x00, 0x01};
 
 //static uint8_t COMPENSATION_CONFIG[] = {0xFF, 0xFF, 0xFF, 0xFF, 0xFF};
 
@@ -121,30 +116,30 @@ static esp_err_t smb_read_block(uint8_t command, uint8_t *data, uint8_t len)
     return ESP_OK;
 }
 
-/**
- * @brief SMBus write block - don;t forget the length byte first :P
- * @param command The command to write
- * @param data The data to write
- * @param len The number of bytes to write
- */
-static esp_err_t smb_write_block(uint8_t command, uint8_t *data, uint8_t len)
-{
-    //malloc a buffer len+2 to store the command byte and then the length byte
-    uint8_t *buf = (uint8_t *)malloc(len+2);
-    buf[0] = command;
-    buf[1] = len;
-    //copy the data into the buffer
-    memcpy(buf+2, data, len);
+// /**
+//  * @brief SMBus write block - don;t forget the length byte first :P
+//  * @param command The command to write
+//  * @param data The data to write
+//  * @param len The number of bytes to write
+//  */
+// static esp_err_t smb_write_block(uint8_t command, uint8_t *data, uint8_t len)
+// {
+//     //malloc a buffer len+2 to store the command byte and then the length byte
+//     uint8_t *buf = (uint8_t *)malloc(len+2);
+//     buf[0] = command;
+//     buf[1] = len;
+//     //copy the data into the buffer
+//     memcpy(buf+2, data, len);
 
-    //write it all
-    if (i2c_bitaxe_register_write_bytes(tps546_i2c_handle, buf, len+2) != ESP_OK) {
-        free(buf);
-        return ESP_FAIL;
-    } else {
-        free(buf);
-        return ESP_OK;
-    }
-}
+//     //write it all
+//     if (i2c_bitaxe_register_write_bytes(tps546_i2c_handle, buf, len+2) != ESP_OK) {
+//         free(buf);
+//         return ESP_FAIL;
+//     } else {
+//         free(buf);
+//         return ESP_OK;
+//     }
+// }
 
 /**
  * @brief Convert an SLINEAR11 value into an int
@@ -502,20 +497,6 @@ void TPS546_read_mfr_info(uint8_t *read_mfr_revision)
 }
 
 /**
- * @brief Write the manufacturer ID and revision to NVM 
-*/
-void TPS546_set_mfr_info(void)
-{
-    ESP_LOGI(TAG, "----- Manufacturer Info");
-    ESP_LOGI(TAG, "Setting MFR_ID: %02X %02X %02X", MFR_ID[0], MFR_ID[1], MFR_ID[2]);
-	smb_write_block(PMBUS_MFR_ID, MFR_ID, 3);
-    ESP_LOGI(TAG, "Setting MFR_MODEL: %02X %02X %02X", MFR_MODEL[0], MFR_MODEL[1], MFR_MODEL[2]);
-	smb_write_block(PMBUS_MFR_MODEL, MFR_MODEL, 3);
-    ESP_LOGI(TAG, "Setting MFR_REVISION: %02X %02X %02X", MFR_REVISION[0], MFR_REVISION[1], MFR_REVISION[2]);
-	smb_write_block(PMBUS_MFR_REVISION, MFR_REVISION, 3);
-}
-
-/**
  * @brief Set all the relevant config registers for normal operation 
 */
 void TPS546_write_entire_config(void)
@@ -631,12 +612,12 @@ void TPS546_write_entire_config(void)
     smb_write_word(PMBUS_PIN_DETECT_OVERRIDE, INIT_PIN_DETECT_OVERRIDE);
 
     /* TODO write new MFR_REVISION number to reflect these parameters */
-    ESP_LOGI(TAG, "Setting MFR ID");
-    smb_write_block(PMBUS_MFR_ID, MFR_ID, 3);
-    ESP_LOGI(TAG, "Setting MFR MODEL");
-    smb_write_block(PMBUS_MFR_ID, MFR_MODEL, 3);
-    ESP_LOGI(TAG, "Setting MFR REVISION");
-    smb_write_block(PMBUS_MFR_ID, MFR_REVISION, 3);
+    // ESP_LOGI(TAG, "Setting MFR ID");
+    // smb_write_block(PMBUS_MFR_ID, MFR_ID, 3);
+    // ESP_LOGI(TAG, "Setting MFR MODEL");
+    // smb_write_block(PMBUS_MFR_ID, MFR_MODEL, 3);
+    // ESP_LOGI(TAG, "Setting MFR REVISION");
+    // smb_write_block(PMBUS_MFR_ID, MFR_REVISION, 3);
 
     /*
     !!!!!!!!!!!!!!!!!!!!!!!!!!!
