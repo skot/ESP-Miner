@@ -2,7 +2,7 @@
 
 // #include "freertos/event_groups.h"
 // #include "freertos/timers.h"
-// #include "driver/gpio.h"
+#include "driver/gpio.h"
 
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -320,6 +320,8 @@ void self_test(void * pvParameters)
 
     // Create a binary semaphore
     BootSemaphore = xSemaphoreCreateBinary();
+
+    gpio_install_isr_service(0);
 
     if (BootSemaphore == NULL) {
         ESP_LOGE(TAG, "Failed to create semaphore");
