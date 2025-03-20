@@ -199,7 +199,6 @@ esp_err_t ASIC_set_device_model(GlobalState * GLOBAL_STATE) {
 
     if (GLOBAL_STATE->device_model_str == NULL) {
         ESP_LOGE(TAG, "No device model string found");
-        GLOBAL_STATE->SYSTEM_MODULE.asic_status = "No device model found";
         return ESP_FAIL;
     }
 
@@ -249,7 +248,6 @@ esp_err_t ASIC_set_device_model(GlobalState * GLOBAL_STATE) {
 
     } else {
         ESP_LOGE(TAG, "Invalid DEVICE model");
-        GLOBAL_STATE->SYSTEM_MODULE.asic_status = "Invalid DEVICE model";
         GLOBAL_STATE->device_model = DEVICE_UNKNOWN;
         return ESP_FAIL;
     }
