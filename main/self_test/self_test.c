@@ -2,7 +2,7 @@
 
 // #include "freertos/event_groups.h"
 // #include "freertos/timers.h"
-// #include "driver/gpio.h"
+#include "driver/gpio.h"
 
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -22,6 +22,7 @@
 #include "utils.h"
 #include "TPS546.h"
 #include "esp_psram.h"
+#include "power.h"
 
 #include "asic.h"
 
@@ -321,6 +322,8 @@ void self_test(void * pvParameters)
     // Create a binary semaphore
     BootSemaphore = xSemaphoreCreateBinary();
 
+    gpio_install_isr_service(0);
+
     if (BootSemaphore == NULL) {
         ESP_LOGE(TAG, "Failed to create semaphore");
         return;
@@ -534,16 +537,10 @@ void self_test(void * pvParameters)
 
 static void tests_done(GlobalState * GLOBAL_STATE, bool test_result) 
 {
-    switch (GLOBAL_STATE->device_model) {
-        case DEVICE_MAX:
-        case DEVICE_ULTRA:
-        case DEVICE_SUPRA:
-        case DEVICE_GAMMA:
-            GLOBAL_STATE->SELF_TEST_MODULE.result = test_result;
-            GLOBAL_STATE->SELF_TEST_MODULE.finished = true;
-            break;
-        default:
-    }
+
+    GLOBAL_STATE->SELF_TEST_MODULE.result = test_result;
+    GLOBAL_STATE->SELF_TEST_MODULE.finished = true;
+    Power_disable(GLOBAL_STATE);
 
     if (test_result == TESTS_FAILED) {
         ESP_LOGI(TAG, "SELF TESTS FAIL -- Press RESET to continue");  
