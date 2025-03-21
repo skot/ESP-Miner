@@ -45,12 +45,6 @@
 #define POWER_CONSUMPTION_TARGET_GAMMA 11       //watts
 #define POWER_CONSUMPTION_MARGIN 3              //+/- watts
 
-//test hashrate
-#define HASHRATE_TARGET_GAMMA 900 //GH/s
-#define HASHRATE_TARGET_SUPRA 500 //GH/s
-// #define HASHRATE_TARGET_ULTRA 1000 //GH/s
-// #define HASHRATE_TARGET_MAX 2000 //GH/s
-
 static const char * TAG = "self_test";
 
 SemaphoreHandle_t BootSemaphore;
@@ -451,43 +445,53 @@ void self_test(void * pvParameters)
     //(*GLOBAL_STATE->ASIC_functions.send_work_fn)(GLOBAL_STATE, &job);
     ASIC_send_work(GLOBAL_STATE, &job);
     
-     double start = esp_timer_get_time();
-     double sum = 0;
-     double duration = 0;
-     double hash_rate = 0;
+    double start = esp_timer_get_time();
+    double sum = 0;
+    double duration = 0;
+    double hash_rate = 0;
+    double hashtest_timeout = 5;
 
-    while(duration < 3){
+    while (duration < hashtest_timeout) {
         task_result * asic_result = ASIC_process_work(GLOBAL_STATE);
         if (asic_result != NULL) {
             // check the nonce difficulty
             double nonce_diff = test_nonce_value(&job, asic_result->nonce, asic_result->rolled_version);
             sum += difficulty_mask;
-            duration = (double) (esp_timer_get_time() - start) / 1000000;
+            
             hash_rate = (sum * 4294967296) / (duration * 1000000000);
             ESP_LOGI(TAG, "Nonce %lu Nonce difficulty %.32f.", asic_result->nonce, nonce_diff);
             ESP_LOGI(TAG, "%f Gh/s  , duration %f",hash_rate, duration);
         }
+        duration = (double) (esp_timer_get_time() - start) / 1000000;
     }
 
     ESP_LOGI(TAG, "Hashrate: %f", hash_rate);
 
+    float hashrate_test_percentage_target = 0.85;
+    float expected_hashrate_mhs = (float)GLOBAL_STATE->POWER_MANAGEMENT_MODULE.frequency_value;
+
     switch (GLOBAL_STATE->device_model) {
         case DEVICE_MAX:
+            expected_hashrate_mhs *= BM1397_CORE_COUNT * 4;
+            break;
         case DEVICE_ULTRA:
+            expected_hashrate_mhs *= BM1366_CORE_COUNT * 8;
             break;
         case DEVICE_SUPRA:
-            if(hash_rate < HASHRATE_TARGET_SUPRA){
-                display_msg("HASHRATE:FAIL", GLOBAL_STATE);
-                tests_done(GLOBAL_STATE, TESTS_FAILED);
-            }
+            expected_hashrate_mhs *= BM1368_CORE_COUNT * 8;
+            // lower target due to temp sensitivity
+            hashrate_test_percentage_target = 0.8; 
             break;
         case DEVICE_GAMMA:
-            if(hash_rate < HASHRATE_TARGET_GAMMA){
-                display_msg("HASHRATE:FAIL", GLOBAL_STATE);
-                tests_done(GLOBAL_STATE, TESTS_FAILED);
-            }
+            expected_hashrate_mhs *= BM1370_CORE_COUNT * 16;
+            hashrate_test_percentage_target = 0.85; 
             break;
         default:
+    }
+
+    if (hash_rate < hashrate_test_percentage_target * (expected_hashrate_mhs/1000.0) ){
+        display_msg("HASHRATE:FAIL", GLOBAL_STATE);
+        tests_done(GLOBAL_STATE, TESTS_FAILED);
     }
 
     free(GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs);
