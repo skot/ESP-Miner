@@ -4,6 +4,7 @@
 #include "global_state.h"
 #include "serial.h"
 #include "utils.h"
+#include "common.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -15,7 +16,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef CONFIG_GPIO_ASIC_RESET
 #define GPIO_ASIC_RESET CONFIG_GPIO_ASIC_RESET
+#else
+#define GPIO_ASIC_RESET 1
+#endif
 
 #define TYPE_JOB 0x20
 #define TYPE_CMD 0x40
@@ -213,6 +218,63 @@ static void do_frequency_ramp_up(float target_frequency) {
     }
 }
 
+uint8_t BM1370_get_chip_address_interval(int chips) {
+    return (uint8_t)(256/_largest_power_of_two(chips));
+}
+
+void BM1370_set_hash_counting_number(int hcn) {
+    uint8_t set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x00, 0x00};
+    set_10_hash_counting[2] = (hcn >> 24) & 0xFF;
+    set_10_hash_counting[3] = (hcn >> 16) & 0xFF;
+    set_10_hash_counting[4] = (hcn >> 8) & 0xFF;
+    set_10_hash_counting[5] = hcn & 0xFF;
+    _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_WRITE), set_10_hash_counting, 6, BM1370_SERIALTX_DEBUG);
+}
+
+void BM1370_set_chip_nonce_offset(int chips_in_chain,int cno_interval) {
+    // CNO: Dividing by chain 
+    int address_interval = BM1370_get_chip_address_interval(chips_in_chain);
+    int cno_chip_value = 0;
+    unsigned char set_0C_chip_nonce_offset[6] = {0x00,0x0C, 0x00, 0x00, 0x00, 0x00};
+    for (uint8_t chip_idx = 0; chip_idx < chips_in_chain; chip_idx++) {
+        
+        if (chip_idx > 0) cno_chip_value = (int)(cno_interval*(float)chip_idx) + 1;
+        set_0C_chip_nonce_offset[0] = chip_idx * address_interval;
+        set_0C_chip_nonce_offset[2] = 0x80; //CNOV,  CNO valid flag only use cno if this bit is on
+        set_0C_chip_nonce_offset[3] = 0x00; // reserved
+        set_0C_chip_nonce_offset[4] = (cno_chip_value >> 8) & 0xFF;
+        set_0C_chip_nonce_offset[5] = cno_chip_value & 0xFF;
+        _send_BM1370((TYPE_CMD | GROUP_SINGLE | CMD_WRITE), set_0C_chip_nonce_offset, 6, BM1370_SERIALTX_DEBUG);
+    }
+
+    ESP_LOGI(TAG, "Chip setting cno_interval=%i",cno_interval);
+}
+
+float BM1370_set_nonce_percent_and_get_timeout(uint64_t frequency, uint16_t chain_chip_count, int versions_to_roll, float nonce_percent, float timeout_percent) {
+    // This functions set registers to achieve nonce percent and returns the correct timeout
+    
+    // ensure percents are not greater than 100%
+    nonce_percent = limit_percent(nonce_percent,1.0);
+    timeout_percent = limit_percent(timeout_percent,1.0);
+
+    int address_interval = BM1370_get_chip_address_interval(chain_chip_count);
+
+    //CNO: dividing nonce by chain
+    int cno_interval = calculate_cno_interval(chain_chip_count);
+    BM1370_set_chip_nonce_offset(chain_chip_count,cno_interval);
+
+    //HCN: dividing nonce space
+    int hcn = calculate_version_rolling_hcn(BM1370_CORE_COUNT,address_interval,cno_interval,(int)frequency,nonce_percent);
+    BM1370_set_hash_counting_number(hcn);
+    
+    int versions_per_core = versions_to_roll/BM1370_MIDSTATE_ENGINES;
+    float timeout_ms = calculate_timeout_ms(BM1370_CORE_COUNT,address_interval,(int)frequency,cno_interval,nonce_percent,timeout_percent,versions_per_core);
+    
+    ESP_LOGI(TAG, "Chip setting chips=%i freq=%i hcn=%i addr_interval=%i nonce_percent=%.3f timeout_percent=%.3f timeout=%.4f",chain_chip_count,(int)frequency,hcn,address_interval,nonce_percent,timeout_percent,timeout_ms);
+    return timeout_ms;
+}
+
+
 static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
 {
     // set version mask
@@ -252,7 +314,7 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     // _send_simple(init7, 7);
 
     // split the chip address space evenly
-    uint8_t address_interval = (uint8_t) (256 / chip_counter);
+    uint8_t address_interval = BM1370_get_chip_address_interval(chip_counter);
     for (uint8_t i = 0; i < chip_counter; i++) {
         _set_chip_address(i * address_interval);
         // unsigned char init8[7] = {0x55, 0xAA, 0x40, 0x05, 0x00, 0x00, 0x1C};
@@ -313,15 +375,8 @@ static uint8_t _send_init(uint64_t frequency, uint16_t asic_count)
     //ramp up the hash frequency
     do_frequency_ramp_up(frequency);
 
-    //register 10 is still a bit of a mystery. discussion: https://github.com/skot/ESP-Miner/pull/167
-
-    // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x11, 0x5A}; //S19k Pro Default
-    // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x14, 0x46}; //S19XP-Luxos Default
-    // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x15, 0x1C}; //S19XP-Stock Default
-    //unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x15, 0xA4}; //S21-Stock Default
-    unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x1E, 0xB5}; //S21 Pro-Stock Default
-    // unsigned char set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x0F, 0x00, 0x00}; //supposedly the "full" 32bit nonce range
-    _send_BM1370((TYPE_CMD | GROUP_ALL | CMD_WRITE), set_10_hash_counting, 6, BM1370_SERIALTX_DEBUG);
+    BM1370_set_nonce_percent_and_get_timeout(frequency, chip_counter, STRATUM_DEFAULT_VERSION_MASK>>13, 1.0, 1.0);
+    BM1370_set_version_mask(STRATUM_DEFAULT_VERSION_MASK);
 
     return chip_counter;
 }
@@ -519,7 +574,7 @@ task_result * BM1370_proccess_work(void * pvParameters)
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
     if (GLOBAL_STATE->valid_jobs[job_id] == 0) {
-        ESP_LOGE(TAG, "Invalid job nonce found, 0x%02X", job_id);
+        ESP_LOGW(TAG, "Invalid job nonce found, 0x%02X", job_id);
         return NULL;
     }
 

@@ -5,8 +5,6 @@
 #include "driver/gpio.h"
 #include "mining.h"
 
-#define ASIC_BM1370_JOB_FREQUENCY_MS 500
-
 #define CRC5_MASK 0x1F
 #define BM1370_ASIC_DIFFICULTY 256
 
@@ -17,6 +15,7 @@
 
 static const uint64_t BM1370_CORE_COUNT = 128;
 static const uint64_t BM1370_SMALL_CORE_COUNT = 2040;
+static const float BM1370_MIDSTATE_ENGINES = 16.0;
 
 typedef struct
 {
@@ -45,5 +44,5 @@ int BM1370_set_max_baud(void);
 int BM1370_set_default_baud(void);
 void BM1370_send_hash_frequency(int, float, float);
 task_result * BM1370_proccess_work(void * GLOBAL_STATE);
-
+float BM1370_set_nonce_percent_and_get_timeout(uint64_t frequency, uint16_t chain_chip_count, int versions_to_roll, float nonce_percent, float timeout_percent);
 #endif /* BM1370_H_ */

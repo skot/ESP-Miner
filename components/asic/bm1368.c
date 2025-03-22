@@ -4,6 +4,7 @@
 #include "global_state.h"
 #include "serial.h"
 #include "utils.h"
+#include "common.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -15,7 +16,11 @@
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef CONFIG_GPIO_ASIC_RESET
 #define GPIO_ASIC_RESET CONFIG_GPIO_ASIC_RESET
+#else
+#define GPIO_ASIC_RESET 1
+#endif
 
 #define TYPE_JOB 0x20
 #define TYPE_CMD 0x40
@@ -237,6 +242,34 @@ static void do_frequency_ramp_up(float target_frequency) {
     do_frequency_transition(target_frequency);
 }
 
+uint8_t BM1368_get_chip_address_interval(int chips) {
+    return (uint8_t)(256/_largest_power_of_two(chips));
+}
+
+
+void BM1368_set_hash_counting_number(int hcn) {
+    uint8_t set_10_hash_counting[6] = {0x00, 0x10, 0x00, 0x00, 0x00, 0x00};
+    set_10_hash_counting[2] = (hcn >> 24) & 0xFF;
+    set_10_hash_counting[3] = (hcn >> 16) & 0xFF;
+    set_10_hash_counting[4] = (hcn >> 8) & 0xFF;
+    set_10_hash_counting[5] = hcn & 0xFF;
+    _send_BM1368((TYPE_CMD | GROUP_ALL | CMD_WRITE), set_10_hash_counting, 6, BM1368_SERIALTX_DEBUG);
+}
+
+float BM1368_set_nonce_percent_and_get_timeout(uint64_t frequency, uint16_t chain_chip_count, int versions_to_roll, float nonce_percent, float timeout_percent) {
+    nonce_percent = limit_percent(nonce_percent,1.0);
+
+    int address_interval = BM1368_get_chip_address_interval(chain_chip_count);
+    int cno_interval = 0; //not used by bm1368
+    int hcn = calculate_version_rolling_hcn(BM1368_CORE_COUNT,address_interval, frequency,cno_interval,nonce_percent);
+    BM1368_set_hash_counting_number(hcn);
+
+    int versions_per_core = versions_to_roll/BM1368_MIDSTATE_ENGINES;
+    float timeout_ms = calculate_timeout_ms(BM1368_CORE_COUNT,address_interval,(int)frequency,cno_interval,nonce_percent,timeout_percent,versions_per_core);
+    
+    ESP_LOGI(TAG, "Chip setting chips=%i freq=%i hcn=%i addr_interval=%i nonce_percent=%.3f timeout_percent=%.3f timeout=%.4f",chain_chip_count,(int)frequency,hcn,address_interval,nonce_percent,timeout_percent,timeout_ms);    return timeout_ms;
+}
+
 uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
 {
     ESP_LOGI(TAG, "Initializing BM1368");
@@ -274,7 +307,7 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
         _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, init_cmds[i], 6, false);
     }
 
-    uint8_t address_interval = (uint8_t) (256 / chip_counter);
+    uint8_t address_interval = BM1368_get_chip_address_interval(chip_counter);
     for (int i = 0; i < chip_counter; i++) {
         _set_chip_address(i * address_interval);
     }
@@ -298,10 +331,11 @@ uint8_t BM1368_init(uint64_t frequency, uint16_t asic_count)
 
     do_frequency_ramp_up((float)frequency);
 
-    _send_BM1368(TYPE_CMD | GROUP_ALL | CMD_WRITE, (uint8_t[]){0x00, 0x10, 0x00, 0x00, 0x15, 0xa4}, 6, false);
+    BM1368_set_nonce_percent_and_get_timeout(frequency,chip_counter,STRATUM_DEFAULT_VERSION_MASK>>13,1.0,1.0);
     BM1368_set_version_mask(STRATUM_DEFAULT_VERSION_MASK);
 
     ESP_LOGI(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
+    
     return chip_counter;
 }
 
@@ -433,7 +467,7 @@ task_result * BM1368_proccess_work(void * pvParameters)
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
     if (GLOBAL_STATE->valid_jobs[job_id] == 0) {
-        ESP_LOGE(TAG, "Invalid job found, 0x%02X", job_id);
+        ESP_LOGW(TAG, "Invalid job found, 0x%02X", job_id);
         return NULL;
     }
 

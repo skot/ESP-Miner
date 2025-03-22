@@ -1,5 +1,4 @@
 #include "http_server.h"
-#include "recovery_page.h"
 #include "theme_api.h"  // Add theme API include
 #include "cJSON.h"
 #include "esp_chip_info.h"
@@ -16,6 +15,7 @@
 #include "global_state.h"
 #include "nvs_config.h"
 #include "vcore.h"
+#include "connect.h"
 #include <fcntl.h>
 #include <string.h>
 #include <sys/param.h>
@@ -32,9 +32,48 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include <pthread.h>
+#include "connect.h"
 
 static const char * TAG = "http_server";
 static const char * CORS_TAG = "CORS";
+
+/* Handler for WiFi scan endpoint */
+static esp_err_t GET_wifi_scan(httpd_req_t *req)
+{
+    httpd_resp_set_type(req, "application/json");
+    
+    // Give some time for the connected flag to take effect
+    vTaskDelay(100 / portTICK_PERIOD_MS);
+    
+    wifi_ap_record_simple_t ap_records[20];
+    uint16_t ap_count = 0;
+
+    esp_err_t err = wifi_scan(ap_records, &ap_count);
+    if (err != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "WiFi scan failed");
+        return ESP_OK;
+    }
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON *networks = cJSON_CreateArray();
+
+    for (int i = 0; i < ap_count; i++) {
+        cJSON *network = cJSON_CreateObject();
+        cJSON_AddStringToObject(network, "ssid", (char *)ap_records[i].ssid);
+        cJSON_AddNumberToObject(network, "rssi", ap_records[i].rssi);
+        cJSON_AddNumberToObject(network, "authmode", ap_records[i].authmode);
+        cJSON_AddItemToArray(networks, network);
+    }
+
+    cJSON_AddItemToObject(root, "networks", networks);
+
+    const char *response = cJSON_Print(root);
+    httpd_resp_sendstr(req, response);
+
+    free((void *)response);
+    cJSON_Delete(root);
+    return ESP_OK;
+}
 
 static GlobalState * GLOBAL_STATE;
 static httpd_handle_t server = NULL;
@@ -83,18 +122,10 @@ static esp_err_t ip_in_private_range(uint32_t address) {
     return ESP_FAIL;
 }
 
-static uint32_t extract_origin_ip_addr(httpd_req_t *req)
+static uint32_t extract_origin_ip_addr(char *origin)
 {
-    char origin[128];
     char ip_str[16];
     uint32_t origin_ip_addr = 0;
-
-    // Attempt to get the Origin header.
-    if (httpd_req_get_hdr_value_str(req, "Origin", origin, sizeof(origin)) != ESP_OK) {
-        ESP_LOGD(CORS_TAG, "No origin header found.");
-        return 0;
-    }
-    ESP_LOGD(CORS_TAG, "Origin header: %s", origin);
 
     // Find the start of the IP address in the Origin header
     const char *prefix = "http://";
@@ -149,8 +180,14 @@ static esp_err_t is_network_allowed(httpd_req_t * req)
     // Convert to IPv4 string
     inet_ntop(AF_INET, &request_ip_addr, ipstr, sizeof(ipstr));
 
-    uint32_t origin_ip_addr = extract_origin_ip_addr(req);
-    if (origin_ip_addr == 0) {
+    // Attempt to get the Origin header.
+    char origin[128];
+    uint32_t origin_ip_addr;
+    if (httpd_req_get_hdr_value_str(req, "Origin", origin, sizeof(origin)) == ESP_OK) {
+        ESP_LOGD(CORS_TAG, "Origin header: %s", origin);
+        origin_ip_addr = extract_origin_ip_addr(origin);
+    } else {
+        ESP_LOGD(CORS_TAG, "No origin header found.");
         origin_ip_addr = request_ip_addr;
     }
 
@@ -247,7 +284,11 @@ static esp_err_t rest_recovery_handler(httpd_req_t * req)
         return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
     }
 
-    httpd_resp_send(req, recovery_page, HTTPD_RESP_USE_STRLEN);
+    extern const unsigned char recovery_page_start[] asm("_binary_recovery_page_html_start");
+    extern const unsigned char recovery_page_end[] asm("_binary_recovery_page_html_end");
+    const size_t recovery_page_size = (recovery_page_end - recovery_page_start);
+    httpd_resp_send_chunk(req, (const char*)recovery_page_start, recovery_page_size);
+    httpd_resp_send_chunk(req, NULL, 0);
     return ESP_OK;
 }
 
@@ -503,6 +544,8 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     cJSON_AddNumberToObject(root, "stratumDiff", GLOBAL_STATE->stratum_difficulty);
 
     cJSON_AddNumberToObject(root, "isUsingFallbackStratum", GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback);
+
+    cJSON_AddNumberToObject(root, "isPSRAMAvailable", GLOBAL_STATE->psram_is_available);
 
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
     cJSON_AddNumberToObject(root, "coreVoltage", nvs_config_get_u16(NVS_CONFIG_ASIC_VOLTAGE, CONFIG_ASIC_VOLTAGE));
@@ -853,6 +896,15 @@ esp_err_t start_rest_server(void * pvParameters)
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &system_info_get_uri);
+
+    /* URI handler for WiFi scan */
+    httpd_uri_t wifi_scan_get_uri = {
+        .uri = "/api/system/wifi/scan",
+        .method = HTTP_GET,
+        .handler = GET_wifi_scan,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &wifi_scan_get_uri);
 
     httpd_uri_t swarm_options_uri = {
         .uri = "/api/swarm",

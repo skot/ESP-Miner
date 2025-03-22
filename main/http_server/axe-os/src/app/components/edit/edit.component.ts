@@ -139,30 +139,6 @@ export class EditComponent implements OnInit, OnDestroy {
         this.form = this.fb.group({
           flipscreen: [info.flipscreen == 1],
           invertscreen: [info.invertscreen == 1],
-          stratumURL: [info.stratumURL, [
-            Validators.required,
-            Validators.pattern(/^(?!.*stratum\+tcp:\/\/).*$/),
-            Validators.pattern(/^[^:]*$/),
-          ]],
-          stratumPort: [info.stratumPort, [
-            Validators.required,
-            Validators.pattern(/^[^:]*$/),
-            Validators.min(0),
-            Validators.max(65353)
-          ]],
-          fallbackStratumURL: [info.fallbackStratumURL, [
-            Validators.pattern(/^(?!.*stratum\+tcp:\/\/).*$/),
-          ]],
-          fallbackStratumPort: [info.fallbackStratumPort, [
-            Validators.required,
-            Validators.pattern(/^[^:]*$/),
-            Validators.min(0),
-            Validators.max(65353)
-          ]],
-          stratumUser: [info.stratumUser, [Validators.required]],
-          stratumPassword: ['*****', [Validators.required]],
-          fallbackStratumUser: [info.fallbackStratumUser, [Validators.required]],
-          fallbackStratumPassword: ['password', [Validators.required]],
           coreVoltage: [info.coreVoltage, [Validators.required]],
           frequency: [info.frequency, [Validators.required]],
           autofanspeed: [info.autofanspeed == 1, [Validators.required]],
@@ -213,19 +189,16 @@ export class EditComponent implements OnInit, OnDestroy {
       .pipe(this.loadingService.lockUIUntilComplete())
       .subscribe({
         next: () => {
-          this.toastr.success('Success!', 'Saved.');
+          const successMessage = this.uri ? `Saved settings for ${this.uri}` : 'Saved settings';
+          this.toastr.success(successMessage, 'Success!');
           this.savedChanges = true;
         },
         error: (err: HttpErrorResponse) => {
-          this.toastr.error('Error.', `Could not save. ${err.message}`);
+          const errorMessage = this.uri ? `Could not save settings for ${this.uri}. ${err.message}` : `Could not save settings. ${err.message}`;
+          this.toastr.error(errorMessage, 'Error');
           this.savedChanges = false;
         }
       });
-  }
-
-  showStratumPassword: boolean = false;
-  toggleStratumPasswordVisibility() {
-    this.showStratumPassword = !this.showStratumPassword;
   }
 
   showWifiPassword: boolean = false;
@@ -238,20 +211,17 @@ export class EditComponent implements OnInit, OnDestroy {
     this.updateSystem();
   }
 
-  showFallbackStratumPassword: boolean = false;
-  toggleFallbackStratumPasswordVisibility() {
-    this.showFallbackStratumPassword = !this.showFallbackStratumPassword;
-  }
-
   public restart() {
     this.systemService.restart(this.uri)
       .pipe(this.loadingService.lockUIUntilComplete())
       .subscribe({
         next: () => {
-          this.toastr.success('Success!', 'Bitaxe restarted');
+          const successMessage = this.uri ? `Bitaxe at ${this.uri} restarted` : 'Bitaxe restarted';
+          this.toastr.success(successMessage, 'Success');
         },
         error: (err: HttpErrorResponse) => {
-          this.toastr.error('Error', `Could not restart. ${err.message}`);
+          const errorMessage = this.uri ? `Failed to restart device at ${this.uri}. ${err.message}` : `Failed to restart device. ${err.message}`;
+          this.toastr.error(errorMessage, 'Error');
         }
       });
   }

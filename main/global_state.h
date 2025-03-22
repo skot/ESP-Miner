@@ -46,6 +46,7 @@ typedef struct
     void (*set_difficulty_mask_fn)(int);
     void (*send_work_fn)(void * GLOBAL_STATE, bm_job * next_bm_job);
     void (*set_version_mask)(uint32_t);
+    float (*set_nonce_percent_and_get_timeout_fn)(uint64_t frequency, uint16_t chips_in_chain, int versions_to_roll, float nonce_percent, float timeout_percent);
 } AsicFunctions;
 
 typedef struct
@@ -74,6 +75,10 @@ typedef struct
     char * fallback_pool_url;
     uint16_t pool_port;
     uint16_t fallback_pool_port;
+    char * pool_user;
+    char * fallback_pool_user;
+    char * pool_pass;
+    char * fallback_pool_pass;
     bool is_using_fallback;
     uint16_t overheat_mode;
     uint32_t lastClockSync;
@@ -120,9 +125,17 @@ typedef struct
     uint32_t stratum_difficulty;
     uint32_t version_mask;
     bool new_stratum_version_rolling_msg;
+    double asic_nonce_percent;
+    double asic_timeout_percent;
 
     int sock;
+
+    // A message ID that must be unique per request that expects a response.
+    // For requests not expecting a response (called notifications), this is null.
+    int send_uid;
+
     bool ASIC_initalized;
+    bool psram_is_available;
 } GlobalState;
 
 #endif /* GLOBAL_STATE_H_ */
