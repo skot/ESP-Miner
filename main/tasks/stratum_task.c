@@ -15,9 +15,13 @@
 
 #define PORT CONFIG_STRATUM_PORT
 #define STRATUM_URL CONFIG_STRATUM_URL
+#define STRATUM_TLS CONFIG_STRATUM_TLS
+#define STRATUM_CERT CONFIG_STRATUM_CERT
 
 #define FALLBACK_PORT CONFIG_FALLBACK_STRATUM_PORT
 #define FALLBACK_STRATUM_URL CONFIG_FALLBACK_STRATUM_URL
+#define FALLBACK_STRATUM_TLS CONFIG_FALLBACK_STRATUM_TLS
+#define FALLBACK_STRATUM_CERT CONFIG_FALLBACK_STRATUM_CERT
 
 #define STRATUM_PW CONFIG_STRATUM_PW
 #define FALLBACK_STRATUM_PW CONFIG_FALLBACK_STRATUM_PW
@@ -25,6 +29,9 @@
 
 #define MAX_RETRY_ATTEMPTS 3
 #define MAX_CRITICAL_RETRY_ATTEMPTS 5
+#define TRANSPORT_TIMEOUT_MS 5000
+
+#define BUFFER_SIZE 1024
 
 static const char * TAG = "stratum_task";
 
@@ -33,6 +40,8 @@ static SystemTaskModule SYSTEM_TASK_MODULE = {.stratum_difficulty = 8192};
 
 static const char * primary_stratum_url;
 static uint16_t primary_stratum_port;
+static uint16_t primary_stratum_is_tls;
+static char * primary_stratum_cert;
 
 bool is_wifi_connected() {
     wifi_ap_record_t ap_info;
@@ -56,16 +65,16 @@ void cleanQueue(GlobalState * GLOBAL_STATE) {
     pthread_mutex_unlock(&GLOBAL_STATE->valid_jobs_lock);
 }
 
+void stratum_reset_uid(GlobalState * GLOBAL_STATE)
+{
+    ESP_LOGI(TAG, "Resetting stratum uid");
+    GLOBAL_STATE->send_uid = 1;
+}
+
 void stratum_close_connection(GlobalState * GLOBAL_STATE)
 {
-    if (GLOBAL_STATE->sock < 0) {
-        ESP_LOGE(TAG, "Socket already shutdown, not shutting down again..");
-        return;
-    }
-
     ESP_LOGE(TAG, "Shutting down socket and restarting...");
-    shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
-    close(GLOBAL_STATE->sock);
+    STRATUM_V1_transport_close(GLOBAL_STATE->transport);
     cleanQueue(GLOBAL_STATE);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 }
@@ -74,11 +83,8 @@ void stratum_primary_heartbeat(void * pvParameters)
 {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
 
-    ESP_LOGI(TAG, "Starting heartbeat thread for primary endpoint: %s", primary_stratum_url);
+    ESP_LOGI(TAG, "Starting heartbeat thread for primary pool: %s:%d", primary_stratum_url, primary_stratum_port);
     vTaskDelay(10000 / portTICK_PERIOD_MS);
-
-    int addr_family = AF_INET;
-    int ip_protocol = IPPROTO_IP;
 
     while (1)
     {
@@ -87,7 +93,6 @@ void stratum_primary_heartbeat(void * pvParameters)
             continue;
         }
 
-        char host_ip[INET_ADDRSTRLEN];
         ESP_LOGD(TAG, "Running Heartbeat on: %s!", primary_stratum_url);
 
         if (!is_wifi_connected()) {
@@ -95,46 +100,47 @@ void stratum_primary_heartbeat(void * pvParameters)
             vTaskDelay(10000 / portTICK_PERIOD_MS);
             continue;
         }
-
-        struct hostent *primary_dns_addr = gethostbyname(primary_stratum_url);
-        if (primary_dns_addr == NULL) {
-            ESP_LOGD(TAG, "Heartbeat. Failed DNS check for: %s!", primary_stratum_url);
+       
+        uint16_t is_tls = GLOBAL_STATE->SYSTEM_MODULE.pool_is_tls;
+        char * cert = GLOBAL_STATE->SYSTEM_MODULE.pool_cert;
+        esp_transport_handle_t transport = STRATUM_V1_transport_init(is_tls, cert);
+        if (transport == NULL) {
+            ESP_LOGD(TAG, "Heartbeat. Failed transport init check!");
             vTaskDelay(60000 / portTICK_PERIOD_MS);
             continue;
         }
-        inet_ntop(AF_INET, (void *)primary_dns_addr->h_addr_list[0], host_ip, sizeof(host_ip));
-
-        struct sockaddr_in dest_addr;
-        dest_addr.sin_addr.s_addr = inet_addr(host_ip);
-        dest_addr.sin_family = AF_INET;
-        dest_addr.sin_port = htons(primary_stratum_port);
-
-        int sock = socket(addr_family, SOCK_STREAM, ip_protocol);
-        if (sock < 0) {
-            ESP_LOGD(TAG, "Heartbeat. Failed socket create check!");
-            vTaskDelay(60000 / portTICK_PERIOD_MS);
-            close(sock);
-            continue;
-        }
-
-        int err = connect(sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
-        if (err != 0)
+        esp_err_t err = STRATUM_V1_transport_connect(primary_stratum_url, primary_stratum_port, transport);
+        if (err != 0) 
         {
-            ESP_LOGD(TAG, "Heartbeat. Failed connect check: %s:%d (errno %d: %s)", host_ip, primary_stratum_port, errno, strerror(errno));
-            close(sock);
+            ESP_LOGD(TAG, "Heartbeat. Failed connect check: %s:%d (errno %d: %s)", primary_stratum_url, primary_stratum_port, errno, strerror(errno));
+            STRATUM_V1_transport_close(transport);
             vTaskDelay(60000 / portTICK_PERIOD_MS);
             continue;
         }
-        shutdown(sock, SHUT_RDWR);
-        close(sock);
 
-        if (GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback) {
+        int send_uid = 1;
+        STRATUM_V1_subscribe(transport, send_uid++, GLOBAL_STATE->asic_model_str);
+        STRATUM_V1_authenticate(transport, send_uid++, GLOBAL_STATE->SYSTEM_MODULE.pool_user, GLOBAL_STATE->SYSTEM_MODULE.pool_pass);
+
+        char recv_buffer[BUFFER_SIZE];
+        memset(recv_buffer, 0, BUFFER_SIZE);
+        int bytes_received = esp_transport_read(transport, recv_buffer, BUFFER_SIZE - 1, TRANSPORT_TIMEOUT_MS); 
+
+        STRATUM_V1_transport_close(transport);
+
+        if (bytes_received == -1)  {
+            vTaskDelay(60000 / portTICK_PERIOD_MS);
+            continue;
+        }
+        STRATUM_V1_transport_close(transport);
+
+        if (strstr(recv_buffer, "mining.notify") != NULL) {
             ESP_LOGI(TAG, "Heartbeat successful and in fallback mode. Switching back to primary.");
             GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback = false;
             stratum_close_connection(GLOBAL_STATE);
-            vTaskDelay(60000 / portTICK_PERIOD_MS);
             continue;
         }
+
         vTaskDelay(60000 / portTICK_PERIOD_MS);
     }
 }
@@ -142,29 +148,26 @@ void stratum_primary_heartbeat(void * pvParameters)
 void stratum_task(void * pvParameters)
 {
     GlobalState * GLOBAL_STATE = (GlobalState *) pvParameters;
-
+    
     primary_stratum_url = GLOBAL_STATE->SYSTEM_MODULE.pool_url;
     primary_stratum_port = GLOBAL_STATE->SYSTEM_MODULE.pool_port;
+    primary_stratum_is_tls = GLOBAL_STATE->SYSTEM_MODULE.pool_is_tls;
+    primary_stratum_cert = GLOBAL_STATE->SYSTEM_MODULE.pool_cert;
     char * stratum_url = GLOBAL_STATE->SYSTEM_MODULE.pool_url;
     uint16_t port = GLOBAL_STATE->SYSTEM_MODULE.pool_port;
+    uint16_t is_tls = GLOBAL_STATE->SYSTEM_MODULE.pool_is_tls;
+    char * cert = GLOBAL_STATE->SYSTEM_MODULE.pool_cert;
 
     STRATUM_V1_initialize_buffer();
-    char host_ip[20];
-    int addr_family = AF_INET;
-    int ip_protocol = IPPROTO_IP;
     int retry_attempts = 0;
     int retry_critical_attempts = 0;
-    struct timeval timeout = {};
-    timeout.tv_sec = 5;
-    timeout.tv_usec = 0;
 
-    xTaskCreate(stratum_primary_heartbeat, "stratum primary heartbeat", 4096, pvParameters, 1, NULL);
+    xTaskCreate(stratum_primary_heartbeat, "stratum primary heartbeat", 8192, pvParameters, 1, NULL);
 
-    ESP_LOGI(TAG, "Trying to get IP for URL: %s", stratum_url);
+    ESP_LOGI(TAG, "Opening connection to pool: %s:%d", stratum_url, port);
     while (1) {
         if (!is_wifi_connected()) {
             ESP_LOGI(TAG, "WiFi disconnected, attempting to reconnect...");
-            esp_wifi_connect();
             vTaskDelay(10000 / portTICK_PERIOD_MS);
             continue;
         }
@@ -185,25 +188,14 @@ void stratum_task(void * pvParameters)
 
         stratum_url = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_url : GLOBAL_STATE->SYSTEM_MODULE.pool_url;
         port = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_port : GLOBAL_STATE->SYSTEM_MODULE.pool_port;
+        is_tls = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_is_tls : GLOBAL_STATE->SYSTEM_MODULE.pool_is_tls;
+        cert = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_cert : GLOBAL_STATE->SYSTEM_MODULE.pool_cert;
+        retry_critical_attempts = 0;
 
-        struct hostent *dns_addr = gethostbyname(stratum_url);
-        if (dns_addr == NULL) {
-            retry_attempts++;
-            vTaskDelay(1000 / portTICK_PERIOD_MS);
-            continue;
-        }
-        inet_ntop(AF_INET, (void *)dns_addr->h_addr_list[0], host_ip, sizeof(host_ip));
-
-        ESP_LOGI(TAG, "Connecting to: stratum+tcp://%s:%d (%s)", stratum_url, port, host_ip);
-
-        struct sockaddr_in dest_addr;
-        dest_addr.sin_addr.s_addr = inet_addr(host_ip);
-        dest_addr.sin_family = AF_INET;
-        dest_addr.sin_port = htons(port);
-
-        GLOBAL_STATE->sock = socket(addr_family, SOCK_STREAM, ip_protocol);
-        if (GLOBAL_STATE->sock < 0) {
-            ESP_LOGE(TAG, "Unable to create socket: errno %d", errno);
+        GLOBAL_STATE->transport = STRATUM_V1_transport_init(is_tls, cert);
+        // Check if transport was initialized
+        if(GLOBAL_STATE->transport == NULL) {
+            ESP_LOGE(TAG, "Transport initialization failed.");
             if (++retry_critical_attempts > MAX_CRITICAL_RETRY_ATTEMPTS) {
                 ESP_LOGE(TAG, "Max retry attempts reached, restarting...");
                 esp_restart();
@@ -211,58 +203,49 @@ void stratum_task(void * pvParameters)
             vTaskDelay(5000 / portTICK_PERIOD_MS);
             continue;
         }
-        retry_critical_attempts = 0;
-
-        ESP_LOGI(TAG, "Socket created, connecting to %s:%d", host_ip, port);
-        int err = connect(GLOBAL_STATE->sock, (struct sockaddr *)&dest_addr, sizeof(struct sockaddr_in6));
-        if (err != 0)
-        {
-            retry_attempts++;
-            ESP_LOGE(TAG, "Socket unable to connect to %s:%d (errno %d: %s)", stratum_url, port, errno, strerror(errno));
-            // close the socket
-            shutdown(GLOBAL_STATE->sock, SHUT_RDWR);
-            close(GLOBAL_STATE->sock);
+        ESP_LOGI(TAG, "Transport initialized, connecting to %s:%d", stratum_url, port);
+        esp_err_t ret = STRATUM_V1_transport_connect(stratum_url, port, GLOBAL_STATE->transport);
+        if (ret != ESP_OK) {
+            retry_attempts ++;
+            ESP_LOGE(TAG, "Transport unable to connect to %s:%d (errno %d). Attempt: %d", stratum_url, port, ret, retry_attempts);
+            // close the transport
+            STRATUM_V1_transport_close(GLOBAL_STATE->transport);
             // instead of restarting, retry this every 5 seconds
             vTaskDelay(5000 / portTICK_PERIOD_MS);
             continue;
         }
-        retry_attempts = 0;
 
-        if (setsockopt(GLOBAL_STATE->sock, SOL_SOCKET, SO_SNDTIMEO, &timeout, sizeof(timeout)) != 0) {
-            ESP_LOGE(TAG, "Fail to setsockopt SO_SNDTIMEO");
-        }
-
-        STRATUM_V1_reset_uid();
+        stratum_reset_uid(GLOBAL_STATE);
         cleanQueue(GLOBAL_STATE);
 
         ///// Start Stratum Action
         // mining.configure - ID: 1
-        STRATUM_V1_configure_version_rolling(GLOBAL_STATE->sock, &GLOBAL_STATE->version_mask);
+        STRATUM_V1_configure_version_rolling(GLOBAL_STATE->transport, GLOBAL_STATE->send_uid++, &GLOBAL_STATE->version_mask);
 
         // mining.subscribe - ID: 2
-        STRATUM_V1_subscribe(GLOBAL_STATE->sock, GLOBAL_STATE->asic_model_str);
+        STRATUM_V1_subscribe(GLOBAL_STATE->transport, GLOBAL_STATE->send_uid++, GLOBAL_STATE->asic_model_str);
 
-        char * username = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_USER, FALLBACK_STRATUM_USER) : nvs_config_get_string(NVS_CONFIG_STRATUM_USER, STRATUM_USER);
-        char * password = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_PASS, FALLBACK_STRATUM_PW) : nvs_config_get_string(NVS_CONFIG_STRATUM_PASS, STRATUM_PW);
+        char * username = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_user : GLOBAL_STATE->SYSTEM_MODULE.pool_user;
+        char * password = GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback ? GLOBAL_STATE->SYSTEM_MODULE.fallback_pool_pass : GLOBAL_STATE->SYSTEM_MODULE.pool_pass;
 
         //mining.authorize - ID: 3
-        STRATUM_V1_authenticate(GLOBAL_STATE->sock, username, password);
-        free(password);
-        free(username);
+        STRATUM_V1_authenticate(GLOBAL_STATE->transport, GLOBAL_STATE->send_uid++, username, password);
 
         //mining.suggest_difficulty - ID: 4
-        STRATUM_V1_suggest_difficulty(GLOBAL_STATE->sock, STRATUM_DIFFICULTY);
+        STRATUM_V1_suggest_difficulty(GLOBAL_STATE->transport, GLOBAL_STATE->send_uid++, STRATUM_DIFFICULTY);
 
         // Everything is set up, lets make sure we don't abandon work unnecessarily.
         GLOBAL_STATE->abandon_work = 0;
 
         while (1) {
-            char * line = STRATUM_V1_receive_jsonrpc_line(GLOBAL_STATE->sock);
+            char * line = STRATUM_V1_receive_jsonrpc_line(GLOBAL_STATE->transport);
             if (!line) {
                 ESP_LOGE(TAG, "Failed to receive JSON-RPC line, reconnecting...");
+                retry_attempts++;
                 stratum_close_connection(GLOBAL_STATE);
                 break;
             }
+
             ESP_LOGI(TAG, "rx: %s", line); // debug incoming stratum messages
             STRATUM_V1_parse(&stratum_api_v1_message, line);
             free(line);
@@ -306,6 +289,8 @@ void stratum_task(void * pvParameters)
                     SYSTEM_notify_rejected_share(GLOBAL_STATE);
                 }
             } else if (stratum_api_v1_message.method == STRATUM_RESULT_SETUP) {
+                // Reset retry attempts after successfully receiving data.
+                retry_attempts = 0;
                 if (stratum_api_v1_message.response_success) {
                     ESP_LOGI(TAG, "setup message accepted");
                 } else {
