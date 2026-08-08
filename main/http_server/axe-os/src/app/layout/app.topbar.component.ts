@@ -55,7 +55,7 @@ export class AppTopBarComponent implements OnInit, OnDestroy {
         this.wasOtaUpdating = true;
         const percent = info.firmwareUpdatePercent ?? 0;
         const status = info.firmwareUpdateStatus || 'Updating...';
-        const title = `Firmware Update (${percent}%)`;
+        const title = `Firmware Update`;
         const message = status;
 
         if (!this.otaToastRef) {
@@ -106,7 +106,7 @@ export class AppTopBarComponent implements OnInit, OnDestroy {
 
     this.liveDataService.connected$.pipe(takeUntil(this.destroy$)).subscribe((connected: boolean) => {
       if (!connected && this.otaToastRef) {
-        const title = 'Firmware Update (100%)';
+        const title = 'Firmware Update';
         const message = 'Device is rebooting...';
         if (this.otaToastRef.toastRef && this.otaToastRef.toastRef.componentInstance) {
           const inst = this.otaToastRef.toastRef.componentInstance;
