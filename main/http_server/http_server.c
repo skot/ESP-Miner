@@ -162,6 +162,7 @@ static esp_err_t GET_wifi_scan(httpd_req_t *req)
 
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
 #define MESSAGE_QUEUE_SIZE (128)
+#define MAX_REST_PAYLOAD_SIZE (16384) /* 16 KB max REST JSON payload */
 
 #define CHECK_FILE_EXTENSION(filename, ext) (strcasecmp(&filename[strlen(filename) - strlen(ext)], ext) == 0)
 
@@ -1051,7 +1052,7 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     }
 
     int total_len = req->content_len;
-    if (total_len <= 0 || total_len > 16384) {
+    if (total_len <= 0 || total_len > MAX_REST_PAYLOAD_SIZE) {
         httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content length invalid or too large");
         return ESP_OK;
     }
@@ -1262,7 +1263,7 @@ static esp_err_t PUT_system_pool(httpd_req_t *req)
     }
 
     int total_len = req->content_len;
-    if (total_len <= 0 || total_len > 16384) {
+    if (total_len <= 0 || total_len > MAX_REST_PAYLOAD_SIZE) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid request length");
     }
 
@@ -1457,9 +1458,9 @@ static esp_err_t POST_system_boot(httpd_req_t *req)
         return ESP_OK;
     }
 
-    size_t total_len = req->content_len;
-    if (total_len == 0) {
-        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty request body");
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len > MAX_REST_PAYLOAD_SIZE) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content length invalid or too large");
     }
 
     char *buf = malloc(total_len + 1);
