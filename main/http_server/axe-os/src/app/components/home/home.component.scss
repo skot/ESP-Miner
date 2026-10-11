@@ -110,16 +110,6 @@
         }
     }
 
-    // Registers widget: tighter padding to fit domain rows cleanly without scrollbar
-    .grid-stack-item[gs-id="registers"] {
-        .grid-stack-item-content {
-            > .card {
-                padding: 0.6rem 0.85rem;
-                overflow: hidden;
-            }
-        }
-    }
-
     // Hide resize handles by default
     .ui-resizable-handle,
     .gs-resizable-handle {
