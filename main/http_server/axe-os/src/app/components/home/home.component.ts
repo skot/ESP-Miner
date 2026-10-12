@@ -1230,7 +1230,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     if (outputs.length <= 1) return outputs;
 
     const lowerUser = (this.activePoolUser ?? '').toLowerCase();
-    const isUserOutput = (o: any) => !!o.address && lowerUser.includes(o.address.toLowerCase());
+    const isUserOutput = (o: any) => o.isUserOutput === 1 || (!!o.address && lowerUser.includes(o.address.toLowerCase()));
 
     const userOutputs = outputs.filter(isUserOutput);
     if (!userOutputs.length) return outputs;

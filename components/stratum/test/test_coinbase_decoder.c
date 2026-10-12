@@ -1075,3 +1075,106 @@ TEST_CASE("User address not in coinbase - payout status is not_found", "[coinbas
     TEST_ASSERT_EQUAL_STRING("unknown", coinbase_payout_status_to_string(result.payout_status));
 }
 
+TEST_CASE("Mainnet account username starting with m does not trigger testnet", "[coinbase_decoder]")
+{
+    static miner_job_t job;
+    memset(&job, 0, sizeof(job));
+    job.coinbase_prefix = s_test_pbuf;
+    job.coinbase_suffix = s_test_sbuf;
+    job.type = JOB_TYPE_V1;
+    job.version = 0x20000000;
+    job.nbits = 0x1d00ffff;
+
+    const char *c1 = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0403a08601";
+    hex2bin(c1, job.coinbase_prefix, strlen(c1) / 2);
+    job.coinbase_prefix_len = strlen(c1) / 2;
+
+    uint8_t *s = s_test_sbuf;
+    int pos = 0;
+    s[pos++] = 0xff; s[pos++] = 0xff; s[pos++] = 0xff; s[pos++] = 0xff; // nSequence
+    s[pos++] = 0x01; // 1 output
+
+    uint64_t val = 50000;
+    for (int b = 0; b < 8; b++) s[pos++] = (uint8_t)(val >> (b * 8));
+    s[pos++] = 22;
+    // P2WPKH script: OP_0 OP_PUSHDATA_20 <20 bytes>
+    s[pos++] = 0x00; s[pos++] = 0x14;
+    memset(s + pos, 0x22, 20);
+    pos += 20;
+    s[pos++] = 0x00; s[pos++] = 0x00; s[pos++] = 0x00; s[pos++] = 0x00; // locktime
+
+    job.coinbase_suffix_len = pos;
+    job.extranonce1_len = 0;
+    job.extranonce2_len = 0;
+
+    mining_notification_result_t result = { 0 };
+    // 26-char alphanumeric username starting with 'm' (not a Base58 address)
+    const char *account_user = "masterminerfromcalifornia1";
+
+    esp_err_t err = coinbase_process_miner_job(&job, account_user, true, &result);
+    TEST_ASSERT_EQUAL(ESP_OK, err);
+    TEST_ASSERT_EQUAL(COINBASE_PAYOUT_NOT_APPLICABLE, result.payout_status);
+    // Should decode with mainnet 'bc1' prefix, NOT testnet 'tb1'
+    TEST_ASSERT_EQUAL_INT(0, strncmp("bc1", result.outputs[0].address, 3));
+}
+
+TEST_CASE("Coinbase outputs partition verified user outputs to head", "[coinbase_decoder]")
+{
+    static miner_job_t job;
+    memset(&job, 0, sizeof(job));
+    job.coinbase_prefix = s_test_pbuf;
+    job.coinbase_suffix = s_test_sbuf;
+    job.type = JOB_TYPE_V1;
+    job.version = 0x20000000;
+    job.nbits = 0x1d00ffff;
+
+    const char *c1 = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0403a08601";
+    hex2bin(c1, job.coinbase_prefix, strlen(c1) / 2);
+    job.coinbase_prefix_len = strlen(c1) / 2;
+
+    uint8_t user_script[22] = {
+        0x00, 0x14,
+        0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11, 0x22, 0x33,
+        0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd
+    };
+
+    uint8_t *s = s_test_sbuf;
+    int pos = 0;
+    s[pos++] = 0xff; s[pos++] = 0xff; s[pos++] = 0xff; s[pos++] = 0xff; // nSequence
+    s[pos++] = 0x02; // 2 outputs: output 0 is third-party pool, output 1 is user
+
+    // Output 0: Third-party (10000 sat)
+    uint64_t val0 = 10000;
+    for (int b = 0; b < 8; b++) s[pos++] = (uint8_t)(val0 >> (b * 8));
+    s[pos++] = 22;
+    s[pos++] = 0x00; s[pos++] = 0x14;
+    memset(s + pos, 0x11, 20);
+    pos += 20;
+
+    // Output 1: User (40000 sat)
+    uint64_t val1 = 40000;
+    for (int b = 0; b < 8; b++) s[pos++] = (uint8_t)(val1 >> (b * 8));
+    s[pos++] = 22;
+    memcpy(s + pos, user_script, 22);
+    pos += 22;
+
+    s[pos++] = 0x00; s[pos++] = 0x00; s[pos++] = 0x00; s[pos++] = 0x00; // locktime
+
+    job.coinbase_suffix_len = pos;
+    job.extranonce1_len = 0;
+    job.extranonce2_len = 0;
+
+    mining_notification_result_t result = { 0 };
+    const char *user_addr = "bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x";
+
+    esp_err_t err = coinbase_process_miner_job(&job, user_addr, true, &result);
+    TEST_ASSERT_EQUAL(ESP_OK, err);
+    TEST_ASSERT_EQUAL_INT(2, result.output_count);
+    // Verified user output must have been partitioned to index 0
+    TEST_ASSERT_TRUE(result.outputs[0].is_user_output);
+    TEST_ASSERT_TRUE(40000ULL == result.outputs[0].value_satoshis);
+    TEST_ASSERT_FALSE(result.outputs[1].is_user_output);
+    TEST_ASSERT_TRUE(10000ULL == result.outputs[1].value_satoshis);
+}
+
+

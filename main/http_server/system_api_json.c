@@ -308,15 +308,14 @@ static void system_api_add_block_info(cJSON *root, GlobalState *g) {
             if (obj) {
                 cJSON_AddNumberToObject(obj, "value", g->coinbase.outputs[i].value_satoshis);
                 cJSON_AddStringToObject(obj, "address", g->coinbase.outputs[i].address);
+                cJSON_AddNumberToObject(obj, "isUserOutput", g->coinbase.outputs[i].is_user_output ? 1 : 0);
                 cJSON_AddItemToArray(outputs, obj);
             }
         }
         cJSON_AddItemToObject(root, "coinbaseOutputs", outputs);
+        cJSON_AddNumberToObject(root, "coinbaseOthersCount", g->coinbase.others_count);
+        cJSON_AddNumberToObject(root, "coinbaseOthersValueSatoshis", g->coinbase.others_value_satoshis);
     }
-
-    // Outputs beyond the capacity of coinbaseOutputs, aggregated into a single entry
-    cJSON_AddNumberToObject(root, "coinbaseOthersCount", g->coinbase.others_count);
-    cJSON_AddNumberToObject(root, "coinbaseOthersValueSatoshis", g->coinbase.others_value_satoshis);
 }
 
 static void system_api_add_partitions(cJSON *root, GlobalState * GLOBAL_STATE) {

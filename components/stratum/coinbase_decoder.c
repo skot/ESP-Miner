@@ -358,10 +358,6 @@ static void coinbase_detect_network(const char *user, const char **bech32_hrp, b
                             break;
                         }
                     }
-                } else if (seg_len <= 35 && (candidate[0] == 'm' || candidate[0] == 'n' || candidate[0] == '2')) {
-                    detected_hrp = "tb";
-                    detected_testnet = true;
-                    break;
                 }
             }
         }
@@ -550,23 +546,29 @@ static esp_err_t parse_coinbase_suffix(const miner_job_t *job,
     result->bip54_signaling = decode_coinbase_tx && (result->block_height > 0) &&
                               (nLockTime == result->block_height - 1) && (nSequence != 0xffffffff);
 
+    // Partition outputs so that verified user outputs appear first
+    if (result->output_count > 1) {
+        coinbase_output_t ordered[MAX_COINBASE_TX_OUTPUTS];
+        int user_idx = 0;
+        for (int i = 0; i < result->output_count; i++) {
+            if (result->outputs[i].is_user_output) {
+                ordered[user_idx++] = result->outputs[i];
+            }
+        }
+        int other_idx = user_idx;
+        for (int i = 0; i < result->output_count; i++) {
+            if (!result->outputs[i].is_user_output) {
+                ordered[other_idx++] = result->outputs[i];
+            }
+        }
+        memcpy(result->outputs, ordered, sizeof(coinbase_output_t) * result->output_count);
+    }
+
     return ESP_OK;
 }
 
-static char s_cached_user[128] = "";
-static uint8_t s_cached_scripts[MAX_USER_ADDRESSES][MAX_SCRIPTPUBKEY_LEN];
-static size_t s_cached_script_lens[MAX_USER_ADDRESSES];
-static int s_cached_script_count = 0;
-static const char *s_cached_bech32_hrp = "bc";
-static bool s_cached_is_testnet = false;
-static bool s_cache_valid = false;
-
 void coinbase_clear_user_cache(void) {
-    s_cache_valid = false;
-    s_cached_user[0] = '\0';
-    s_cached_script_count = 0;
-    s_cached_bech32_hrp = "bc";
-    s_cached_is_testnet = false;
+    // Decoding is stateless; retained for backward compatibility.
 }
 
 const char *coinbase_payout_status_to_string(coinbase_payout_status_t status) {
@@ -599,25 +601,16 @@ esp_err_t coinbase_process_miner_job(const miner_job_t *job,
 
     const char *bech32_hrp = "bc";
     bool is_testnet = false;
+    uint8_t user_scripts[MAX_USER_ADDRESSES][MAX_SCRIPTPUBKEY_LEN];
+    size_t user_script_lens[MAX_USER_ADDRESSES];
     int user_script_count = 0;
 
     if (decode_coinbase_tx && user_address) {
-        if (!s_cache_valid || strcmp(user_address, s_cached_user) != 0) {
-            strncpy(s_cached_user, user_address, sizeof(s_cached_user) - 1);
-            s_cached_user[sizeof(s_cached_user) - 1] = '\0';
-
-            s_cached_script_count = coinbase_parse_user_scriptpubkeys(user_address,
-                                                                      s_cached_scripts,
-                                                                      s_cached_script_lens,
-                                                                      MAX_USER_ADDRESSES);
-
-            coinbase_detect_network(user_address, &s_cached_bech32_hrp, &s_cached_is_testnet);
-            s_cache_valid = true;
-        }
-
-        user_script_count = s_cached_script_count;
-        bech32_hrp = s_cached_bech32_hrp;
-        is_testnet = s_cached_is_testnet;
+        user_script_count = coinbase_parse_user_scriptpubkeys(user_address,
+                                                              user_scripts,
+                                                              user_script_lens,
+                                                              MAX_USER_ADDRESSES);
+        coinbase_detect_network(user_address, &bech32_hrp, &is_testnet);
     }
 
     // Parse Coinbase prefix for ScriptSig info
@@ -700,8 +693,8 @@ esp_err_t coinbase_process_miner_job(const miner_job_t *job,
 
     // 4. Parse Coinbase Suffix (nSequence, outputs, nLockTime)
     esp_err_t err = parse_coinbase_suffix(job, coinbase_2_offset,
-                                          (const uint8_t (*)[MAX_SCRIPTPUBKEY_LEN])s_cached_scripts,
-                                          s_cached_script_lens,
+                                          (const uint8_t (*)[MAX_SCRIPTPUBKEY_LEN])user_scripts,
+                                          user_script_lens,
                                           user_script_count,
                                           bech32_hrp,
                                           is_testnet,
