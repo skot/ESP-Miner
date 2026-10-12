@@ -11,7 +11,6 @@
 #include "connect.h"
 #include "sv2_protocol.h"
 #include "sv2_noise.h"
-#include "mining.h"
 #include "utils.h"
 #include "libbase58.h"
 #include "device_config.h"
@@ -21,8 +20,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#define TRANSPORT_TIMEOUT_MS 5000
-#define SV2_MAX_FRAME_SIZE 8192
+#define SV2_PROBE_BUFFER_SIZE   1024
 
 static const char *TAG = "stratum_v2";
 
@@ -54,7 +52,7 @@ static void clear_active_job_ids(uint32_t *active_job_ids, int *count)
     *count = 0;
 }
 
-static bool stratum_v2_load_authority_pubkey(uint8_t out[32], const char *b58_key)
+static bool stratum_v2_load_authority_pubkey(uint8_t out[SV2_AUTHORITY_PUBKEY_SIZE], const char *b58_key)
 {
     if (!b58_key || strlen(b58_key) == 0) {
         return false;
@@ -68,8 +66,8 @@ static bool stratum_v2_load_authority_pubkey(uint8_t out[32], const char *b58_ke
         return false;
     }
 
-    if (decoded_len != 38) {
-        ESP_LOGE(TAG, "Invalid decoded length: %zu (expected 38)", decoded_len);
+    if (decoded_len != SV2_BASE58_AUTHORITY_KEY_LEN) {
+        ESP_LOGE(TAG, "Invalid decoded length: %zu (expected %d)", decoded_len, SV2_BASE58_AUTHORITY_KEY_LEN);
         return false;
     }
 
@@ -80,7 +78,7 @@ static bool stratum_v2_load_authority_pubkey(uint8_t out[32], const char *b58_ke
         return false;
     }
 
-    memcpy(out, data + 2, 32);
+    memcpy(out, data + 2, SV2_AUTHORITY_PUBKEY_SIZE);
     ESP_LOGI(TAG, "Successfully decoded base58 authority pubkey");
     return true;
 }
@@ -123,7 +121,7 @@ int stratum_v2_submit_share(GlobalState *GLOBAL_STATE, const asic_job_t *active_
         return -1;
     }
 
-    uint8_t extranonce_2[32];
+    uint8_t extranonce_2[SV2_MAX_EXTRANONCE_SIZE];
     uint8_t en2_len = 0;
 
     if (active_job->source_type == JOB_TYPE_SV2_EXTENDED) {
@@ -360,7 +358,7 @@ static void stratum_v2_handle_set_target(GlobalState *GLOBAL_STATE, sv2_conn_t *
     }
 
     double pdiff = target_to_diff(max_target);
-    if (pdiff < 0.0001 || pdiff >= (double)UINT32_MAX) {
+    if (pdiff < MIN_POOL_DIFFICULTY || pdiff > MAX_POOL_DIFFICULTY) {
         ESP_LOGW(TAG, "Ignoring out-of-range SV2 target pdiff: %g", pdiff);
         return;
     }
@@ -483,7 +481,7 @@ esp_err_t stratum_v2_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
     }
     conn->noise_ctx = noise_ctx;
 
-    uint8_t auth_key[32];
+    uint8_t auth_key[SV2_AUTHORITY_PUBKEY_SIZE];
     bool has_auth = stratum_v2_load_authority_pubkey(auth_key, auth_pubkey[0] ? auth_pubkey : NULL);
 
     if (require_auth && !has_auth) {
@@ -602,7 +600,7 @@ esp_err_t stratum_v2_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
         if (channel_type == SV2_CHANNEL_EXTENDED) {
             ESP_LOGI(TAG, "Opening extended mining channel (user=%s)", user[0] ? user : "(empty)");
             frame_len = sv2_build_open_extended_mining_channel(frame_buf, SV2_MAX_FRAME_SIZE,
-                                                                1, user, hash_rate, 2);
+                                                                1, user, hash_rate, SV2_MIN_EXTRANONCE_SIZE);
         } else {
             ESP_LOGI(TAG, "Opening standard mining channel (user=%s)", user[0] ? user : "(empty)");
             frame_len = sv2_build_open_standard_mining_channel(frame_buf, SV2_MAX_FRAME_SIZE,
@@ -878,7 +876,7 @@ bool stratum_v2_probe_pool(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
         return false;
     }
 
-    uint8_t auth_key[32];
+    uint8_t auth_key[SV2_AUTHORITY_PUBKEY_SIZE];
     bool has_auth = stratum_v2_load_authority_pubkey(auth_key, auth_pubkey[0] ? auth_pubkey : NULL);
 
     if (require_auth && !has_auth) {
@@ -895,10 +893,10 @@ bool stratum_v2_probe_pool(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
         return false;
     }
 
-    uint8_t *frame_buf = heap_caps_malloc(1024, MALLOC_CAP_SPIRAM);
-    if (!frame_buf) frame_buf = malloc(1024);
-    uint8_t *recv_buf = heap_caps_malloc(1024, MALLOC_CAP_SPIRAM);
-    if (!recv_buf) recv_buf = malloc(1024);
+    uint8_t *frame_buf = heap_caps_malloc(SV2_PROBE_BUFFER_SIZE, MALLOC_CAP_SPIRAM);
+    if (!frame_buf) frame_buf = malloc(SV2_PROBE_BUFFER_SIZE);
+    uint8_t *recv_buf = heap_caps_malloc(SV2_PROBE_BUFFER_SIZE, MALLOC_CAP_SPIRAM);
+    if (!recv_buf) recv_buf = malloc(SV2_PROBE_BUFFER_SIZE);
 
     if (!frame_buf || !recv_buf) {
         free(frame_buf);
@@ -912,7 +910,7 @@ bool stratum_v2_probe_pool(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
     uint32_t setup_flags = sv2_setup_flags_for_channel(channel_type);
 
     const char *device_model = GLOBAL_STATE->DEVICE_CONFIG.family.asic.name;
-    int frame_len = sv2_build_setup_connection(frame_buf, 1024,
+    int frame_len = sv2_build_setup_connection(frame_buf, SV2_PROBE_BUFFER_SIZE,
                                                url, port,
                                                "bitaxe", device_model ? device_model : "",
                                                "", "", setup_flags);
@@ -921,7 +919,7 @@ bool stratum_v2_probe_pool(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
     if (frame_len > 0 && sv2_noise_send(noise_ctx, transport, frame_buf, frame_len) == 0) {
         uint8_t hdr_buf[6];
         int payload_len = 0;
-        if (sv2_noise_recv(noise_ctx, transport, hdr_buf, recv_buf, 1024, &payload_len) == 0) {
+        if (sv2_noise_recv(noise_ctx, transport, hdr_buf, recv_buf, SV2_PROBE_BUFFER_SIZE, &payload_len) == 0) {
             sv2_frame_header_t hdr;
             if (sv2_parse_frame_header(hdr_buf, &hdr) == 0 && hdr.msg_type == SV2_MSG_SETUP_CONNECTION_SUCCESS) {
                 uint16_t used_version;

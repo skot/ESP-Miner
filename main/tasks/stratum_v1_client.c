@@ -19,9 +19,6 @@
 #include "freertos/task.h"
 #include "stratum_timing.h"
 
-#define MAX_EXTRANONCE_2_LEN 32
-#define TRANSPORT_TIMEOUT_MS 5000
-#define BUFFER_SIZE 1024
 #define PROBE_RECV_BUFFER_SIZE 2048
 
 static const char *TAG = "stratum_v1";

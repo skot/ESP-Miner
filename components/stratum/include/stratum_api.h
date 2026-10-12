@@ -7,12 +7,7 @@
 #include <esp_transport.h>
 #include "miner_job.h"
 
-#define MAX_MERKLE_BRANCHES 32
-#define HASH_SIZE 32
-#define COINBASE_SIZE 100
-#define COINBASE2_SIZE 128
 #define MAX_REQUEST_IDS 1024
-#define MAX_EXTRANONCE_2_LEN 32
 #define MAX_POOL_MESSAGE_LEN 256
 #define STRATUM_V1_MAX_JSON_LINE_SIZE 16384
 
