@@ -29,11 +29,21 @@
 #define SV2_MSG_SET_NEW_PREV_HASH                       0x20
 #define SV2_MSG_SET_TARGET                              0x21
 
-#define SV2_MAX_MERKLE_BRANCHES 20
+#define SV2_MAX_FRAME_SIZE 8192
 
-// Submit shares frame sizing (6-byte header + 24-byte payload + optional 1-byte len + 32-byte extranonce)
+// Minimum extranonce size requested in OpenExtendedMiningChannel (spec 5.4.4)
+#define SV2_MIN_EXTRANONCE_SIZE 2
+// Stratum V2 B0_32 wire type maximum length (spec 5.4.5 & 5.4.11)
+#define SV2_MAX_EXTRANONCE_SIZE 32
+
+// Authority public key size (32-byte x-only pubkey, spec 4.1.1)
+#define SV2_AUTHORITY_PUBKEY_SIZE 32
+// Decoded Base58Check authority key length: 2-byte version + 32-byte pubkey + 4-byte checksum (spec 4.1.2)
+#define SV2_BASE58_AUTHORITY_KEY_LEN 38
+
+// Submit shares frame sizing (6-byte header + 24-byte payload + optional 1-byte len + extranonce)
 #define SV2_SUBMIT_SHARES_PAYLOAD_SIZE 24
-#define SV2_SUBMIT_SHARES_MAX_FRAME_SIZE (SV2_FRAME_HEADER_SIZE + SV2_SUBMIT_SHARES_PAYLOAD_SIZE + 1 + 32)
+#define SV2_SUBMIT_SHARES_MAX_FRAME_SIZE (SV2_FRAME_HEADER_SIZE + SV2_SUBMIT_SHARES_PAYLOAD_SIZE + 1 + SV2_MAX_EXTRANONCE_SIZE)
 
 // Extension type flag for channel messages
 #define SV2_CHANNEL_MSG_FLAG 0x8000
@@ -101,7 +111,7 @@ typedef struct sv2_conn {
 
     // Extended channel state (zero for standard channels)
     sv2_channel_type_t channel_type;
-    uint8_t  extranonce_prefix[32];
+    uint8_t  extranonce_prefix[SV2_MAX_EXTRANONCE_SIZE];
     uint8_t  extranonce_prefix_len;
     uint8_t  extranonce_size;              // total extranonce bytes assigned by pool
 
