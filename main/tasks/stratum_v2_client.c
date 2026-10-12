@@ -91,6 +91,10 @@ void stratum_v2_close_connection(GlobalState *GLOBAL_STATE)
     sv2_conn_t *conn = s_v2_conn;
     s_v2_conn = NULL;
 
+    SYSTEM_reset_pool_session(GLOBAL_STATE);
+    stratum_timing_reset(&s_v2_timing);
+    pthread_mutex_unlock(&GLOBAL_STATE->transport_mutex);
+
     if (conn && conn->noise_ctx) {
         sv2_noise_destroy(conn->noise_ctx);
         conn->noise_ctx = NULL;
@@ -103,10 +107,6 @@ void stratum_v2_close_connection(GlobalState *GLOBAL_STATE)
         clear_active_job_ids(conn->active_job_ids, &conn->active_job_ids_count);
         free(conn);
     }
-    pthread_mutex_unlock(&GLOBAL_STATE->transport_mutex);
-
-    SYSTEM_reset_pool_session(GLOBAL_STATE);
-    stratum_timing_reset(&s_v2_timing);
 }
 
 static void stratum_v2_track_submit(uint32_t sequence_number)
@@ -159,6 +159,7 @@ int stratum_v2_submit_share(GlobalState *GLOBAL_STATE, const asic_job_t *active_
         if (sent_time_us) {
             *sent_time_us = esp_timer_get_time();
         }
+        SYSTEM_notify_submitted_share(GLOBAL_STATE);
     }
     pthread_mutex_unlock(&GLOBAL_STATE->transport_mutex);
     return ret;

@@ -97,6 +97,7 @@ int stratum_v1_submit_share(GlobalState *GLOBAL_STATE, const asic_job_t *active_
         if (sent_time_us) {
             *sent_time_us = now;
         }
+        SYSTEM_notify_submitted_share(GLOBAL_STATE);
     }
     pthread_mutex_unlock(&GLOBAL_STATE->transport_mutex);
     return ret;
@@ -110,6 +111,10 @@ void stratum_v1_close_connection(GlobalState *GLOBAL_STATE)
     sv1_conn_t *conn = s_v1_conn;
     s_v1_conn = NULL;
 
+    SYSTEM_reset_pool_session(GLOBAL_STATE);
+    stratum_timing_reset(&s_v1_timing);
+    pthread_mutex_unlock(&GLOBAL_STATE->transport_mutex);
+
     if (transport != NULL) {
         esp_transport_close(transport);
         esp_transport_destroy(transport);
@@ -118,10 +123,6 @@ void stratum_v1_close_connection(GlobalState *GLOBAL_STATE)
         clear_active_job_ids(conn->active_job_ids, &conn->active_job_ids_count);
         free(conn);
     }
-    pthread_mutex_unlock(&GLOBAL_STATE->transport_mutex);
-
-    SYSTEM_reset_pool_session(GLOBAL_STATE);
-    stratum_timing_reset(&s_v1_timing);
 }
 
 esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
@@ -220,11 +221,13 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
 
     stratum_v1_reset_uid(GLOBAL_STATE);
 
+    int configure_message_id = stratum_get_next_uid(GLOBAL_STATE);
     // mining.configure - ID: 1
-    STRATUM_V1_configure_version_rolling(transport, stratum_get_next_uid(GLOBAL_STATE), &s_v1_conn->version_mask);
+    STRATUM_V1_configure_version_rolling(transport, configure_message_id, &s_v1_conn->version_mask);
 
+    int subscribe_message_id = stratum_get_next_uid(GLOBAL_STATE);
     // mining.subscribe - ID: 2
-    STRATUM_V1_subscribe(transport, stratum_get_next_uid(GLOBAL_STATE), GLOBAL_STATE->DEVICE_CONFIG.family.asic.name);
+    STRATUM_V1_subscribe(transport, subscribe_message_id, GLOBAL_STATE->DEVICE_CONFIG.family.asic.name);
 
     int authorize_message_id = stratum_get_next_uid(GLOBAL_STATE);
     int suggest_diff_message_id = -1;
@@ -369,7 +372,9 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
                 break;
 
             case MINING_PING:
+                pthread_mutex_lock(&GLOBAL_STATE->transport_mutex);
                 STRATUM_V1_pong(transport, s_v1_msg->message_id);
+                pthread_mutex_unlock(&GLOBAL_STATE->transport_mutex);
                 break;
 
             case CLIENT_RECONNECT:
@@ -382,12 +387,16 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
                 break;
 
             case CLIENT_GET_VERSION:
+                pthread_mutex_lock(&GLOBAL_STATE->transport_mutex);
                 STRATUM_V1_send_version(transport, s_v1_msg->message_id);
+                pthread_mutex_unlock(&GLOBAL_STATE->transport_mutex);
                 break;
 
             case STRATUM_RESULT: {
                 bool is_setup_msg = (s_v1_msg->message_id > 0 &&
-                                     (s_v1_msg->message_id == authorize_message_id ||
+                                     (s_v1_msg->message_id == configure_message_id ||
+                                      s_v1_msg->message_id == subscribe_message_id ||
+                                      s_v1_msg->message_id == authorize_message_id ||
                                       s_v1_msg->message_id == suggest_diff_message_id ||
                                       s_v1_msg->message_id == extranonce_sub_message_id));
 
@@ -397,11 +406,15 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
                         if (s_v1_msg->message_id == authorize_message_id) {
                             if (difficulty > 0) {
                                 suggest_diff_message_id = stratum_get_next_uid(GLOBAL_STATE);
+                                pthread_mutex_lock(&GLOBAL_STATE->transport_mutex);
                                 STRATUM_V1_suggest_difficulty(transport, suggest_diff_message_id, difficulty);
+                                pthread_mutex_unlock(&GLOBAL_STATE->transport_mutex);
                             }
                             if (extranonce_subscribe) {
                                 extranonce_sub_message_id = stratum_get_next_uid(GLOBAL_STATE);
+                                pthread_mutex_lock(&GLOBAL_STATE->transport_mutex);
                                 STRATUM_V1_extranonce_subscribe(transport, extranonce_sub_message_id);
+                                pthread_mutex_unlock(&GLOBAL_STATE->transport_mutex);
                             }
                         }
                     } else {
