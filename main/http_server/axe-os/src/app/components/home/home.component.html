@@ -597,16 +597,20 @@
 
           @if (sparklineAsicRows.length > 0) {
             <div class="w-full flex-1 min-h-0 flex flex-col gap-1 overflow-hidden">
-              <div class="flex items-center gap-2 shrink-0 pb-0.5">
-                @if (sparklineAsicRows.length > 1) {
-                  <span class="w-8 text-xs text-secondary font-medium shrink-0 text-center">ASIC</span>
-                }
-                <div class="flex gap-1.5 flex-1 min-w-0">
-                  @for (cell of sparklineAsicRows[0].cells; track cell.id) {
-                    <span class="flex-1 min-w-0 text-center text-xs text-secondary font-medium truncate">Domain {{ cell.domainNumber }}</span>
+              @if (sparklineAsicRows.length > 1 || sparklineAsicRows[0].cells.length > 1) {
+                <div class="flex items-center gap-2 shrink-0 pb-0.5">
+                  @if (sparklineAsicRows.length > 1) {
+                    <span class="w-8 text-xs text-secondary font-medium shrink-0 text-center">ASIC</span>
+                  }
+                  @if (sparklineAsicRows[0].cells.length > 1) {
+                    <div class="flex gap-1.5 flex-1 min-w-0">
+                      @for (cell of sparklineAsicRows[0].cells; track cell.id) {
+                        <span class="flex-1 min-w-0 text-center text-xs text-secondary font-medium truncate">Domain {{ cell.domainNumber }}</span>
+                      }
+                    </div>
                   }
                 </div>
-              </div>
+              }
               @for (row of sparklineAsicRows; track row.id) {
                 <div class="flex items-stretch gap-2 flex-1 min-h-0">
                   @if (sparklineAsicRows.length > 1) {
