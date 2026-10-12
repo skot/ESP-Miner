@@ -16,8 +16,6 @@
 #include "esp_transport.h"
 #include "system.h"
 
-typedef struct bm_job bm_job;
-
 typedef struct PoolConfig
 {
     char * url;
@@ -125,6 +123,7 @@ typedef struct SystemModule
 typedef struct SelfTestNonceMeasurement
 {
     bool is_active;
+    uint8_t target[32];
     uint64_t accepted_count;
     uint64_t rejected_count;
     double hashes;
@@ -148,7 +147,7 @@ typedef struct AsicTaskModule
     // ASIC may not return the nonce in the same order as the jobs were sent
     // it also may return a previous nonce under some circumstances
     // so we keep a list of jobs indexed by the job id
-    bm_job **active_jobs;
+    struct asic_job **active_jobs;
     uint8_t *valid_jobs;
     pthread_mutex_t valid_jobs_lock;
 } AsicTaskModule;
@@ -174,14 +173,8 @@ typedef struct GlobalState
     bool filesystem_is_available;
 
     int block_height;
-    char scriptsig[128];
-    coinbase_output_t coinbase_outputs[MAX_COINBASE_TX_OUTPUTS];
-    int coinbase_output_count;
-    int coinbase_others_count;
-    uint64_t coinbase_others_value_satoshis;
-    uint64_t coinbase_value_total_satoshis;
-    uint64_t coinbase_value_user_satoshis;
-    coinbase_payout_status_t coinbase_payout_status;
+    mining_notification_result_t coinbase;
+    mining_notification_result_t coinbase_staging;
     uint64_t network_nonce_diff;
     char network_diff_string[DIFF_STRING_SIZE];
     char block_signals[MAX_BLOCK_SIGNALS][MAX_BLOCK_SIGNAL_LEN];

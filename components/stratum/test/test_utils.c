@@ -1,13 +1,24 @@
 #include "unity.h"
 #include "utils.h"
 #include "mining.h"
+#include <math.h>
 #include <string.h>
+
+TEST_CASE("Test sha256_bin", "[utils]")
+{
+    const char input[] = "hello";
+    uint8_t hash[32];
+    TEST_ASSERT_TRUE(sha256_bin((const uint8_t *)input, 5, hash));
+    char output[65];
+    bin2hex(hash, 32, output, 65);
+    TEST_ASSERT_EQUAL_STRING("2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824", output);
+}
 
 TEST_CASE("Test double_sha256_bin", "[utils]")
 {
     const char input[] = "hello";
     uint8_t hash[32];
-    double_sha256_bin((uint8_t *)input, 5, hash);
+    TEST_ASSERT_TRUE(double_sha256_bin((uint8_t *)input, 5, hash));
     char output[65];
     bin2hex(hash, 32, output, 65);
     TEST_ASSERT_EQUAL_STRING("9595c9df90075148eb06860365df33584b75bff782a510c6cd4883a419833d50", output);
@@ -98,13 +109,7 @@ TEST_CASE("Test bin2hex", "[utils]")
 
 TEST_CASE("reverse_32bit_words", "[utils]")
 {
-    uint8_t input[32];
-    for (int i = 0; i < 32; i++) input[i] = i;
-
-    uint8_t actual[32];
-    reverse_32bit_words(input, actual);
-
-    uint8_t expected[32] = {28, 29, 30, 31,
+    const uint8_t expected[32] = {28, 29, 30, 31,
                             24, 25, 26, 27,
                             20, 21, 22, 23,
                             16, 17, 18, 19,
@@ -112,17 +117,55 @@ TEST_CASE("reverse_32bit_words", "[utils]")
                              8,  9, 10, 11,
                              4,  5,  6,  7,
                              0,  1,  2,  3};
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, actual, 32);
+    for (size_t source_offset = 8; source_offset < 16; source_offset++) {
+        for (size_t destination_offset = 8; destination_offset < 16; destination_offset++) {
+            _Alignas(8) uint8_t source[48], destination[48];
+            uint8_t original_source[sizeof(source)];
+            uint8_t expected_destination[sizeof(destination)];
+            memset(source, 0xa5, sizeof(source));
+            memset(destination, 0xa5, sizeof(destination));
+            memset(expected_destination, 0xa5, sizeof(expected_destination));
+            for (size_t i = 0; i < 32; i++) source[source_offset + i] = (uint8_t)i;
+            memcpy(original_source, source, sizeof(source));
+            memcpy(expected_destination + destination_offset, expected, sizeof(expected));
+
+            reverse_32bit_words(source + source_offset, destination + destination_offset);
+
+            /* Compare the whole buffers, including the surrounding guard bytes. */
+            TEST_ASSERT_EQUAL_HEX8_ARRAY(expected_destination, destination, sizeof(destination));
+            TEST_ASSERT_EQUAL_HEX8_ARRAY(original_source, source, sizeof(source));
+        }
+    }
+}
+
+TEST_CASE("word reversal supports overlapping buffers", "[utils]")
+{
+    const uint8_t expected_words[32] = {
+        28, 29, 30, 31, 24, 25, 26, 27, 20, 21, 22, 23, 16, 17, 18, 19,
+        12, 13, 14, 15,  8,  9, 10, 11,  4,  5,  6,  7,  0,  1,  2,  3
+    };
+    const size_t offsets[][2] = {
+        {0, 0}, {0, 4}, {4, 0}, {1, 1}, {1, 5}, {5, 1}, {0, 1}, {1, 0}
+    };
+
+    for (size_t i = 0; i < sizeof(offsets) / sizeof(offsets[0]); i++) {
+        _Alignas(uint32_t) uint8_t storage[48];
+        uint8_t expected[sizeof(storage)];
+        memset(storage, 0xa5, sizeof(storage));
+        uint8_t *source = storage + 4 + offsets[i][0];
+        uint8_t *destination = storage + 4 + offsets[i][1];
+        for (int byte = 0; byte < 32; byte++) source[byte] = byte;
+        memcpy(expected, storage, sizeof(expected));
+        memcpy(expected + 4 + offsets[i][1], expected_words, sizeof(expected_words));
+
+        reverse_32bit_words(source, destination);
+        TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, storage, sizeof(storage));
+    }
 }
 
 TEST_CASE("reverse_endianness_per_word", "[utils]")
 {
-    uint8_t data[32];
-    for (int i = 0; i < 32; i++) data[i] = i;
-
-    reverse_endianness_per_word(data);
-
-    uint8_t expected[32] = { 3,  2,  1,  0,
+    const uint8_t expected[32] = { 3,  2,  1,  0,
                              7,  6,  5,  4,
                             11, 10,  9,  8,
                             15, 14, 13, 12,
@@ -130,33 +173,133 @@ TEST_CASE("reverse_endianness_per_word", "[utils]")
                             23, 22, 21, 20,
                             27, 26, 25, 24,
                             31, 30, 29, 28};
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected, data, 32);
+    for (size_t offset = 8; offset < 16; offset++) {
+        _Alignas(8) uint8_t storage[48];
+        uint8_t original[sizeof(storage)], expected_storage[sizeof(storage)];
+        memset(storage, 0xa5, sizeof(storage));
+        memset(expected_storage, 0xa5, sizeof(expected_storage));
+        for (size_t i = 0; i < 32; i++) storage[offset + i] = (uint8_t)i;
+        memcpy(original, storage, sizeof(storage));
+        memcpy(expected_storage + offset, expected, sizeof(expected));
+
+        reverse_endianness_per_word(storage + offset);
+        TEST_ASSERT_EQUAL_HEX8_ARRAY(expected_storage, storage, sizeof(storage));
+
+        reverse_endianness_per_word(storage + offset);
+        TEST_ASSERT_EQUAL_HEX8_ARRAY(original, storage, sizeof(storage));
+    }
 }
 
-TEST_CASE("networkDifficulty", "[utils]")
-{
-    uint32_t nBits = 0x1701cdfb;
-
-    double actual = networkDifficulty(nBits);
-
-    double expected = 155973032196071.9;
-
-    TEST_ASSERT_EQUAL_DOUBLE(expected, actual);
-}
-
-TEST_CASE("hash_to_pdiff safety", "[mining]")
+TEST_CASE("target_to_diff safety", "[utils]")
 {
     // 1. NULL pointer
-    TEST_ASSERT_EQUAL_DOUBLE((double)UINT32_MAX, hash_to_pdiff(NULL));
+    TEST_ASSERT_EQUAL_DOUBLE((double)UINT32_MAX, target_to_diff(NULL));
 
     // 2. All zero target (division by zero guard)
     uint8_t zero_target[32] = {0};
-    TEST_ASSERT_EQUAL_DOUBLE((double)UINT32_MAX, hash_to_pdiff(zero_target));
+    TEST_ASSERT_EQUAL_DOUBLE((double)UINT32_MAX, target_to_diff(zero_target));
 
     // 3. Max difficulty 1 target (0x00000000ffff0000...00)
     uint8_t diff1_target[32] = {0};
     diff1_target[26] = 0xff;
     diff1_target[27] = 0xff;
-    double d1 = hash_to_pdiff(diff1_target);
+    double d1 = target_to_diff(diff1_target);
     TEST_ASSERT_TRUE(d1 >= 0.99 && d1 <= 1.01);
+}
+
+TEST_CASE("nbits_to_target", "[utils]")
+{
+    uint8_t target[32];
+
+    // Genesis / Diff 1 nBits: 0x1d00ffff
+    nbits_to_target(0x1d00ffff, target);
+    uint8_t expected_genesis[32] = {0};
+    expected_genesis[26] = 0xff;
+    expected_genesis[27] = 0xff;
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_genesis, target, 32);
+
+    // Test conversion back to difficulty via target_to_diff
+    double diff = target_to_diff(target);
+    TEST_ASSERT_TRUE(diff >= 0.9999 && diff <= 1.0001);
+
+    // Mainnet block nBits (0x1701cdfb)
+    nbits_to_target(0x1701cdfb, target);
+    double actual_diff = target_to_diff(target);
+    double expected_diff = 155973032196071.9;
+    TEST_ASSERT_FLOAT_WITHIN(expected_diff * 0.0001, expected_diff, actual_diff);
+
+    // Negative / overflow nBits (bit 23 set)
+    nbits_to_target(0x1d80ffff, target);
+    uint8_t zero_target[32] = {0};
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(zero_target, target, 32);
+}
+
+TEST_CASE("diff_to_target", "[utils]")
+{
+    uint8_t target[32];
+
+    // diff 1.0 matches diff 1 target
+    diff_to_target(1.0, target);
+    uint8_t expected_diff1[32] = {0};
+    expected_diff1[26] = 0xff;
+    expected_diff1[27] = 0xff;
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_diff1, target, 32);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4, 1.0, target_to_diff(target));
+
+    // diff 1000.0 round-trip
+    diff_to_target(1000.0, target);
+    TEST_ASSERT_FLOAT_WITHIN(0.1, 1000.0, target_to_diff(target));
+
+    // diff 0.5 round-trip
+    diff_to_target(0.5, target);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4, 0.5, target_to_diff(target));
+
+    // diff <= 0.0 returns all-zero target
+    diff_to_target(0.0, target);
+    uint8_t zero_target[32] = {0};
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(zero_target, target, 32);
+
+    diff_to_target(-5.0, target);
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(zero_target, target, 32);
+}
+
+TEST_CASE("uint256_lte boundary conditions", "[utils]")
+{
+    uint8_t target[32] = {0};
+    uint8_t hash[32] = {0};
+
+    // Equal (all zeros) -> true
+    TEST_ASSERT_TRUE(uint256_lte(hash, target));
+
+    // Target set to diff 1 (byte 26 = 0xff, byte 27 = 0xff)
+    target[26] = 0xff;
+    target[27] = 0xff;
+
+    // hash < target (hash is 0) -> true
+    TEST_ASSERT_TRUE(uint256_lte(hash, target));
+
+    // hash == target -> true
+    memcpy(hash, target, 32);
+    TEST_ASSERT_TRUE(uint256_lte(hash, target));
+
+    // hash > target by 1 in highest word -> false
+    hash[27] = 0xff;
+    hash[28] = 0x01;
+    TEST_ASSERT_FALSE(uint256_lte(hash, target));
+
+    // hash > target by 1 in lowest byte -> false
+    memcpy(hash, target, 32);
+    hash[0] = 0x01;
+    TEST_ASSERT_FALSE(uint256_lte(hash, target));
+
+    // hash < target by 1 in lowest byte -> true
+    memset(hash, 0, 32);
+    hash[26] = 0xff;
+    hash[27] = 0xff;
+    memset(target, 0, 32);
+    target[26] = 0xff;
+    target[27] = 0xff;
+    target[0] = 0x02;
+    hash[0] = 0x01;
+    TEST_ASSERT_TRUE(uint256_lte(hash, target));
 }

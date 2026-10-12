@@ -9,6 +9,7 @@
 
 #define MAX_ADDRESS_STRING_LEN 128
 #define MAX_COINBASE_TX_OUTPUTS 6
+#define MAX_SCRIPTSIG_STRING_LEN 100
 #define MAX_SCRIPTPUBKEY_LEN 34
 #define MAX_USER_ADDRESSES 4
 
@@ -107,7 +108,7 @@ typedef struct {
  */
 typedef struct {
     uint32_t block_height;
-    char *scriptsig; // Allocated, must be freed by caller
+    char scriptsig[MAX_SCRIPTSIG_STRING_LEN];
     coinbase_output_t outputs[MAX_COINBASE_TX_OUTPUTS];
     int output_count;
     int others_count;               // outputs that did not fit in `outputs[]`

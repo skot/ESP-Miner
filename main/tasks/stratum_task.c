@@ -14,7 +14,6 @@
 #include <string.h>
 
 #define TAG "stratum_task"
-#define TRANSPORT_TIMEOUT_MS 5000
 #define MAX_RETRY_ATTEMPTS 3
 #define HEARTBEAT_INTERVAL_MS 60000
 #define INITIAL_HEARTBEAT_DELAY_MS 10000
@@ -245,7 +244,7 @@ void stratum_task(void *pvParameters)
     }
 }
 
-int stratum_submit_share(GlobalState *GLOBAL_STATE, const bm_job *active_job,
+int stratum_submit_share(GlobalState *GLOBAL_STATE, const asic_job_t *active_job,
                          uint32_t nonce, uint32_t rolled_version, uint64_t *sent_time_us)
 {
     if (!GLOBAL_STATE || !active_job) {
@@ -263,7 +262,7 @@ int stratum_submit_share(GlobalState *GLOBAL_STATE, const bm_job *active_job,
     }
 
     int ret;
-    if (active_job->job_type == JOB_TYPE_SV2_STANDARD || active_job->job_type == JOB_TYPE_SV2_EXTENDED) {
+    if (active_job->source_type == JOB_TYPE_SV2_STANDARD || active_job->source_type == JOB_TYPE_SV2_EXTENDED) {
         ret = stratum_v2_submit_share(GLOBAL_STATE, active_job, nonce, rolled_version, sent_time_us);
     } else {
         ret = stratum_v1_submit_share(GLOBAL_STATE, active_job, nonce, rolled_version, sent_time_us);

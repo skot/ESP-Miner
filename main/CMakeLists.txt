@@ -82,6 +82,7 @@ REQUIRES
     "dns_server"
     "stratum"
     "stratum_v2"
+    "yyjson"
 
 PRIV_REQUIRES
     "app_update"
