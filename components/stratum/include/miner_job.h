@@ -11,10 +11,12 @@ typedef mining_job_source_t miner_job_type_t;
 
 #define MAX_COINBASE_PREFIX_LEN 1024
 #define MAX_COINBASE_SUFFIX_LEN 64512
-#define MAX_COINBASE_BIN_LEN    MAX_COINBASE_SUFFIX_LEN
+#define MAX_EXTRANONCE_2_LEN 32
 #define MAX_MERKLE_BRANCHES 32
 #define MAX_JOB_ID_LEN ASIC_JOB_ID_LEN
 #define MINER_JOB_POOL_SIZE 8
+#define MIN_POOL_DIFFICULTY 0.0001
+#define MAX_POOL_DIFFICULTY 4294967295.0
 
 typedef struct {
     miner_job_type_t type;

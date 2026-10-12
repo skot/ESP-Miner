@@ -407,7 +407,7 @@ int sv2_parse_open_extended_channel_success(const uint8_t *payload, uint32_t len
 
     // extranonce_prefix: B0_32 (1 byte length + data)
     uint8_t prefix_len = payload[pos++];
-    if (prefix_len > 32 || *extranonce_size < 2 || *extranonce_size > 32 || (uint32_t)prefix_len + *extranonce_size > 32) return -1;
+    if (prefix_len > SV2_MAX_EXTRANONCE_SIZE || *extranonce_size < SV2_MIN_EXTRANONCE_SIZE || *extranonce_size > SV2_MAX_EXTRANONCE_SIZE || (uint32_t)prefix_len + *extranonce_size > SV2_MAX_EXTRANONCE_SIZE) return -1;
     if ((uint32_t)pos + prefix_len + 4 != len) return -1;
     *extranonce_prefix_len = prefix_len;
     if (prefix_len > 0) {
