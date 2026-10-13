@@ -389,7 +389,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     });
 
     this.grid = GridStack.init({
-      column: 12,
+      column: 24,
       cellHeight: DEFAULT_CELL_HEIGHT,
       margin: 8,
       float: false,
