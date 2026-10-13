@@ -1,5 +1,6 @@
 #include "sv2_noise.h"
 #include "sv2_protocol.h"
+#include "stratum_socket.h"
 #include "utils.h"
 
 #include <string.h>
@@ -20,7 +21,6 @@
 
 static const char *TAG = "sv2_noise";
 
-#define TRANSPORT_TIMEOUT_MS    5000
 #define RECV_TIMEOUT_MS         (60 * 3 * 1000)
 // Handshake should complete within seconds; if the server doesn't respond fast we
 // want to fail and reconnect rather than block here for 3 minutes.

@@ -55,6 +55,7 @@ static Settings settings[NVS_CONFIG_COUNT] = {
     [NVS_CONFIG_WIFI_SSID]                             = {.nvs_key_name = "wifissid",        .type = TYPE_STR,   .default_value = {.str = (char *)CONFIG_ESP_WIFI_SSID},                .rest_name = "ssid",                               .min = 1,  .max = 32},
     [NVS_CONFIG_WIFI_PASS]                             = {.nvs_key_name = "wifipass",        .type = TYPE_STR,   .default_value = {.str = (char *)CONFIG_ESP_WIFI_PASSWORD},            .rest_name = "wifiPass",                           .min = 0,  .max = 63},
     [NVS_CONFIG_HOSTNAME]                              = {.nvs_key_name = "hostname",        .type = TYPE_STR,   .default_value = {.str = (char *)CONFIG_LWIP_LOCAL_HOSTNAME},          .rest_name = "hostname",                           .min = 1,  .max = 32},
+    [NVS_CONFIG_USE_NTP]                               = {.nvs_key_name = "usentp",         .type = TYPE_BOOL,  .default_value = {.b = false},                                         .rest_name = "useNTP",                             .min = 0,  .max = 1},
 
     [NVS_CONFIG_POOL]                                  = {.nvs_key_name = "pool",            .type = TYPE_STR,   .default_value = {.str = ""},                                          .rest_name = "pools",                              .min = 0,  .max = NVS_STR_LIMIT, .array_size = MAX_POOLS},
     [NVS_CONFIG_PRIMARY_POOL_INDEX]                    = {.nvs_key_name = "prim_idx",        .type = TYPE_U16,   .default_value = {.u16 = 0},                                           .rest_name = "primaryPoolIndex",                   .min = 0,  .max = MAX_POOLS - 1},
@@ -68,7 +69,7 @@ static Settings settings[NVS_CONFIG_COUNT] = {
     [NVS_CONFIG_DISPLAY]                               = {.nvs_key_name = "display",         .type = TYPE_STR,   .default_value = {.str = DEFAULT_DISPLAY},                             .rest_name = "display",                            .min = 0,  .max = NVS_STR_LIMIT},
     [NVS_CONFIG_ROTATION]                              = {.nvs_key_name = "rotation",        .type = TYPE_U16,                                                                          .rest_name = "rotation",                           .min = 0,  .max = 270},
     [NVS_CONFIG_INVERT_SCREEN]                         = {.nvs_key_name = "invertscreen",    .type = TYPE_BOOL,                                                                         .rest_name = "invertscreen",                       .min = 0,  .max = 1},
-    [NVS_CONFIG_DISPLAY_OFFSET]                        = {.nvs_key_name = "displayOffset",   .type = TYPE_U16,   .default_value = {.u16 = LCD_SH1107_PARAM_DEFAULT_DISP_OFFSET },       .rest_name = "displayOffset",                      .min = 0,  .max = UINT8_MAX},
+    [NVS_CONFIG_DISPLAY_OFFSET]                        = {.nvs_key_name = "displayOffset",   .type = TYPE_U16,                                                                          .rest_name = "displayOffset",                      .min = 0,  .max = UINT8_MAX},
     [NVS_CONFIG_DISPLAY_TIMEOUT]                       = {.nvs_key_name = "displayTimeout",  .type = TYPE_I32,   .default_value = {.i32 = -1},                                          .rest_name = "displayTimeout",                     .min = -1, .max = UINT16_MAX},
 
     [NVS_CONFIG_AUTO_FAN_SPEED]                        = {.nvs_key_name = "autofanspeed",    .type = TYPE_BOOL,  .default_value = {.b   = true},                                        .rest_name = "autofanspeed",                       .min = 0,  .max = 1},
@@ -204,7 +205,7 @@ static void migrate_legacy_pools(void) {
     bool p_xnsub = read_legacy_bool(handle, "stratumxnsub", STRATUM_EXTRANONCE_SUBSCRIBE);
     uint16_t p_tls = read_legacy_u16(handle, "stratumtls", CONFIG_STRATUM_TLS);
     char *p_cert = read_legacy_str(handle, "stratumcert", CONFIG_STRATUM_CERT);
-    char *p_sv2chan = read_legacy_str(handle, "sv2chantype", SV2_CHANNEL_TYPE_EXTENDED);
+    char *p_sv2chan = read_legacy_str(handle, "sv2chantype", sv2_channel_type_to_string(SV2_CHANNEL_EXTENDED));
     char *p_sv2pubkey = read_legacy_str(handle, "sv2authpubkey", "");
     bool p_decode = read_legacy_bool(handle, "stratumdecode", true);
 
@@ -240,7 +241,7 @@ static void migrate_legacy_pools(void) {
     bool f_xnsub = read_legacy_bool(handle, "stratumfbxnsub", FALLBACK_STRATUM_EXTRANONCE_SUBSCRIBE);
     uint16_t f_tls = read_legacy_u16(handle, "fbstratumtls", CONFIG_FALLBACK_STRATUM_TLS);
     char *f_cert = read_legacy_str(handle, "fbstratumcert", CONFIG_FALLBACK_STRATUM_CERT);
-    char *f_sv2chan = read_legacy_str(handle, "fbsv2chantype", SV2_CHANNEL_TYPE_EXTENDED);
+    char *f_sv2chan = read_legacy_str(handle, "fbsv2chantype", sv2_channel_type_to_string(SV2_CHANNEL_EXTENDED));
     char *f_sv2pubkey = read_legacy_str(handle, "fbsv2authpubk", "");
     bool f_decode = read_legacy_bool(handle, "fbstratumdecode", true);
 
