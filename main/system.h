@@ -22,6 +22,10 @@ void SYSTEM_notify_found_nonce(GlobalState * GLOBAL_STATE, double diff, bool is_
 void SYSTEM_notify_new_ntime(GlobalState * GLOBAL_STATE, uint32_t ntime);
 void SYSTEM_record_response_time(GlobalState * GLOBAL_STATE, float response_time_ms, uint16_t batch_count);
 
+// Reset decoded coinbase UI fields (scriptsig, coinbase values, outputs, block signals).
+// Note: block_height is intentionally NOT reset here; it is preserved as the "last known good"
+// network height so the UI, screen, and BAP do not flicker or lose context on transient disconnects.
+void SYSTEM_reset_coinbase_ui_state(GlobalState * GLOBAL_STATE);
 void SYSTEM_decode_and_apply_coinbase(GlobalState * GLOBAL_STATE, const miner_job_t * job);
 
 // Reset pool session stats, share counts, pending shares, latency, difficulty,

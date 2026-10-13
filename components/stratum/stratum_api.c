@@ -5,6 +5,7 @@
  *****************************************************************************/
 
 #include "stratum_api.h"
+#include "stratum_socket.h"
 #include "yyjson.h"
 #include "esp_log.h"
 #include "esp_app_desc.h"
@@ -24,12 +25,8 @@
 #include <time.h>
 #include <sys/param.h>
 
-#define TRANSPORT_TIMEOUT_MS 5000
 #define BUFFER_SIZE 1024
-#define MAX_EXTRANONCE_2_LEN 32
 #define JSON_RPC_BUFFER_LIMIT (STRATUM_V1_MAX_JSON_LINE_SIZE + 2U)
-#define MIN_POOL_DIFFICULTY 0.0001
-#define MAX_POOL_DIFFICULTY 4294967295.0
 #define BITCOIN_GENESIS_NTIME 1231006505
 #define MAX_ERROR_MSG_LEN 256
 static const char * TAG = "stratum_api";
