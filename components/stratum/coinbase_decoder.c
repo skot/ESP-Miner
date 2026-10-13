@@ -547,28 +547,19 @@ static esp_err_t parse_coinbase_suffix(const miner_job_t *job,
                               (nLockTime == result->block_height - 1) && (nSequence != 0xffffffff);
 
     // Partition outputs so that verified user outputs appear first
-    if (result->output_count > 1) {
-        coinbase_output_t ordered[MAX_COINBASE_TX_OUTPUTS];
-        int user_idx = 0;
-        for (int i = 0; i < result->output_count; i++) {
-            if (result->outputs[i].is_user_output) {
-                ordered[user_idx++] = result->outputs[i];
+    for (int i = 1; i < result->output_count; i++) {
+        if (result->outputs[i].is_user_output) {
+            coinbase_output_t temp = result->outputs[i];
+            int j = i;
+            while (j > 0 && !result->outputs[j - 1].is_user_output) {
+                result->outputs[j] = result->outputs[j - 1];
+                j--;
             }
+            result->outputs[j] = temp;
         }
-        int other_idx = user_idx;
-        for (int i = 0; i < result->output_count; i++) {
-            if (!result->outputs[i].is_user_output) {
-                ordered[other_idx++] = result->outputs[i];
-            }
-        }
-        memcpy(result->outputs, ordered, sizeof(coinbase_output_t) * result->output_count);
     }
 
     return ESP_OK;
-}
-
-void coinbase_clear_user_cache(void) {
-    // Decoding is stateless; retained for backward compatibility.
 }
 
 const char *coinbase_payout_status_to_string(coinbase_payout_status_t status) {

@@ -558,7 +558,7 @@
                 @for (output of orderedCoinbaseOutputs; track output; let i = $index) {
                   <div class="flex justify-between">
                     @if (output.value > 0) {
-                      @if (output.isUserOutput === 1 || (output.address && activePoolUser.toLowerCase().includes(output.address.toLowerCase()))) {
+                      @if (output.isUserOutput === 1) {
                         <span><span class="text-sm font-bold" appTooltip="Your payout address" tooltipPosition="top" sensitive-data [innerHTML]="output.address | address"></span>&nbsp;<i class="pi pi-star-fill text-xs"></i></span>
                       } @else {
                         <span class="text-sm" appTooltip="{{ output.address }}" tooltipPosition="top" [innerHTML]="output.address | address"></span>

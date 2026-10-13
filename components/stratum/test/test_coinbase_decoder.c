@@ -855,64 +855,6 @@ TEST_CASE("Account-based pool username - user satoshis is 0", "[coinbase_decoder
     TEST_ASSERT_EQUAL_STRING("not_applicable", coinbase_payout_status_to_string(result.payout_status));
 }
 
-TEST_CASE("User scriptPubKey caching across jobs and cache clear", "[coinbase_decoder]")
-{
-    static miner_job_t job;
-    memset(&job, 0, sizeof(job));
-    job.coinbase_prefix = s_test_pbuf;
-    job.coinbase_suffix = s_test_sbuf;
-    job.type = JOB_TYPE_V1;
-    job.version = 0x20000000;
-    job.nbits = 0x1d00ffff;
-
-    const char *c1 = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0403a08601";
-    hex2bin(c1, job.coinbase_prefix, strlen(c1) / 2);
-    job.coinbase_prefix_len = strlen(c1) / 2;
-
-    uint8_t script[22] = {
-        0x00, 0x14,
-        0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11, 0x22, 0x33,
-        0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd
-    };
-
-    uint8_t *s = s_test_sbuf;
-    int pos = 0;
-    s[pos++] = 0xff; s[pos++] = 0xff; s[pos++] = 0xff; s[pos++] = 0xff; // nSequence
-    s[pos++] = 0x01; // 1 output
-
-    uint64_t val = 50000;
-    for (int b = 0; b < 8; b++) s[pos++] = (uint8_t)(val >> (b * 8));
-    s[pos++] = 22;
-    memcpy(s + pos, script, 22);
-    pos += 22;
-    s[pos++] = 0x00; s[pos++] = 0x00; s[pos++] = 0x00; s[pos++] = 0x00; // locktime
-
-    job.coinbase_suffix_len = pos;
-    job.extranonce1_len = 0;
-    job.extranonce2_len = 0;
-
-    mining_notification_result_t result = { 0 };
-    const char *user = "bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x.worker1";
-
-    // First call: populates cache
-    esp_err_t err = coinbase_process_miner_job(&job, user, true, &result);
-    TEST_ASSERT_EQUAL(ESP_OK, err);
-    TEST_ASSERT_TRUE(50000ULL == result.user_value_satoshis);
-
-    // Second call with same user: hits cache
-    memset(&result, 0, sizeof(result));
-    err = coinbase_process_miner_job(&job, user, true, &result);
-    TEST_ASSERT_EQUAL(ESP_OK, err);
-    TEST_ASSERT_TRUE(50000ULL == result.user_value_satoshis);
-
-    // Clear cache and call again
-    coinbase_clear_user_cache();
-    memset(&result, 0, sizeof(result));
-    err = coinbase_process_miner_job(&job, user, true, &result);
-    TEST_ASSERT_EQUAL(ESP_OK, err);
-    TEST_ASSERT_TRUE(50000ULL == result.user_value_satoshis);
-}
-
 TEST_CASE("Address to scriptpubkey - SRI user identity patterns", "[coinbase_decoder]")
 {
     const char *base = "bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x";
@@ -1175,6 +1117,86 @@ TEST_CASE("Coinbase outputs partition verified user outputs to head", "[coinbase
     TEST_ASSERT_TRUE(40000ULL == result.outputs[0].value_satoshis);
     TEST_ASSERT_FALSE(result.outputs[1].is_user_output);
     TEST_ASSERT_TRUE(10000ULL == result.outputs[1].value_satoshis);
+}
+
+TEST_CASE("Coinbase outputs stable partition with multiple user and pool outputs", "[coinbase_decoder]")
+{
+    static miner_job_t job;
+    memset(&job, 0, sizeof(job));
+    job.coinbase_prefix = s_test_pbuf;
+    job.coinbase_suffix = s_test_sbuf;
+    job.type = JOB_TYPE_V1;
+    job.version = 0x20000000;
+    job.nbits = 0x1d00ffff;
+
+    const char *c1 = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff0403a08601";
+    hex2bin(c1, job.coinbase_prefix, strlen(c1) / 2);
+    job.coinbase_prefix_len = strlen(c1) / 2;
+
+    uint8_t script_user1[22] = {
+        0x00, 0x14,
+        0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff, 0x00, 0x11, 0x22, 0x33,
+        0x44, 0x55, 0x66, 0x77, 0x88, 0x99, 0xaa, 0xbb, 0xcc, 0xdd
+    };
+    uint8_t script_user2[25] = {
+        0x76, 0xa9, 0x14,
+        0x89, 0xab, 0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab,
+        0xcd, 0xef, 0x01, 0x23, 0x45, 0x67, 0x89, 0xab, 0xcd, 0xef,
+        0x88, 0xac
+    };
+
+    uint8_t *s = s_test_sbuf;
+    int pos = 0;
+    s[pos++] = 0xff; s[pos++] = 0xff; s[pos++] = 0xff; s[pos++] = 0xff; // nSequence
+    s[pos++] = 0x04; // 4 outputs
+
+    // Output 0: Pool 1 (1000 sat)
+    uint64_t val0 = 1000;
+    for (int b = 0; b < 8; b++) s[pos++] = (uint8_t)(val0 >> (b * 8));
+    s[pos++] = 22; s[pos++] = 0x00; s[pos++] = 0x14;
+    memset(s + pos, 0x01, 20); pos += 20;
+
+    // Output 1: User 1 (2000 sat)
+    uint64_t val1 = 2000;
+    for (int b = 0; b < 8; b++) s[pos++] = (uint8_t)(val1 >> (b * 8));
+    s[pos++] = 22;
+    memcpy(s + pos, script_user1, 22); pos += 22;
+
+    // Output 2: Pool 2 (3000 sat)
+    uint64_t val2 = 3000;
+    for (int b = 0; b < 8; b++) s[pos++] = (uint8_t)(val2 >> (b * 8));
+    s[pos++] = 22; s[pos++] = 0x00; s[pos++] = 0x14;
+    memset(s + pos, 0x02, 20); pos += 20;
+
+    // Output 3: User 2 (4000 sat)
+    uint64_t val3 = 4000;
+    for (int b = 0; b < 8; b++) s[pos++] = (uint8_t)(val3 >> (b * 8));
+    s[pos++] = 25;
+    memcpy(s + pos, script_user2, 25); pos += 25;
+
+    s[pos++] = 0x00; s[pos++] = 0x00; s[pos++] = 0x00; s[pos++] = 0x00; // locktime
+
+    job.coinbase_suffix_len = pos;
+    job.extranonce1_len = 0;
+    job.extranonce2_len = 0;
+
+    mining_notification_result_t result = { 0 };
+    const char *multi_user = "bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x, 1DYwPTnC4NgEmoqbLbcRqoSzVeH3ehmGbV";
+
+    esp_err_t err = coinbase_process_miner_job(&job, multi_user, true, &result);
+    TEST_ASSERT_EQUAL(ESP_OK, err);
+    TEST_ASSERT_EQUAL_INT(4, result.output_count);
+
+    // Verify stable partitioning: User outputs first in original order, then Pool outputs in original order
+    TEST_ASSERT_TRUE(result.outputs[0].is_user_output);
+    TEST_ASSERT_TRUE(2000ULL == result.outputs[0].value_satoshis);
+    TEST_ASSERT_TRUE(result.outputs[1].is_user_output);
+    TEST_ASSERT_TRUE(4000ULL == result.outputs[1].value_satoshis);
+
+    TEST_ASSERT_FALSE(result.outputs[2].is_user_output);
+    TEST_ASSERT_TRUE(1000ULL == result.outputs[2].value_satoshis);
+    TEST_ASSERT_FALSE(result.outputs[3].is_user_output);
+    TEST_ASSERT_TRUE(3000ULL == result.outputs[3].value_satoshis);
 }
 
 

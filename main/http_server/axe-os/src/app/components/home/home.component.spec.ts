@@ -286,6 +286,19 @@ describe('HomeComponent', () => {
     expect(component.messages.some(message => message.type === 'NO_MINING_REWARD')).toBeFalse();
   });
 
+  it('orders coinbase outputs strictly using isUserOutput without fallback to username substring', () => {
+    component.activePoolUser = 'bc1qother.worker1';
+    const outputs = [
+      { address: 'bc1qother', value: 10000, isUserOutput: 0 },
+      { address: 'bc1quser', value: 40000, isUserOutput: 1 },
+    ];
+    const ordered = component.getOrderedCoinbaseOutputs({ coinbaseOutputs: outputs } as any);
+    expect(ordered?.[0]?.address).toBe('bc1quser');
+    expect(ordered?.[0]?.isUserOutput).toBe(1);
+    expect(ordered?.[1]?.address).toBe('bc1qother');
+    expect(ordered?.[1]?.isUserOutput).toBe(0);
+  });
+
   it('keeps telemetry and messages live while settings load and after settings fail', () => {
     fixture.destroy();
     const settings = new Subject<{ frequencyOptions: number[] }>();

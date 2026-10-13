@@ -135,9 +135,4 @@ esp_err_t coinbase_process_miner_job(const miner_job_t *job,
                                      bool decode_coinbase_tx,
                                      mining_notification_result_t *result);
 
-/**
- * @brief Invalidate the cached parsed user scriptPubKeys and network detection
- */
-void coinbase_clear_user_cache(void);
-
 #endif // COINBASE_DECODER_H

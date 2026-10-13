@@ -493,7 +493,6 @@ void SYSTEM_reset_coinbase_ui_state(GlobalState * GLOBAL_STATE)
     if (!GLOBAL_STATE) return;
 
     memset(&GLOBAL_STATE->coinbase, 0, sizeof(GLOBAL_STATE->coinbase));
-    coinbase_clear_user_cache();
     GLOBAL_STATE->block_signals_count = 0;
 }
 
