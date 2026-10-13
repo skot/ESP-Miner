@@ -81,13 +81,17 @@
 #define CMD_READ 0x02
 #define CMD_INACTIVE 0x03
 
-static const register_type_t REGISTER_MAP[] = {
-    [0x4C] = REGISTER_ERROR_COUNT,
-    [0x88] = REGISTER_DOMAIN_0_COUNT,
-    [0x89] = REGISTER_DOMAIN_1_COUNT,
-    [0x8A] = REGISTER_DOMAIN_2_COUNT,
-    [0x8B] = REGISTER_DOMAIN_3_COUNT,
-    [0x8C] = REGISTER_TOTAL_COUNT
+static const register_type_t REGISTER_MAP[256] = {
+    [BM13XX_REG_ERROR_COUNT]    = REGISTER_ERROR_COUNT,
+    [BM13XX_REG_DOMAIN_0_COUNT] = REGISTER_DOMAIN_0_COUNT,
+    [BM13XX_REG_DOMAIN_1_COUNT] = REGISTER_DOMAIN_1_COUNT,
+    [BM13XX_REG_DOMAIN_2_COUNT] = REGISTER_DOMAIN_2_COUNT,
+    [BM13XX_REG_DOMAIN_3_COUNT] = REGISTER_DOMAIN_3_COUNT,
+    [BM13XX_REG_DOMAIN_4_COUNT] = REGISTER_DOMAIN_4_COUNT,
+    [BM13XX_REG_DOMAIN_5_COUNT] = REGISTER_DOMAIN_5_COUNT,
+    [BM13XX_REG_DOMAIN_6_COUNT] = REGISTER_DOMAIN_6_COUNT,
+    [BM13XX_REG_DOMAIN_7_COUNT] = REGISTER_DOMAIN_7_COUNT,
+    [BM13XX_REG_TOTAL_COUNT]    = REGISTER_TOTAL_COUNT,
 };
 
 typedef struct __attribute__((__packed__))
@@ -339,12 +343,7 @@ uint8_t BM1373_init(GlobalState * GLOBAL_STATE)
         return 0;
     }
 
-    uint8_t difficulty_mask[6];
-    get_difficulty_mask(GLOBAL_STATE->DEVICE_CONFIG.family.asic.difficulty, difficulty_mask);
-    if (!_send_BM1373(TYPE_CMD | GROUP_ALL | CMD_WRITE, difficulty_mask,
-                      sizeof(difficulty_mask), BM1373_SERIALTX_DEBUG)) {
-        return 0;
-    }
+    // TODO: Verify sending ticket mask later
 
     if (!_write_broadcast(BM1372_REGISTER_IO_DRIVER_STRENGTH,
                           BM1372_IO_DRIVER_STRENGTH_DEFAULT)) {
@@ -542,4 +541,12 @@ void BM1373_read_registers(void)
             vTaskDelay(pdMS_TO_TICKS(1));
         }
     }
+}
+
+void BM1373_set_difficulty(uint8_t difficulty_power)
+{
+    uint8_t difficulty_mask[6];
+    get_difficulty_mask(difficulty_power, difficulty_mask);
+    _send_BM1373(TYPE_CMD | GROUP_ALL | CMD_WRITE, difficulty_mask,
+                 sizeof(difficulty_mask), BM1373_SERIALTX_DEBUG);
 }

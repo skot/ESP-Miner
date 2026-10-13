@@ -38,16 +38,25 @@ void ASIC_result_task(void *pvParameters)
         }
 
         const asic_job_t *job = &asic_result->job;
-        double nonce_difficulty = mining_nonce_difficulty(job, asic_result->nonce, asic_result->rolled_version);
-
-        if (GLOBAL_STATE->SELF_TEST_MODULE.is_active) {
-            self_test_record_nonce(GLOBAL_STATE, nonce_difficulty);
+        uint8_t hash_result[32];
+        if (!mining_nonce_hash(job, asic_result->nonce, asic_result->rolled_version, hash_result)) {
+            ESP_LOGE(TAG, "Failed to compute nonce hash, discarding result");
             continue;
         }
 
-        uint32_t version_bits = asic_result->rolled_version ^ job->version;
-        if (job->pool_diff > 0.0 && nonce_difficulty >= job->pool_diff)
-        {
+        if (GLOBAL_STATE->SELF_TEST_MODULE.is_active) {
+            self_test_record_nonce(GLOBAL_STATE, hash_result);
+            continue;
+        }
+
+        // 1. Bit-exact PoW checks
+        bool is_share = uint256_lte(hash_result, job->pool_target);
+        uint8_t network_target[32];
+        nbits_to_target(job->nbits, network_target);
+        bool is_block = uint256_lte(hash_result, network_target);
+
+        // 2. Submit if it meets share or block target IMMEDIATELY
+        if (is_share || is_block) {
             uint64_t sent_time_us = 0;
             int submit_result = stratum_submit_share(GLOBAL_STATE, job, asic_result->nonce, asic_result->rolled_version, &sent_time_us);
             if (submit_result >= 0 && sent_time_us > 0) {
@@ -57,10 +66,19 @@ void ASIC_result_task(void *pvParameters)
             }
         }
 
-        ESP_LOGI(TAG, "ID: %s, ASIC nr: %d, Core: %d/%d, ver: %08" PRIX32 " Nonce %08" PRIX32 " diff %.1f of %g.", job->job_id, asic_result->asic_nr, asic_result->core_id, asic_result->small_core_id, asic_result->rolled_version, asic_result->nonce, nonce_difficulty, job->pool_diff);
+        // 3. Telemetry & Display (deferred after submission)
+        double nonce_diff = target_to_diff(hash_result);
 
-        SYSTEM_notify_found_nonce(GLOBAL_STATE, nonce_difficulty, job->nbits);
+        SYSTEM_notify_found_nonce(GLOBAL_STATE, nonce_diff, is_block);
 
-        scoreboard_add(&GLOBAL_STATE->SYSTEM_MODULE.scoreboard, nonce_difficulty, job->job_id, job->extranonce2, job->ntime, asic_result->nonce, version_bits);
+        uint32_t version_bits = asic_result->rolled_version ^ job->version;
+        scoreboard_add(&GLOBAL_STATE->SYSTEM_MODULE.scoreboard, nonce_diff, job->job_id, job->extranonce2, job->ntime, asic_result->nonce, version_bits);
+
+        double pool_diff = target_to_diff(job->pool_target);
+
+        // Log the ASIC response
+        ESP_LOGI(TAG, "ID: %s, ASIC nr: %d, Core: %d/%d, ver: %08" PRIX32 " Nonce %08" PRIX32 " diff %.1f of %g.",
+                 job->job_id, asic_result->asic_nr, asic_result->core_id, asic_result->small_core_id,
+                 asic_result->rolled_version, asic_result->nonce, nonce_diff, pool_diff);
     }
 }

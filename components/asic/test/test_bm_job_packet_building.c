@@ -15,7 +15,6 @@ TEST_CASE("Validate midstate generation", "[asic-job][bitmain]")
     mjob.version = 0x20000004;
     mjob.nbits = 0x1705dd01;
     mjob.ntime = 0x64658bd8;
-    mjob.pool_diff = 1000;
 
     hex2bin("cd1be82132ef0d12053dcece1fa0247fcfdb61d4dbd3eb32ea9ef9b4c604a846", mjob.merkle_root, 32);
     bm1397_job_packet_t job;

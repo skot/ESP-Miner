@@ -2,6 +2,7 @@
 #include "bm1397_test_harness.h"
 #include "global_state.h"
 #include "mining.h"
+#include "utils.h"
 #include "unity.h"
 #include <stdlib.h>
 #include <string.h>
@@ -13,9 +14,10 @@ static asic_job_t *make_job(mining_job_source_t source_type)
     *job = (asic_job_t) {
         .version = 0x20000004, .version_mask = 0x1fffe000,
         .ntime = 0x64658bd8, .nbits = 0x1705dd01,
-        .starting_nonce = 0x12345678, .pool_diff = 2048.5, .pool_id = UINT8_MAX,
+        .starting_nonce = 0x12345678, .pool_id = UINT8_MAX,
         .source_type = source_type,
     };
+    diff_to_target(2048.5, job->pool_target);
     for (unsigned i = 0; i < 32; ++i) {
         job->prev_hash[i] = i;
         job->merkle_root[i] = 64 - i;
@@ -67,13 +69,14 @@ static void assert_result_job(const asic_job_t *expected, const task_result *res
     TEST_ASSERT_EQUAL_HEX32(expected->nbits, result->job.nbits);
     TEST_ASSERT_EQUAL_HEX8_ARRAY(expected->prev_hash, result->job.prev_hash, 32);
     TEST_ASSERT_EQUAL_HEX8_ARRAY(expected->merkle_root, result->job.merkle_root, 32);
-    TEST_ASSERT_EQUAL_DOUBLE(expected->pool_diff, result->job.pool_diff);
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expected->pool_target, result->job.pool_target, 32);
     TEST_ASSERT_EQUAL_UINT8(expected->pool_id, result->job.pool_id);
     TEST_ASSERT_EQUAL_INT(expected->source_type, result->job.source_type);
-    TEST_ASSERT_EQUAL_STRING(expected->job_id, result->job.job_id);
-    TEST_ASSERT_EQUAL_STRING(expected->extranonce2, result->job.extranonce2);
-    TEST_ASSERT_EQUAL_DOUBLE(mining_nonce_difficulty(expected, nonce, rolled_version),
-                             mining_nonce_difficulty(&result->job, result->nonce, result->rolled_version));
+    uint8_t expected_hash[32];
+    uint8_t result_hash[32];
+    TEST_ASSERT_TRUE(mining_nonce_hash(expected, nonce, rolled_version, expected_hash));
+    TEST_ASSERT_TRUE(mining_nonce_hash(&result->job, result->nonce, result->rolled_version, result_hash));
+    TEST_ASSERT_EQUAL_HEX8_ARRAY(expected_hash, result_hash, 32);
 }
 
 TEST_CASE("ASIC results preserve complete matched jobs across slot reuse for every driver",
@@ -105,8 +108,9 @@ TEST_CASE("ASIC results preserve complete matched jobs across slot reuse for eve
             TEST_ASSERT_NOT_NULL(replacement);
             *replacement = (asic_job_t) {
                 .version = 0x21000004, .job_id = "replacement", .pool_id = 7,
-                .ntime = 123, .nbits = 0x1705ae3a, .pool_diff = 32,
+                .ntime = 123, .nbits = 0x1705ae3a,
             };
+            diff_to_target(32.0, replacement->pool_target);
             replace_slot(state, replacement);
             assert_result_job(&original, result, nonce, rolled_version);
 
