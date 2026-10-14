@@ -2,12 +2,10 @@
 #include <string.h>
 #include <math.h>
 #include "esp_partition.h"
-#include "esp_image_format.h"
 #include "esp_wifi.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
-#include "esp_timer.h"
 #include "global_state.h"
 #include "system_api_json.h"
 #include "system.h"
@@ -85,6 +83,7 @@ static void system_api_add_telemetry(yyjson_mut_doc *doc, yyjson_mut_val *root, 
     yyjson_mut_obj_add_uint(doc, root, "networkDifficulty", g->network_nonce_diff);
     yyjson_mut_obj_add_uint(doc, root, "coinbaseValueTotalSatoshis", g->coinbase.total_value_satoshis);
     yyjson_mut_obj_add_uint(doc, root, "coinbaseValueUserSatoshis", g->coinbase.user_value_satoshis);
+    yyjson_mut_obj_add_strcpy(doc, root, "coinbasePayoutStatus", coinbase_payout_status_to_string(g->coinbase.payout_status));
 
     // Dynamic System Stats
     yyjson_mut_obj_add_uint(doc, root, "freeHeap", esp_get_free_heap_size());
@@ -293,6 +292,7 @@ static void system_api_add_block_info(yyjson_mut_doc *doc, yyjson_mut_val *root,
         yyjson_mut_val *obj = yyjson_mut_arr_add_obj(doc, outputs);
         yyjson_mut_obj_add_uint(doc, obj, "value", g->coinbase.outputs[i].value_satoshis);
         yyjson_mut_obj_add_strcpy(doc, obj, "address", g->coinbase.outputs[i].address);
+        yyjson_mut_obj_add_int(doc, obj, "isUserOutput", g->coinbase.outputs[i].is_user_output ? 1 : 0);
     }
 
     yyjson_mut_obj_add_int(doc, root, "coinbaseOthersCount", g->coinbase.others_count);
