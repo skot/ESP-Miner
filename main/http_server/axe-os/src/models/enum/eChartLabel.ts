@@ -18,6 +18,7 @@ export enum eChartLabel {
     freeHeap = 'Free Heap',
     responseTimeMin = 'Response Time Min',
     responseTimeMax = 'Response Time Max',
+    difficulty = 'Difficulty',
     none = 'None'
 }
 
@@ -39,6 +40,7 @@ export const ChartUnitGroups: IChartUnitGroup[] = [
     { name: 'Wi-Fi RSSI (dBm)', value: 'rssi', labels: ['wifiRssi'] },
     { name: 'Free Heap (Bytes)', value: 'heap', labels: ['freeHeap'] },
     { name: 'Response Time (ms)', value: 'time', labels: ['responseTimeMin', 'responseTimeMax'], type: 'scatter' },
+    { name: 'Difficulty', value: 'difficulty', labels: ['difficulty'], type: 'scatter' },
     { name: 'None', value: 'none', labels: ['none'] }
 ];
 
