@@ -67,7 +67,11 @@ static esp_err_t netif_recv_callback(void *buffer, uint16_t len, void *ctx)
     }
 
     memcpy(buf_copy, buffer, len);
-    return esp_netif_receive(netif, buf_copy, len, NULL);
+    esp_err_t ret = esp_netif_receive(netif, buf_copy, len, NULL);
+    if (ret != ESP_OK) {
+        free(buf_copy);
+    }
+    return ret;
 }
 
 // Callback for CDC ACM when line state changes (DTR, RTS)

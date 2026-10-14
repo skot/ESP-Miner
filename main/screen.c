@@ -385,7 +385,7 @@ static lv_obj_t * create_scr_connection(const char * ssid, const char * ap_ssid,
     // Show network type - either WiFi SSID or "Ethernet-over-USB"
     switch(network_mode) {
         case NETWORK_MODE_WIFI:
-            lv_label_set_text_fmt(label1, "Wi-Fi: %s", ssid);
+            lv_label_set_text_fmt(label1, "Wi-Fi: %s", ssid ? ssid : "");
             break;
         case NETWORK_MODE_USB:
             lv_label_set_text(label1, "Ethernet-over-USB");
@@ -764,7 +764,7 @@ static void screen_update_cb(lv_timer_t * timer)
     }
 
     // Show welcome screen only if not connected (works for both WiFi and USB)
-    if (module->ssid[0] == '\0' && module->network_mode == NETWORK_MODE_WIFI) {
+    if ((module->ssid == NULL || module->ssid[0] == '\0') && module->network_mode == NETWORK_MODE_WIFI) {
         screen_show(SCR_WELCOME);
         return;
     }

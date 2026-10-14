@@ -744,7 +744,7 @@ void connect_init(void * pvParameters)
         ESP_LOGI(TAG, "Network mode: WiFi");
 
         /* Skip connection if SSID is null */
-        if (strlen(GLOBAL_STATE->SYSTEM_MODULE.ssid) == 0) {
+        if (GLOBAL_STATE->SYSTEM_MODULE.ssid == NULL || GLOBAL_STATE->SYSTEM_MODULE.ssid[0] == '\0') {
             ESP_LOGI(TAG, "No WiFi SSID provided, running in AP-only mode");
         } else {
             ESP_LOGI(TAG, "Configuring Wi-Fi STA");
