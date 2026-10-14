@@ -9,6 +9,9 @@
 
 #define MAX_ADDRESS_STRING_LEN 128
 #define MAX_COINBASE_TX_OUTPUTS 6
+#define MAX_SCRIPTSIG_STRING_LEN 100
+#define MAX_SCRIPTPUBKEY_LEN 34
+#define MAX_USER_ADDRESSES 4
 
 // Bitcoin Script Opcodes
 #define OP_0            0x00
@@ -21,6 +24,33 @@
 #define OP_EQUALVERIFY  0x88
 #define OP_HASH160      0xa9
 #define OP_CHECKSIG     0xac
+
+/**
+ * @brief Convert user address string (address, address.worker, or hex script)
+ *        into canonical binary scriptPubKey bytes.
+ * 
+ * @param user User string from pool config (e.g. "bc1q...axe1", "1A1z..._w1", "0014...")
+ * @param script_out Buffer to store binary scriptPubKey (min MAX_SCRIPTPUBKEY_LEN bytes)
+ * @param max_out Maximum capacity of script_out
+ * @return size_t Length of parsed scriptPubKey in bytes, or 0 if user is not a valid address/script
+ */
+size_t coinbase_address_to_scriptpubkey(const char *user, uint8_t *script_out, size_t max_out);
+
+/**
+ * @brief Parse user configuration string (which may contain up to MAX_USER_ADDRESSES
+ *        comma- or semicolon-separated addresses, each with optional worker suffix)
+ *        into canonical binary scriptPubKeys.
+ *
+ * @param user User string from pool config (e.g. "addr1.w1,addr2.w2" or "addr1")
+ * @param scripts_out 2D array [MAX_USER_ADDRESSES][MAX_SCRIPTPUBKEY_LEN]
+ * @param script_lens Array to store lengths of parsed scripts [MAX_USER_ADDRESSES]
+ * @param max_scripts Maximum number of scripts to parse (up to MAX_USER_ADDRESSES)
+ * @return int Number of successfully parsed scripts (0 to max_scripts)
+ */
+int coinbase_parse_user_scriptpubkeys(const char *user,
+                                      uint8_t scripts_out[][MAX_SCRIPTPUBKEY_LEN],
+                                      size_t script_lens[],
+                                      int max_scripts);
 
 /**
  * @brief Decode Bitcoin varint from binary data
@@ -50,6 +80,21 @@ void coinbase_decode_address_from_scriptpubkey(const uint8_t *script, size_t scr
                                                 const char *bech32_hrp, bool is_testnet);
 
 /**
+ * @brief Aggregate payout address verification status against coinbase transaction
+ */
+typedef enum {
+    COINBASE_PAYOUT_UNKNOWN = 0,
+    COINBASE_PAYOUT_NOT_APPLICABLE,
+    COINBASE_PAYOUT_NOT_FOUND,
+    COINBASE_PAYOUT_VERIFIED,
+} coinbase_payout_status_t;
+
+/**
+ * @brief Convert coinbase_payout_status_t enum to string representation
+ */
+const char *coinbase_payout_status_to_string(coinbase_payout_status_t status);
+
+/**
  * @brief Structure representing a decoded coinbase transaction output
  */
 typedef struct {
@@ -63,13 +108,14 @@ typedef struct {
  */
 typedef struct {
     uint32_t block_height;
-    char *scriptsig; // Allocated, must be freed by caller
+    char scriptsig[MAX_SCRIPTSIG_STRING_LEN];
     coinbase_output_t outputs[MAX_COINBASE_TX_OUTPUTS];
     int output_count;
     int others_count;               // outputs that did not fit in `outputs[]`
     uint64_t others_value_satoshis; // summed value of those outputs
     uint64_t total_value_satoshis;
     uint64_t user_value_satoshis;
+    coinbase_payout_status_t payout_status;
     bool decode_coinbase_tx;
     bool bip54_signaling;  // BIP-54: nLockTime = height - 1 && nSequence != 0xffffffff
     bool bip110_signaling; // BIP-110: signaling via version bit 4 (0x00000010)
