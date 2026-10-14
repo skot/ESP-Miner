@@ -21,15 +21,6 @@ jobs:
           name: event-file
           path: ${{ github.event_path }}
 
-      - name: esp-idf add-dependency esp_tinyusb
-        uses: espressif/esp-idf-ci-action@v1
-        with:
-          esp_idf_version: v6.0.2
-          target: esp32s3
-          command: idf.py add-dependency "espressif/esp_tinyusb^2.0.1~1"
-          path: 'test-ci'
-
-
       - name: esp-idf build
         uses: espressif/esp-idf-ci-action@v1
         with:
