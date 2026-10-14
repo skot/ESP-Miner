@@ -28,7 +28,10 @@ static const char *parameter_strings[] = {
     "fan_speed",
     "auto_fan",
     "best_difficulty",
+    "block_height",
     "wifi",
+    "found_block",
+    "show_new_block",
     "unknown"
 };
 

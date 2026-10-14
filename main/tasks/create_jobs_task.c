@@ -1,127 +1,119 @@
 #include <sys/time.h>
 #include <limits.h>
+#include <inttypes.h>
 
-#include "work_queue.h"
 #include "global_state.h"
 #include "esp_log.h"
 #include "esp_system.h"
 #include "mining.h"
+#include "miner_job.h"
 #include "string.h"
+#include "esp_timer.h"
 
 #include "asic.h"
+#include "asic_common.h"
+#include "difficulty_controller.h"
+#include "system.h"
+#include "esp_heap_caps.h"
+#include "utils.h"
 
 static const char *TAG = "create_jobs_task";
 
-#define QUEUE_LOW_WATER_MARK 10 // Adjust based on your requirements
+static void generate_work_from_miner_job(GlobalState *GLOBAL_STATE, const miner_job_t *job, uint64_t extranonce_2, uint32_t current_version)
+{
+    if (!job) return;
 
-static bool should_generate_more_work(GlobalState *GLOBAL_STATE);
-static void generate_work(GlobalState *GLOBAL_STATE, mining_notify *notification, uint64_t extranonce_2, uint32_t difficulty);
+    asic_job_t next_job;
+    uint32_t effective_version = job->version;
+    if (!GLOBAL_STATE->DEVICE_CONFIG.family.asic.hardware_version_rolling && !miner_job_is_rollable(job)) {
+        effective_version = current_version;
+    }
+    if (!mining_build_asic_job(job, extranonce_2, effective_version, &next_job)) {
+        ESP_LOGE(TAG, "Failed to build ASIC job");
+        return;
+    }
+    if (!GLOBAL_STATE->ASIC_initalized) {
+        ESP_LOGW(TAG, "ASIC not initialized, skipping job send");
+        return;
+    }
+    ASIC_send_job(GLOBAL_STATE, &next_job);
+}
 
 void create_jobs_task(void *pvParameters)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)pvParameters;
 
-    uint32_t difficulty = GLOBAL_STATE->pool_difficulty;
-    while (1)
-    {
-        mining_notify *mining_notification = (mining_notify *)queue_dequeue(&GLOBAL_STATE->stratum_queue);
-        if (mining_notification == NULL) {
-            ESP_LOGE(TAG, "Failed to dequeue mining notification");
-            vTaskDelay(100 / portTICK_PERIOD_MS); // Wait a bit before trying again
-            continue;
-        }
+    // active_jobs / valid_jobs are allocated and zeroed by SYSTEM_init_system(),
+    // before any task that touches them can run.
 
-        ESP_LOGI(TAG, "New Work Dequeued %s", mining_notification->job_id);
+    uint32_t current_version_mask = 0;
+    miner_job_t *current_work = NULL;
+    bool current_work_sent = false;
+    uint64_t extranonce_2 = 0;
+    uint32_t current_version = 0;
+    int timeout_ms = ASIC_get_asic_job_frequency_ms(GLOBAL_STATE);
 
-        if (GLOBAL_STATE->new_set_mining_difficulty_msg)
-        {
-            ESP_LOGI(TAG, "New pool difficulty %lu", GLOBAL_STATE->pool_difficulty);
-            difficulty = GLOBAL_STATE->pool_difficulty;
-            GLOBAL_STATE->new_set_mining_difficulty_msg = false;
-        }
+    ESP_LOGI(TAG, "ASIC Job Interval: %d ms", timeout_ms);
+    ESP_LOGI(TAG, "ASIC Ready!");
 
-        if (GLOBAL_STATE->new_stratum_version_rolling_msg) {
-            ESP_LOGI(TAG, "Set chip version rolls %i", (int)(GLOBAL_STATE->version_mask >> 13));
-            ASIC_set_version_mask(GLOBAL_STATE, GLOBAL_STATE->version_mask);
-            GLOBAL_STATE->new_stratum_version_rolling_msg = false;
-        }
+    while (1) {
+        uint64_t start_time = esp_timer_get_time();
+        uint32_t slot_notify = 0;
+        TickType_t wait_ticks = (timeout_ms > 0) ? pdMS_TO_TICKS(timeout_ms) : 0;
+        BaseType_t notified = xTaskNotifyWait(0, ULONG_MAX, &slot_notify, wait_ticks);
+        timeout_ms -= (esp_timer_get_time() - start_time) / 1000;
 
-        uint64_t extranonce_2 = 0;
-        while (GLOBAL_STATE->stratum_queue.count < 1 && GLOBAL_STATE->abandon_work == 0)
-        {
-            if (should_generate_more_work(GLOBAL_STATE))
-            {
-                generate_work(GLOBAL_STATE, mining_notification, extranonce_2, difficulty);
+        if (notified == pdTRUE) {
+            miner_job_t *new_work = miner_job_get_slot((size_t)slot_notify);
+            ESP_LOGI(TAG, "New Work Activated (slot %lu) %s (type %d)", (unsigned long)slot_notify, new_work->job_id, new_work->type);
+            current_work = new_work;
+            GLOBAL_STATE->active_job_slot_idx = (uint8_t)(slot_notify % MINER_JOB_POOL_SIZE);
+            current_work_sent = false;
+            current_version = new_work->version;
 
-                // Increase extranonce_2 for the next job.
-                extranonce_2++;
+            if (new_work->version_mask != current_version_mask && GLOBAL_STATE->ASIC_initalized) {
+                ESP_LOGI(TAG, "Set chip version rolls %i", (int)(new_work->version_mask >> 13));
+                ASIC_set_version_mask(GLOBAL_STATE, new_work->version_mask);
+                current_version_mask = new_work->version_mask;
             }
-            else
-            {
-                // If no more work needed, wait a bit before checking again.
+
+            extranonce_2 = 0;
+
+            if (GLOBAL_STATE->ASIC_initalized) {
+                difficulty_controller_update(GLOBAL_STATE);
+            }
+
+            if (!current_work->clean_jobs) {
+                // Staged job for next cycle, let current ASIC cycle finish
+                continue;
+            }
+        } else {
+            if (current_work == NULL) {
                 vTaskDelay(100 / portTICK_PERIOD_MS);
+                continue;
+            }
+            if (!miner_job_is_rollable(current_work) && current_work_sent && GLOBAL_STATE->DEVICE_CONFIG.family.asic.hardware_version_rolling) {
+                timeout_ms = ASIC_get_asic_job_frequency_ms(GLOBAL_STATE);
+                continue;
             }
         }
 
-        if (GLOBAL_STATE->abandon_work == 1)
-        {
-            GLOBAL_STATE->abandon_work = 0;
-            ASIC_jobs_queue_clear(&GLOBAL_STATE->ASIC_jobs_queue);
-            xSemaphoreGive(GLOBAL_STATE->ASIC_TASK_MODULE.semaphore);
+        generate_work_from_miner_job(GLOBAL_STATE, current_work, extranonce_2, current_version);
+        if (!current_work_sent) {
+            SYSTEM_decode_and_apply_coinbase(GLOBAL_STATE, current_work);
         }
+        current_work_sent = true;
 
-        STRATUM_V1_free_mining_notify(mining_notification);
+        if (miner_job_is_rollable(current_work)) {
+            extranonce_2++;
+        } else if (!GLOBAL_STATE->DEVICE_CONFIG.family.asic.hardware_version_rolling) {
+            // Software version rolling for ASICs without hardware version rolling (e.g. BM1397) on SV2 Standard Channel
+            uint32_t mask = (current_work->version_mask != 0) ? current_work->version_mask : BIP320_VERSION_ROLLING_MASK;
+            uint8_t midstates = GLOBAL_STATE->DEVICE_CONFIG.family.asic.software_midstates;
+            for (int i = 0; i < midstates; i++) {
+                current_version = increment_bitmask(current_version, mask);
+            }
+        }
+        timeout_ms = ASIC_get_asic_job_frequency_ms(GLOBAL_STATE);
     }
-}
-
-static bool should_generate_more_work(GlobalState *GLOBAL_STATE)
-{
-    return GLOBAL_STATE->ASIC_jobs_queue.count < QUEUE_LOW_WATER_MARK;
-}
-
-static void generate_work(GlobalState *GLOBAL_STATE, mining_notify *notification, uint64_t extranonce_2, uint32_t difficulty)
-{
-    char *extranonce_2_str = extranonce_2_generate(extranonce_2, GLOBAL_STATE->extranonce_2_len);
-    if (extranonce_2_str == NULL) {
-        ESP_LOGE(TAG, "Failed to generate extranonce_2");
-        return;
-    }
-    //print generated extranonce_2
-    //ESP_LOGI(TAG, "Generated extranonce_2: %s", extranonce_2_str);
-
-    char *coinbase_tx = construct_coinbase_tx(notification->coinbase_1, notification->coinbase_2, GLOBAL_STATE->extranonce_str, extranonce_2_str);
-    if (coinbase_tx == NULL) {
-        ESP_LOGE(TAG, "Failed to construct coinbase_tx");
-        free(extranonce_2_str);
-        return;
-    }
-
-    char *merkle_root = calculate_merkle_root_hash(coinbase_tx, (uint8_t(*)[32])notification->merkle_branches, notification->n_merkle_branches);
-    if (merkle_root == NULL) {
-        ESP_LOGE(TAG, "Failed to calculate merkle_root");
-        free(extranonce_2_str);
-        free(coinbase_tx);
-        return;
-    }
-
-    bm_job next_job = construct_bm_job(notification, merkle_root, GLOBAL_STATE->version_mask, difficulty);
-
-    bm_job *queued_next_job = malloc(sizeof(bm_job));
-    if (queued_next_job == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate memory for queued_next_job");
-        free(extranonce_2_str);
-        free(coinbase_tx);
-        free(merkle_root);
-        return;
-    }
-
-    memcpy(queued_next_job, &next_job, sizeof(bm_job));
-    queued_next_job->extranonce2 = extranonce_2_str; // Transfer ownership
-    queued_next_job->jobid = strdup(notification->job_id);
-    queued_next_job->version_mask = GLOBAL_STATE->version_mask;
-
-    queue_enqueue(&GLOBAL_STATE->ASIC_jobs_queue, queued_next_job);
-
-    free(coinbase_tx);
-    free(merkle_root);
 }

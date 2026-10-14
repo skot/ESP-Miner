@@ -1,19 +1,26 @@
 #ifndef POWER_MANAGEMENT_TASK_H_
 #define POWER_MANAGEMENT_TASK_H_
 
+typedef struct GlobalState GlobalState;
+
 typedef struct
 {
-    uint16_t fan_perc;
+    float fan_perc;
     uint16_t fan_rpm;
-    float chip_temp[6];
+    uint16_t fan2_rpm;
     float chip_temp_avg;
     float chip_temp2_avg;
     float vr_temp;
     float voltage;
     float frequency_value;
+    float actual_frequency;    
+    float expected_hashrate;
     float power;
     float current;
+    float core_voltage;
 } PowerManagementModule;
+
+void POWER_MANAGEMENT_init_frequency(GlobalState * GLOBAL_STATE);
 
 void POWER_MANAGEMENT_task(void * pvParameters);
 

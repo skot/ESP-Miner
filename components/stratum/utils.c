@@ -3,139 +3,54 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include "esp_attr.h"
+#include "esp_psram.h"
+#include "esp_heap_caps.h"
 
-#include "mbedtls/sha256.h"
+#include "psa/crypto.h"
 
-#ifndef bswap_16
-#define bswap_16(a) ((((uint16_t)(a) << 8) & 0xff00) | (((uint16_t)(a) >> 8) & 0xff))
-#endif
+DRAM_ATTR static const char hex_table[] = "0123456789abcdef";
 
-#ifndef bswap_32
-#define bswap_32(a) ((((uint32_t)(a) << 24) & 0xff000000) | \
-                     (((uint32_t)(a) << 8) & 0xff0000) |    \
-                     (((uint32_t)(a) >> 8) & 0xff00) |      \
-                     (((uint32_t)(a) >> 24) & 0xff))
-#endif
-
-/*
- * General byte order swapping functions.
- */
-#define bswap16(x) __bswap16(x)
-#define bswap32(x) __bswap32(x)
-#define bswap64(x) __bswap64(x)
-
-uint32_t swab32(uint32_t v)
-{
-    return bswap_32(v);
-}
-
-// takes 80 bytes and flips every 4 bytes
-void flip80bytes(void *dest_p, const void *src_p)
-{
-    uint32_t *dest = dest_p;
-    const uint32_t *src = src_p;
-    int i;
-
-    for (i = 0; i < 20; i++)
-        dest[i] = swab32(src[i]);
-}
-
-void flip64bytes(void *dest_p, const void *src_p)
-{
-    uint32_t *dest = dest_p;
-    const uint32_t *src = src_p;
-    int i;
-
-    for (i = 0; i < 16; i++)
-        dest[i] = swab32(src[i]);
-}
-
-void flip32bytes(void *dest_p, const void *src_p)
-{
-    uint32_t *dest = dest_p;
-    const uint32_t *src = src_p;
-    int i;
-
-    for (i = 0; i < 8; i++)
-        dest[i] = swab32(src[i]);
-}
-
-int hex2char(uint8_t x, char *c)
-{
-    if (x <= 9)
-    {
-        *c = x + '0';
-    }
-    else if (x <= 15)
-    {
-        *c = x - 10 + 'a';
-    }
-    else
-    {
-        return -1;
-    }
-
-    return 0;
-}
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Woverride-init"
+DRAM_ATTR const int8_t hex_val_table[256] = {
+    [0 ... 255] = -1,
+    ['0'] = 0,  ['1'] = 1,  ['2'] = 2,  ['3'] = 3,  ['4'] = 4,
+    ['5'] = 5,  ['6'] = 6,  ['7'] = 7,  ['8'] = 8,  ['9'] = 9,
+    ['a'] = 10, ['b'] = 11, ['c'] = 12, ['d'] = 13, ['e'] = 14, ['f'] = 15,
+    ['A'] = 10, ['B'] = 11, ['C'] = 12, ['D'] = 13, ['E'] = 14, ['F'] = 15
+};
+#pragma GCC diagnostic pop
 
 size_t bin2hex(const uint8_t *buf, size_t buflen, char *hex, size_t hexlen)
 {
-    if ((hexlen + 1) < buflen * 2)
-    {
+    if (hexlen <= buflen * 2) {
         return 0;
     }
 
-    for (size_t i = 0; i < buflen; i++)
-    {
-        if (hex2char(buf[i] >> 4, &hex[2 * i]) < 0)
-        {
-            return 0;
-        }
-        if (hex2char(buf[i] & 0xf, &hex[2 * i + 1]) < 0)
-        {
-            return 0;
-        }
+    for (size_t i = 0; i < buflen; i++) {
+        hex[2 * i] = hex_table[buf[i] >> 4];
+        hex[2 * i + 1] = hex_table[buf[i] & 0x0F];
     }
-
     hex[2 * buflen] = '\0';
     return 2 * buflen;
 }
 
-uint8_t hex2val(char c)
-{
-    if (c >= '0' && c <= '9')
-    {
-        return c - '0';
-    }
-    else if (c >= 'a' && c <= 'f')
-    {
-        return c - 'a' + 10;
-    }
-    else if (c >= 'A' && c <= 'F')
-    {
-        return c - 'A' + 10;
-    }
-    else
-    {
-        return 0;
-    }
-}
-
 size_t hex2bin(const char *hex, uint8_t *bin, size_t bin_len)
 {
+    if (hex == NULL || bin == NULL) {
+        return 0;
+    }
+
     size_t len = 0;
-
-    while (*hex && len < bin_len)
-    {
-        bin[len] = hex2val(*hex++) << 4;
-
-        if (!*hex)
-        {
-            len++;
-            break;
+    while (len < bin_len && *hex != '\0') {
+        int byte = hex_decode_byte(hex);
+        if (byte < 0) {
+            return 0;
         }
 
-        bin[len++] |= hex2val(*hex++);
+        bin[len++] = (uint8_t)byte;
+        hex += 2;
     }
 
     return len;
@@ -166,122 +81,91 @@ void print_hex(const uint8_t *b, size_t len,
     fflush(stdout);
 }
 
-char *double_sha256(const char *hex_string)
+bool sha256_bin(const uint8_t *data, size_t data_len, uint8_t dest[32])
 {
-    size_t bin_len = strlen(hex_string) / 2;
-    uint8_t *bin = malloc(bin_len);
-    hex2bin(hex_string, bin, bin_len);
-
-    unsigned char first_hash_output[32], second_hash_output[32];
-
-    mbedtls_sha256(bin, bin_len, first_hash_output, 0);
-    mbedtls_sha256(first_hash_output, 32, second_hash_output, 0);
-
-    free(bin);
-
-    char *output_hash = malloc(64 + 1);
-    bin2hex(second_hash_output, 32, output_hash, 65);
-    return output_hash;
+    size_t output_len = 0;
+    psa_status_t status = psa_hash_compute(PSA_ALG_SHA_256, data, data_len,
+                                           dest, 32, &output_len);
+    if (status != PSA_SUCCESS || output_len != 32) {
+        memset(dest, 0xff, 32); // fail-close, never lower than difficulty target
+        return false;
+    }
+    return true;
 }
 
-uint8_t *double_sha256_bin(const uint8_t *data, const size_t data_len)
+bool double_sha256_bin(const uint8_t *data, const size_t data_len, uint8_t dest[32])
 {
     uint8_t first_hash_output[32];
-    uint8_t *second_hash_output = malloc(32);
-
-    mbedtls_sha256(data, data_len, first_hash_output, 0);
-    mbedtls_sha256(first_hash_output, 32, second_hash_output, 0);
-
-    return second_hash_output;
-}
-
-void single_sha256_bin(const uint8_t *data, const size_t data_len, uint8_t *dest)
-{
-    // mbedtls_sha256(data, data_len, dest, 0);
-
-    // Initialize SHA256 context
-    mbedtls_sha256_context sha256_ctx;
-    mbedtls_sha256_init(&sha256_ctx);
-    mbedtls_sha256_starts(&sha256_ctx, 0);
-
-    // Compute first SHA256 hash of header
-    mbedtls_sha256_update(&sha256_ctx, data, 64);
-    unsigned char hash[32];
-    mbedtls_sha256_finish(&sha256_ctx, hash);
-
-    // Compute midstate from hash
-    memcpy(dest, hash, 32);
-}
-
-void midstate_sha256_bin(const uint8_t *data, const size_t data_len, uint8_t *dest)
-{
-    mbedtls_sha256_context midstate;
-
-    // Calculate midstate
-    mbedtls_sha256_init(&midstate);
-    mbedtls_sha256_starts(&midstate, 0);
-    mbedtls_sha256_update(&midstate, data, 64);
-
-    // memcpy(dest, midstate.state, 32);
-     flip32bytes(dest, midstate.state);
-}
-
-void swap_endian_words(const char *hex_words, uint8_t *output)
-{
-    size_t hex_length = strlen(hex_words);
-    if (hex_length % 8 != 0)
-    {
-        fprintf(stderr, "Must be 4-byte word aligned\n");
-        exit(EXIT_FAILURE);
+    if (!sha256_bin(data, data_len, first_hash_output)) {
+        memset(dest, 0xff, 32); // fail-close, never lower than difficulty target
+        return false;
     }
+    return sha256_bin(first_hash_output, sizeof(first_hash_output), dest);
+}
 
-    size_t binary_length = hex_length / 2;
+void nbits_to_target(uint32_t nbits, uint8_t target[32])
+{
+    memset(target, 0, 32);
+    if (nbits & 0x00800000) {
+        return;
+    }
+    uint32_t mantissa = nbits & 0x007fffff;
+    uint8_t exponent = (nbits >> 24) & 0xff;
 
-    for (size_t i = 0; i < binary_length; i += 4)
-    {
-        for (int j = 0; j < 4; j++)
-        {
-            unsigned int byte_val;
-            sscanf(hex_words + (i + j) * 2, "%2x", &byte_val);
-            output[i + (3 - j)] = byte_val;
+    if (exponent <= 3) {
+        mantissa >>= 8 * (3 - exponent);
+        memcpy(target, &mantissa, 4);
+    } else {
+        size_t offset = exponent - 3;
+        if (offset <= 28) {
+            memcpy(target + offset, &mantissa, 4);
+        } else if (offset < 32) {
+            size_t copy_len = 32 - offset;
+            memcpy(target + offset, &mantissa, copy_len);
         }
     }
 }
 
-void reverse_bytes(uint8_t *data, size_t len)
+void diff_to_target(double diff, uint8_t target[32])
 {
-    for (int i = 0; i < len / 2; ++i)
-    {
-        uint8_t temp = data[i];
-        data[i] = data[len - 1 - i];
-        data[len - 1 - i] = temp;
-    }
+    memset(target, 0, 32);
+    if (diff <= 0.0 || isnan(diff)) return;
+
+    double d64 = TRUEDIFFONE / diff;
+
+    double dcut64 = d64 / BITS192;
+    uint64_t h64 = (uint64_t)dcut64;
+    for (int i = 0; i < 8; i++) target[24 + i] = (uint8_t)(h64 >> (i * 8));
+    d64 -= ((double)h64) * BITS192;
+
+    dcut64 = d64 / BITS128;
+    h64 = (uint64_t)dcut64;
+    for (int i = 0; i < 8; i++) target[16 + i] = (uint8_t)(h64 >> (i * 8));
+    d64 -= ((double)h64) * BITS128;
+
+    dcut64 = d64 / BITS64;
+    h64 = (uint64_t)dcut64;
+    for (int i = 0; i < 8; i++) target[8 + i] = (uint8_t)(h64 >> (i * 8));
+    d64 -= ((double)h64) * BITS64;
+
+    h64 = (uint64_t)d64;
+    for (int i = 0; i < 8; i++) target[i] = (uint8_t)(h64 >> (i * 8));
 }
 
-// static const double truediffone = 26959535291011309493156476344723991336010898738574164086137773096960.0;
-static const double bits192 = 6277101735386680763835789423207666416102355444464034512896.0;
-static const double bits128 = 340282366920938463463374607431768211456.0;
-static const double bits64 = 18446744073709551616.0;
-
-/* Converts a little endian 256 bit value to a double */
-double le256todouble(const void *target)
+double target_to_diff(const uint8_t target[32])
 {
-    uint64_t *data64;
-    double dcut64;
+    if (!target) return (double)UINT32_MAX;
 
-    data64 = (uint64_t *)(target + 24);
-    dcut64 = *data64 * bits192;
+    uint64_t w0, w1, w2, w3;
+    memcpy(&w0, target,      8);
+    memcpy(&w1, target + 8,  8);
+    memcpy(&w2, target + 16, 8);
+    memcpy(&w3, target + 24, 8);
 
-    data64 = (uint64_t *)(target + 16);
-    dcut64 += *data64 * bits128;
+    if ((w0 | w1 | w2 | w3) == 0) return (double)UINT32_MAX;
 
-    data64 = (uint64_t *)(target + 8);
-    dcut64 += *data64 * bits64;
-
-    data64 = (uint64_t *)(target);
-    dcut64 += *data64;
-
-    return dcut64;
+    double s64 = (double)w3 * BITS192 + (double)w2 * BITS128 + (double)w1 * BITS64 + (double)w0;
+    return TRUEDIFFONE / s64;
 }
 
 void prettyHex(unsigned char *buf, int len)
@@ -293,29 +177,6 @@ void prettyHex(unsigned char *buf, int len)
         printf("%02X ", buf[i]);
     }
     printf("%02X]", buf[len - 1]);
-}
-
-uint32_t flip32(uint32_t val)
-{
-    uint32_t ret = 0;
-    ret |= (val & 0xFF) << 24;
-    ret |= (val & 0xFF00) << 8;
-    ret |= (val & 0xFF0000) >> 8;
-    ret |= (val & 0xFF000000) >> 24;
-    return ret;
-}
-
-/* Calculate the network difficulty from nBits */
-double networkDifficulty(uint32_t nBits)
-{
-    uint32_t mantissa = nBits & 0x007fffff;  // Extract the mantissa from nBits
-    uint8_t exponent = (nBits >> 24) & 0xff; // Extract the exponent from nBits
-
-    double target = (double) mantissa * pow(256, (exponent - 3)); // Calculate the target value
-
-    double difficulty = (pow(2, 208) * 65535) / target; // Calculate the difficulty
-
-    return difficulty;
 }
 
 /* Convert a uint64_t value into a truncated string for displaying with its
@@ -363,14 +224,53 @@ void suffixString(uint64_t val, char * buf, size_t bufsiz, int sigdigits)
 
     if (!sigdigits) {
         if (decimal)
-            snprintf(buf, bufsiz, "%.2f %s", dval, suffix);
+            snprintf(buf, bufsiz, "%.2f%s", dval, suffix);
         else
-            snprintf(buf, bufsiz, "%d %s", (unsigned int) dval, suffix);
+            snprintf(buf, bufsiz, "%d%s", (unsigned int) dval, suffix);
     } else {
         /* Always show sigdigits + 1, padded on right with zeroes
          * followed by suffix */
         int ndigits = sigdigits - 1 - (dval > 0.0 ? floor(log10(dval)) : 0);
 
-        snprintf(buf, bufsiz, "%*.*f %s", sigdigits + 1, ndigits, dval, suffix);
+        snprintf(buf, bufsiz, "%*.*f%s", sigdigits + 1, ndigits, dval, suffix);
     }
+}
+
+void url_decode(char *dst, const char *src)
+{
+    if (dst == NULL || src == NULL) {
+        return;
+    }
+
+    while (*src != '\0') {
+        if (*src == '%' && src[1] != '\0') {
+            int byte = hex_decode_byte(src + 1);
+            if (byte >= 0) {
+                *dst++ = (char)byte;
+                src += 3;
+                continue;
+            }
+        }
+
+        if (*src == '+') {
+            *dst++ = ' ';
+            src++;
+        } else {
+            *dst++ = *src++;
+        }
+    }
+    *dst = '\0';
+}
+
+char *strdup_psram(const char *str)
+{
+    if (!str) return NULL;
+    if (esp_psram_is_initialized()) {
+        char *p = heap_caps_malloc(strlen(str) + 1, MALLOC_CAP_SPIRAM);
+        if (p) {
+            strcpy(p, str);
+            return p;
+        }
+    }
+    return strdup(str);
 }

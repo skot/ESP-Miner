@@ -7,17 +7,16 @@
 
 #include <string.h>
 #include <stdio.h>
-#include <ctype.h>
 #include <stdlib.h>
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "nvs_config.h"
+#include "global_state.h"
 #include "bap_handlers.h"
 #include "bap_protocol.h"
 #include "bap_uart.h"
 #include "bap_subscription.h"
 #include "bap.h"
-#include "asic.h"
 
 static const char *TAG = "BAP_HANDLERS";
 
@@ -40,7 +39,8 @@ void BAP_parse_message(const char *message) {
     uint32_t current_time = esp_timer_get_time() / 1000;
     if (strcmp(message, last_processed_message) == 0 &&
         (current_time - last_message_time) < 1000) {
-        ESP_LOGW(TAG, "Duplicate message detected, ignoring: %s", message);
+        // Don't echo the body: a SET can carry the Wi-Fi or pool password.
+        ESP_LOGW(TAG, "Duplicate message detected, ignoring");
         return;
     }
 
@@ -232,12 +232,40 @@ void BAP_send_request(bap_parameter_t param, GlobalState *state) {
             BAP_send_message(BAP_CMD_RES, "deviceModel", state->DEVICE_CONFIG.family.name);
             BAP_send_message(BAP_CMD_RES, "asicModel", state->DEVICE_CONFIG.family.asic.name);
             char port_str[6];
-            snprintf(port_str, sizeof(port_str),"%u", state->SYSTEM_MODULE.pool_port);
-            BAP_send_message(BAP_CMD_RES, "pool", state->SYSTEM_MODULE.pool_url);
+            uint16_t prim_idx = state->SYSTEM_MODULE.primary_pool_index;
+            snprintf(port_str, sizeof(port_str),"%u", state->SYSTEM_MODULE.pools[prim_idx].port);
+            BAP_send_message(BAP_CMD_RES, "pool", state->SYSTEM_MODULE.pools[prim_idx].url);
             BAP_send_message(BAP_CMD_RES, "poolPort", port_str);
-            BAP_send_message(BAP_CMD_RES, "poolUser", state->SYSTEM_MODULE.pool_user);
+            BAP_send_message(BAP_CMD_RES, "poolUser", state->SYSTEM_MODULE.pools[prim_idx].user);
             break;
-            
+        case BAP_PARAM_SHARES:
+            {
+                char shares_ar_str[64];
+                snprintf(shares_ar_str, sizeof(shares_ar_str), "%" PRIu64 "/%" PRIu64, state->SYSTEM_MODULE.shares_accepted, state->SYSTEM_MODULE.shares_rejected);
+                BAP_send_message(BAP_CMD_RES, "shares", shares_ar_str);
+            }
+            break;
+        case BAP_PARAM_BLOCK_HEIGHT:
+            {
+                char block_height_str[32];
+                snprintf(block_height_str, sizeof(block_height_str), "%d", state->block_height);
+                BAP_send_message(BAP_CMD_RES, "block_height", block_height_str);
+            }
+            break;
+        case BAP_PARAM_FOUND_BLOCK:
+            {
+                char block_found_str[16];
+                snprintf(block_found_str, sizeof(block_found_str), "%d", state->SYSTEM_MODULE.block_found);
+                BAP_send_message(BAP_CMD_RES, "block_found", block_found_str);
+            }
+            break;
+        case BAP_PARAM_SHOW_NEW_BLOCK:
+            {
+                char show_new_block_str[2];
+                snprintf(show_new_block_str, sizeof(show_new_block_str), "%d", state->SYSTEM_MODULE.show_new_block);
+                BAP_send_message(BAP_CMD_RES, "show_new_block", show_new_block_str);
+            }
+            break;
         default:
             ESP_LOGE(TAG, "Unsupported request parameter: %d", param);
             break;
@@ -283,10 +311,8 @@ void BAP_handle_settings(const char *parameter, const char *value) {
                     return;
                 }
                 
-                //ESP_LOGI(TAG, "Setting ASIC frequency to %.2f MHz", target_frequency);
+                nvs_config_set_float(NVS_CONFIG_ASIC_FREQUENCY, target_frequency);
 
-                nvs_config_set_u16(NVS_CONFIG_ASIC_FREQUENCY, target_frequency);
-                    
                 char freq_str[32];
                 snprintf(freq_str, sizeof(freq_str), "%.2f", target_frequency);
                 BAP_send_message(BAP_CMD_ACK, parameter, freq_str);
@@ -303,10 +329,7 @@ void BAP_handle_settings(const char *parameter, const char *value) {
                     return;
                 }
 
-                //ESP_LOGI(TAG, "Setting ASIC voltage to %d mV", target_voltage_mv);
-
                 nvs_config_set_u16(NVS_CONFIG_ASIC_VOLTAGE, target_voltage_mv);
-                //ESP_LOGI(TAG, "Voltage successfully set to %d mV", target_voltage_mv);
 
                 char voltage_str[32];
                 snprintf(voltage_str, sizeof(voltage_str), "%d", target_voltage_mv);
@@ -316,7 +339,7 @@ void BAP_handle_settings(const char *parameter, const char *value) {
 
         case BAP_PARAM_SSID:
             {
-                char *current_ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID, "myssid");
+                char *current_ssid = nvs_config_get_string(NVS_CONFIG_WIFI_SSID);
 
                 if (current_ssid && strcmp(current_ssid, value) == 0) {
                     //ESP_LOGI(TAG, "WiFi SSID is already set to: %s", value);
@@ -328,6 +351,18 @@ void BAP_handle_settings(const char *parameter, const char *value) {
                     //ESP_LOGI(TAG, "WiFi SSID set to: %s", value);
                     BAP_send_message(BAP_CMD_ACK, parameter, value);
                     if (current_ssid) free(current_ssid);
+                    // If a password is already configured, reboot now to apply the new SSID.
+                    // If no password exists yet, the password SET handler will trigger the reboot.
+                    char *existing_pass = nvs_config_get_string(NVS_CONFIG_WIFI_PASS);
+                    if (existing_pass && strlen(existing_pass) > 0) {
+                        free(existing_pass);
+                        vTaskDelay(pdMS_TO_TICKS(100));
+                        BAP_send_message(BAP_CMD_STA, "status", "restarting");
+                        vTaskDelay(pdMS_TO_TICKS(1000));
+                        esp_restart();
+                    } else {
+                        if (existing_pass) free(existing_pass);
+                    }
                 } else {
                     ESP_LOGE(TAG, "Failed to set WiFi SSID");
                     BAP_send_message(BAP_CMD_ERR, parameter, "set_failed");
@@ -338,7 +373,7 @@ void BAP_handle_settings(const char *parameter, const char *value) {
         
         case BAP_PARAM_PASSWORD:
             {   
-                char *current_pass = nvs_config_get_string(NVS_CONFIG_WIFI_PASS, "mypass");
+                char *current_pass = nvs_config_get_string(NVS_CONFIG_WIFI_PASS);
 
                 if (current_pass && strcmp(current_pass, value) == 0) {
                     //ESP_LOGI(TAG, "WiFi password is already set");
@@ -371,8 +406,8 @@ void BAP_handle_settings(const char *parameter, const char *value) {
                     return;
                 }
                 //ESP_LOGI(TAG, "Setting fan speed to %d%%", fan_speed);
-                nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, 0);
-                nvs_config_set_u16(NVS_CONFIG_FAN_SPEED, fan_speed);
+                nvs_config_set_bool(NVS_CONFIG_AUTO_FAN_SPEED, false);
+                nvs_config_set_u16(NVS_CONFIG_MANUAL_FAN_SPEED, fan_speed);
             }
             break;
         case BAP_PARAM_AUTO_FAN_SPEED:
@@ -385,9 +420,25 @@ void BAP_handle_settings(const char *parameter, const char *value) {
                     return;
                 }
                 //ESP_LOGI(TAG, "Setting auto fan speed to %d", auto_fan_speed);
-                nvs_config_set_u16(NVS_CONFIG_AUTO_FAN_SPEED, auto_fan_speed);
+                nvs_config_set_bool(NVS_CONFIG_AUTO_FAN_SPEED, auto_fan_speed);
                 BAP_send_message(BAP_CMD_ACK, parameter, "auto_fan_speed_set");
                 return;
+            }
+            break;
+
+        case BAP_PARAM_FOUND_BLOCK:
+            {
+                int block_found_val = atoi(value);
+                bap_global_state->SYSTEM_MODULE.block_found = block_found_val;
+                BAP_send_message(BAP_CMD_ACK, parameter, value);
+            }
+            break;
+
+        case BAP_PARAM_SHOW_NEW_BLOCK:
+            {
+                int show_new_block_val = atoi(value);
+                bap_global_state->SYSTEM_MODULE.show_new_block = (show_new_block_val != 0);
+                BAP_send_message(BAP_CMD_ACK, parameter, value);
             }
             break;
             

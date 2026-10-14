@@ -27,26 +27,34 @@ menu "Bitaxe Configuration"
                 GPIO pin for DC barrel (PLUG_SENSE), sense pin of DC power jack socket.
 
         config GPIO_I2C_SDA
-            int "I2C SDA Pin"
-            default 47
+            int "I2C SDA Pin Override (-1 to use board default)"
+            default -1
             help
-                GPIO pin for I2C clock line (SDA).
+                GPIO pin override for I2C SDA line. Set to -1 to use board default.
             
         config GPIO_I2C_SCL
-            int "I2C SCL Pin"
-            default 48
+            int "I2C SCL Pin Override (-1 to use board default)"
+            default -1
             help
-                GPIO pin for I2C clock line (SCL).
+                GPIO pin override for I2C SCL line. Set to -1 to use board default.
+
+        config ENABLE_BAP
+            bool "Enable BAP (Bitaxe Accessory Protocol)"
+            default y
+            help
+                Enable or disable Bitaxe Accessory Protocol (BAP) UART communication.
+
         config GPIO_BAP_RX
-            int "I2C BAP Pin"
-            default 40
+            int "BAP RX Pin Override (-1 to use board default)"
+            default -1
             help
-                GPIO pin for BAP receiving line.
+                GPIO pin override for BAP receiving line. Set to -1 to use board default.
+
         config GPIO_BAP_TX
-            int "I2C BAP Pin"
-            default 39
+            int "BAP TX Pin Override (-1 to use board default)"
+            default -1
             help
-                GPIO pin for BAP transmitting line.
+                GPIO pin override for BAP transmitting line. Set to -1 to use board default.
             
     endmenu
     
@@ -79,6 +87,34 @@ menu "Stratum Configuration"
         default 21496
         help
             The stratum server port to connect to.
+    
+    choice
+        prompt "Stratum TLS mode"
+        default STRATUM_TLS_DISABLED
+        help
+            Select how TLS is used for stratum connections.
+
+        config STRATUM_TLS_DISABLED
+            bool "Disabled"
+
+        config STRATUM_TLS_BUNDLED
+            bool "Enabled (bundled CA certificate)"
+
+        config STRATUM_TLS_CUSTOM
+            bool "Enabled (user-provided/custom CA certificate)"
+    endchoice
+
+    config STRATUM_TLS
+        int
+        default 0 if STRATUM_TLS_DISABLED
+        default 1 if STRATUM_TLS_BUNDLED
+        default 2 if STRATUM_TLS_CUSTOM
+    
+    config STRATUM_CERT
+        string "Stratum Certificate"
+        default "x"
+        help
+            The certificate to use with the stratum connection.
 
     config EXTRANONCE_SUBSCRIBE
         bool "Pool extranonce subscribe"
@@ -98,6 +134,34 @@ menu "Stratum Configuration"
         default 3333
         help
             The stratum server port to connect to if the primary fails.
+    
+    choice
+        prompt "Fallback Stratum TLS mode"
+        default FALLBACK_STRATUM_TLS_DISABLED
+        help
+            Select how TLS is used for stratum connections.
+
+        config FALLBACK_STRATUM_TLS_DISABLED
+            bool "Disabled"
+
+        config FALLBACK_STRATUM_TLS_BUNDLED
+            bool "Enabled (bundled CA certificate)"
+
+        config FALLBACK_STRATUM_TLS_CUSTOM
+            bool "Enabled (user-provided/custom CA certificate)"
+    endchoice
+
+    config FALLBACK_STRATUM_TLS
+        int
+        default 0 if FALLBACK_STRATUM_TLS_DISABLED
+        default 1 if FALLBACK_STRATUM_TLS_BUNDLED
+        default 2 if FALLBACK_STRATUM_TLS_CUSTOM
+    
+    config FALLBACK_STRATUM_CERT
+        string "Fallback Stratum Certificate"
+        default "x"
+        help
+            The certificate to use with the stratum connection if the primary fails.
 
     config FALLBACK_EXTRANONCE_SUBSCRIBE
         bool "Fallback pool extranonce subscribe"
@@ -142,5 +206,11 @@ menu "Stratum Configuration"
         default 1000
         help
             A starting difficulty to use with the fallback pool.
+
+    config ENABLE_TASK_MONITOR
+        bool "Task Monitor"
+        default n
+        help
+            Enable task monitor. NOTE: This is intended for debugging use only as the use of uxTaskGetSystemState results in the scheduler remaining suspended for an extended period.
 
 endmenu

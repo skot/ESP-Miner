@@ -23,7 +23,7 @@ esp_err_t SERIAL_init(void)
     ESP_LOGI(TAG, "Initializing serial");
     // Configure UART1 parameters
     uart_config_t uart_config = {
-        .baud_rate = 115200,
+        .baud_rate = UART_FREQ,
         .data_bits = UART_DATA_8_BITS,
         .parity = UART_PARITY_DISABLE,
         .stop_bits = UART_STOP_BITS_1,
@@ -39,6 +39,11 @@ esp_err_t SERIAL_init(void)
     // tx buffer 0 so the tx time doesn't overlap with the job wait time
     //  by returning before the job is written
     return uart_driver_install(UART_NUM_1, BUF_SIZE * 2, BUF_SIZE * 2, 0, NULL, 0);
+}
+
+bool SERIAL_is_initialized(void)
+{
+    return uart_is_driver_installed(UART_NUM_1);
 }
 
 esp_err_t SERIAL_set_baud(int baud)
@@ -73,7 +78,7 @@ int16_t SERIAL_rx(uint8_t *buf, uint16_t size, uint16_t timeout_ms)
 {
     int16_t bytes_read = uart_read_bytes(UART_NUM_1, buf, size, timeout_ms / portTICK_PERIOD_MS);
 
-    #if BM1397_SERIALRX_DEBUG || BM1366_SERIALRX_DEBUG || BM1368_SERIALRX_DEBUG || BM1370_SERIALRX_DEBUG
+    #if BM1397_SERIALRX_DEBUG || BM1366_SERIALRX_DEBUG || BM1368_SERIALRX_DEBUG || BM1370_SERIALRX_DEBUG || BM1373_SERIALRX_DEBUG
     size_t buff_len = 0;
     if (bytes_read > 0) {
         uart_get_buffered_data_len(UART_NUM_1, &buff_len);

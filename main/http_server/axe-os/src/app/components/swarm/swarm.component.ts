@@ -1,21 +1,65 @@
-import { HttpClient } from '@angular/common/http';
-import { Component, OnDestroy, OnInit, ViewChild } from '@angular/core';
-import { FormBuilder, FormGroup, Validators, FormControl } from '@angular/forms';
+import { HttpClient, HttpErrorResponse } from '@angular/common/http';
+import { isFrequencyLow } from 'src/app/utils/common-functions';
+import { Component, OnDestroy, OnInit, ViewChild, HostListener } from '@angular/core';
+import { AbstractControl, FormBuilder, FormGroup, Validators, FormControl, ValidationErrors } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
-import { forkJoin, catchError, from, map, mergeMap, of, take, timeout, toArray, Observable } from 'rxjs';
+import { forkJoin, catchError, from, map, mergeMap, of, take, timeout, toArray, Observable, Subscription } from 'rxjs';
 import { LocalStorageService } from 'src/app/local-storage.service';
+import { LayoutService } from "../../layout/service/app.layout.service";
+import { SystemApiService } from 'src/app/services/system.service';
+import { SystemInfo as ISystemInfo } from 'src/app/generated/models';
 import { ModalComponent } from '../modal/modal.component';
 
 const SWARM_DATA = 'SWARM_DATA';
+const SWARM_VERSION = 'SWARM_VERSION';
 const SWARM_REFRESH_TIME = 'SWARM_REFRESH_TIME';
 const SWARM_SORTING = 'SWARM_SORTING';
+const SWARM_GRID_VIEW = 'SWARM_GRID_VIEW';
 
-type SwarmDevice = { IP: string; ASICModel: string; deviceModel: string; swarmColor: string; asicCount: number; [key: string]: any };
+export function addressValidator(control: AbstractControl): ValidationErrors | null {
+  const value = control.value;
+  if (!value) return null;
+
+  const trimmed = typeof value === 'string' ? value.trim() : '';
+  if (!trimmed) return null;
+
+  const parts = trimmed.split('.');
+
+  // If input is an IPv4 address (4 numeric octets 0-255)
+  if (parts.length === 4 && parts.every(part => /^\d+$/.test(part) && Number(part) >= 0 && Number(part) <= 255)) {
+    return null;
+  }
+
+  // If all parts are numeric or the last part (TLD) is numeric, it is a malformed IP / invalid TLD
+  if (parts.some(part => part === '') || /^\d+$/.test(parts[parts.length - 1])) {
+    return { invalidAddress: true };
+  }
+
+  // RFC 1123 Hostname / FQDN format check (each label 1-63 chars, alphanum & hyphens, cannot start/end with hyphen)
+  const labelRegex = /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$/;
+  if (trimmed.length <= 253 && parts.every(part => labelRegex.test(part))) {
+    return null;
+  }
+
+  return { invalidAddress: true };
+}
+
+type SwarmDevice = { 
+  address: string; 
+  ASICModel: string; 
+  deviceModel: string; 
+  swarmColor: string; 
+  asicCount: number; 
+  displayName?: string; 
+  connectionAddress?: string; 
+  [key: string]: any 
+};
 
 @Component({
-  selector: 'app-swarm',
-  templateUrl: './swarm.component.html',
-  styleUrls: ['./swarm.component.scss']
+    selector: 'app-swarm',
+    templateUrl: './swarm.component.html',
+    styleUrls: ['./swarm.component.scss'],
+    standalone: false
 })
 export class SwarmComponent implements OnInit, OnDestroy {
 
@@ -33,25 +77,59 @@ export class SwarmComponent implements OnInit, OnDestroy {
   public refreshIntervalTime = 30;
   public refreshTimeSet = 30;
 
-  public totals: { hashRate: number; power: number; bestDiff: string } = { hashRate: 0, power: 0, bestDiff: '0' };
+  public totals: { hashRate: number; power: number; bestDiff: number } = { hashRate: 0, power: 0, bestDiff: 0 };
 
   public isRefreshing = false;
 
   public refreshIntervalControl: FormControl;
 
-  public sortField: string = '';
-  public sortDirection: 'asc' | 'desc' = 'asc';
+  public gridView: boolean;
+  public selectedSort: { sortField: string; sortDirection: 'asc' | 'desc' };
+
+  public staticMenuDesktopInactive: boolean;
+  private staticMenuDesktopSubscription!: Subscription;
+
+  public filterText = '';
+
+  public currentDeviceIp: string | null = null;
+  private currentDeviceVersion: string | null = null;
+
+  public isSortDropdownOpen = false;
+
+  getSelectedSortLabel(): string {
+    const selected = this.sortOptions.find(opt => opt.value.sortField === this.selectedSort.sortField && opt.value.sortDirection === this.selectedSort.sortDirection);
+    return selected ? selected.label : 'Sort';
+  }
+
+  selectSortOption(value: {sortField: string; sortDirection: string}) {
+    this.selectedSort = {
+      sortField: value.sortField,
+      sortDirection: value.sortDirection as 'asc' | 'desc'
+    };
+    this.sortBy(value.sortField, this.selectedSort.sortDirection);
+  }
+
+  @HostListener('document:keydown.esc', ['$event'])
+  onEscKey() {
+    if (this.filterText) {
+      this.filterText = '';
+    }
+  }
 
   constructor(
     private fb: FormBuilder,
     private toastr: ToastrService,
     private localStorageService: LocalStorageService,
+    public layoutService: LayoutService,
+    private systemService: SystemApiService,
     private httpClient: HttpClient
   ) {
 
     this.form = this.fb.group({
-      manualAddIp: [null, [Validators.required, Validators.pattern('(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)')]]
+      manualAddAddress: [null, [Validators.required, addressValidator]]
     });
+
+    this.gridView = this.localStorageService.getBool(SWARM_GRID_VIEW);
 
     const storedRefreshTime = this.localStorageService.getNumber(SWARM_REFRESH_TIME) ?? 30;
     this.refreshIntervalTime = storedRefreshTime;
@@ -64,41 +142,147 @@ export class SwarmComponent implements OnInit, OnDestroy {
       this.localStorageService.setNumber(SWARM_REFRESH_TIME, value);
     });
 
-    const storedSorting = this.localStorageService.getObject(SWARM_SORTING) ?? {
-      sortField: 'IP',
+
+    this.selectedSort = this.localStorageService.getObject(SWARM_SORTING) ?? {
+      sortField: 'address',
       sortDirection: 'asc'
     };
-    this.sortField = storedSorting.sortField;
-    this.sortDirection = storedSorting.sortDirection;
+
+    this.staticMenuDesktopInactive = this.layoutService.state.staticMenuDesktopInactive;
   }
 
   ngOnInit(): void {
-    const swarmData = this.localStorageService.getObject(SWARM_DATA);
-
-    if (swarmData == null) {
-      this.scanNetwork();
-    } else {
-      this.swarm = swarmData;
-      this.refreshList(true);
-    }
+    this.staticMenuDesktopSubscription = this.layoutService.getStaticMenuDesktopInactive$()
+      .subscribe(inactive => {
+        this.staticMenuDesktopInactive = inactive;
+      });
 
     this.refreshIntervalRef = window.setInterval(() => {
-      if (!this.scanning && !this.isRefreshing) {
+      if (!this.scanning && !this.isRefreshing && this.swarm.length) {
         this.refreshIntervalTime--;
         if (this.refreshIntervalTime <= 0) {
           this.refreshList(false);
         }
       }
     }, 1000);
+
+    this.httpClient.get(`http://${window.location.hostname}/api/system/info`).subscribe({
+      next: (response: any) => {
+        this.currentDeviceIp = this.deviceIpv4(response) ?? null;
+        this.currentDeviceVersion = response.version;
+        this.initSwarm(response.version);
+      },
+      error: () => {
+        this.currentDeviceIp = null;
+        this.currentDeviceVersion = null;
+        this.initSwarm(null);
+      }
+    });
+  }
+
+  private initSwarm(firmwareVersion: string | null) {
+    const swarmData = this.localStorageService.getObject(SWARM_DATA);
+    const storedVersion = this.localStorageService.getItem(SWARM_VERSION);
+
+    const versionMatch = firmwareVersion && storedVersion === firmwareVersion;
+
+    if (swarmData == null || !versionMatch) {
+      if (swarmData != null && !versionMatch) {
+        this.localStorageService.removeItem(SWARM_DATA);
+      }
+      if (!firmwareVersion) {
+        this.localStorageService.removeItem(SWARM_VERSION);
+      }
+      this.scanNetwork();
+    } else {
+      this.swarm = swarmData;
+      this.refreshList(true);
+    }
   }
 
   ngOnDestroy(): void {
+    this.staticMenuDesktopSubscription.unsubscribe();
     window.clearInterval(this.refreshIntervalRef);
     this.form.reset();
   }
 
+  private saveSwarmData() {
+    this.localStorageService.setObject(SWARM_DATA, this.swarm);
+    if (this.currentDeviceVersion) {
+      this.localStorageService.setItem(SWARM_VERSION, this.currentDeviceVersion);
+    }
+  }
+
   private ipToInt(ip: string): number {
     return ip.split('.').reduce((acc, octet) => (acc << 8) + parseInt(octet, 10), 0) >>> 0;
+  }
+
+private isIpAddress(value: string): boolean {
+    const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+    return ipRegex.test(value);
+  }
+
+  // Device IP field names differ per firmware:
+  //   AxeOS    -> `ipv4`   on /api/system/info
+  //   NerdOS   -> `hostip` on /api/system/info
+  //   Bitforge -> `staIp`  on /api/ap/info (see fetchDeviceIpv4)
+  private deviceIpv4(...sources: any[]): string | undefined {
+    for (const source of sources) {
+      const ipv4 = source?.['ipv4'] || source?.['hostip'] || source?.['staIp'];
+      if (ipv4) return ipv4;
+    }
+    return undefined;
+  }
+
+  private fetchDeviceIpv4(address: string, info: any): Observable<string | undefined> {
+    const ipv4 = this.deviceIpv4(info);
+    if (ipv4) {
+      return of(ipv4);
+    }
+    if (this.isIpAddress(address)) {
+      return of(address);
+    }
+    return this.httpClient.get(`http://${address}/api/ap/info`).pipe(
+      timeout(3000),
+      map((ap: any) => this.deviceIpv4(ap)),
+      catchError(() => of(undefined))
+    );
+  }
+
+  // Utility method to get the display name for a device
+  public getDeviceDisplayName(device: SwarmDevice): string {
+    return device.displayName || device.address;
+  }
+
+  public getCurrentHostname(): string {
+    return window.location.hostname;
+  }
+
+  // Utility method to get the link URL for a device
+  // Follows the current device's access method (IP, hostname.local, bare hostname, or custom domain suffix like .lan)
+  public getDeviceLink(device: SwarmDevice): string {
+    const currentHost = this.getCurrentHostname();
+    const isIP = this.isIpAddress(currentHost);
+    if (isIP) {
+      // Accessing via IP — link to device IP
+      return device['ipv4'] || device.connectionAddress || device.address || '';
+    }
+
+    const dotIndex = currentHost.indexOf('.');
+    if (dotIndex !== -1) {
+      // Accessing via domain (e.g. .local, .lan, .home.arpa) — link using the same domain suffix
+      const domainSuffix = currentHost.substring(dotIndex);
+      if (domainSuffix.toLowerCase() === '.local' && device['fullHostname']) {
+        return device['fullHostname'];
+      }
+      const baseName = (device['hostname'] || device.address || '').replace(/\.local$/i, '');
+      if (baseName) {
+        return `${baseName}${domainSuffix}`;
+      }
+    }
+
+    // Accessing via bare hostname — link to device's bare hostname
+    return device['hostname'] || device.connectionAddress || device.address || '';
   }
 
   private intToIp(int: number): string {
@@ -116,111 +300,222 @@ export class SwarmComponent implements OnInit, OnDestroy {
   scanNetwork() {
     this.scanning = true;
 
-    const { start, end } = this.calculateIpRange(window.location.hostname, '255.255.255.0');
-    const ips = Array.from({ length: end - start + 1 }, (_, i) => this.intToIp(start + i));
+    if (this.isIpAddress(window.location.hostname)) {
+      // Direct IP access - scan the subnet
+      const { start, end } = this.calculateIpRange(window.location.hostname, '255.255.255.0');
+      const ips = Array.from({ length: end - start + 1 }, (_, i) => this.intToIp(start + i));
+      this.performNetworkScan(ips);
+    } else {
+      // mDNS hostname - fetch server IP first, then scan its subnet
+      this.httpClient.get(`http://${window.location.hostname}/api/system/info`)
+        .subscribe({
+          next: (response: any) => {
+            const serverIp = this.deviceIpv4(response);
+            if (!serverIp) {
+              this.scanning = false;
+              return;
+            }
+            const { start, end } = this.calculateIpRange(serverIp, '255.255.255.0');
+            const ips = Array.from({ length: end - start + 1 }, (_, i) => this.intToIp(start + i));
+            this.performNetworkScan(ips);
+          },
+          error: () => {
+            // Fallback: skip scanning if we can't get the IP
+            this.scanning = false;
+          }
+        });
+    }
+  }
+
+  private performNetworkScan(ips: string[]) {
     this.getAllDeviceInfo(ips, () => of(null)).subscribe({
-      next: (result) => {
-        // Filter out null items first
-        const validResults = result.filter((item): item is SwarmDevice => item !== null);
-        // Merge new results with existing swarm entries
-        const existingIps = new Set(this.swarm.map(item => item.IP));
-        const newItems = validResults.filter(item => !existingIps.has(item.IP));
-        this.swarm = [...this.swarm, ...newItems];
-        this.sortSwarm();
-        this.localStorageService.setObject(SWARM_DATA, this.swarm);
-        this.calculateTotals();
+      next: (device) => {
+        if (device) {
+          const isDuplicate = this.swarm.some(item =>
+            (item.connectionAddress && item.connectionAddress === device.connectionAddress) ||
+            (item['ipv4'] && item['ipv4'] === device['ipv4']) ||
+            (item['hostname'] && item['hostname'] === device['hostname'])
+          );
+          if (!isDuplicate) {
+            this.swarm = [...this.swarm, device];
+            this.sortSwarm();
+            this.saveSwarmData();
+            this.calculateTotals();
+          }
+        }
       },
       complete: () => {
         this.scanning = false;
+        this.refreshIntervalTime = this.refreshTimeSet;
       }
     });
   }
 
-  private getAllDeviceInfo(ips: string[], errorHandler: (error: any, ip: string) => Observable<SwarmDevice[] | null>, fetchAsic: boolean = true) {
-    return from(ips).pipe(
-      mergeMap(IP => forkJoin({
-        info: this.httpClient.get(`http://${IP}/api/system/info`),
-        asic: fetchAsic ? this.httpClient.get(`http://${IP}/api/system/asic`).pipe(catchError(() => of({}))) : of({})
-      }).pipe(
-        map(({ info, asic }) => {
-          const existingDevice = this.swarm.find(device => device.IP === IP);
-          const result = { IP, ...(existingDevice ? existingDevice : {}), ...info, ...asic };
-          return this.fallbackDeviceModel(result);
-        }),
+  private buildSwarmDevice(address: string, info: any, asic: any, ipv4?: string): SwarmDevice {
+    const existingDevice = this.swarm.find(device => device.connectionAddress === address);
+    const result = {
+      address: info?.['fullHostname'] || info?.['hostname'] || address,
+      displayName: info?.['hostname'] ? info['hostname'].replace(/\.local$/i, '') : address,
+      connectionAddress: address,
+      ...(existingDevice ? existingDevice : {}),
+      ...info,
+      ...asic,
+      ...this.numerizeDeviceBestDiffs(info as ISystemInfo),
+      ipv4: ipv4 ?? existingDevice?.['ipv4']
+    };
+    return this.fallbackDeviceModel(result);
+  }
+
+  private fetchDevice(address: string, fetchAsic: boolean = true): Observable<SwarmDevice | null> {
+    return this.httpClient.get<any>(`http://${address}/api/system/info`).pipe(
+      mergeMap(info => {
+        if (!info) {
+          return of(null);
+        }
+        const asic$ = fetchAsic
+          ? this.httpClient.get<any>(`http://${address}/api/system/asic`).pipe(timeout(1000), catchError(() => of({})))
+          : of({});
+
+        return forkJoin({
+          asic: asic$,
+          ipv4: this.fetchDeviceIpv4(address, info)
+        }).pipe(
+          map(({ asic, ipv4 }) => this.buildSwarmDevice(address, info, asic, ipv4))
+        );
+      })
+    );
+  }
+
+  private getAllDeviceInfo(addresses: string[], errorHandler: (error: any, address: string) => Observable<SwarmDevice | null>, fetchAsic: boolean = true): Observable<SwarmDevice | null> {
+    return from(addresses).pipe(
+      mergeMap(address => this.fetchDevice(address, fetchAsic).pipe(
         timeout(5000),
-        catchError(error => errorHandler(error, IP))
-      ),
-        128
-      ),
-      toArray()
-    ).pipe(take(1));
+        catchError(error => errorHandler(error, address))
+      ), 128)
+    );
   }
 
   public add() {
-    const IP = this.form.value.manualAddIp;
+    const address = this.form.value.manualAddAddress;
 
-    // Check if IP already exists
-    if (this.swarm.some(item => item.IP === IP)) {
-      this.toastr.warning('This IP address already exists in the swarm.');
-      return;
-    }
+    this.httpClient.get<any>(`http://${address}/api/system/info`).pipe(
+      catchError(error => {
+        if (error.status === 401 || error.status === 0) {
+          this.toastr.warning(`Potential swarm peer detected at ${address} - upgrade its firmware to be able to add it.`);
+          return of({ _corsError: 401 });
+        }
+        if (error.name === 'TimeoutError') {
+          this.toastr.error(`Request timed out - device at ${address} did not respond.`, `Device at ${address}`);
+          return of(null);
+        }
+        throw error;
+      }),
+      mergeMap(info => {
+        if (!info || (info as any)._corsError === 401) {
+          return of(null); // Already showed warning or timed out
+        }
+        return forkJoin({
+          asic: this.httpClient.get<any>(`http://${address}/api/system/asic`).pipe(timeout(1000), catchError(() => of({}))),
+          ipv4: this.fetchDeviceIpv4(address, info)
+        }).pipe(
+          map(({ asic, ipv4 }) => {
+            if (!info.ASICModel || !asic.ASICModel) {
+              return null;
+            }
+            return { info, asic, ipv4 };
+          })
+        );
+      })
+    ).subscribe(result => {
+      if (result === null) {
+        return;
+      }
+      const { info, asic, ipv4 } = result;
 
-    forkJoin({
-      info: this.httpClient.get<any>(`http://${IP}/api/system/info`),
-      asic: this.httpClient.get<any>(`http://${IP}/api/system/asic`).pipe(catchError(() => of({})))
-    }).subscribe(({ info, asic }) => {
-      if (!info.ASICModel || !asic.ASICModel) {
+      if (ipv4 && this.swarm.some(item => item.connectionAddress === ipv4)) {
+        this.toastr.warning('Device already added to the swarm.', `Device at ${address}`);
         return;
       }
 
-      this.swarm.push({ IP, ...asic, ...info });
+      const device = {
+        address: info['fullHostname'] || info['hostname'] || address,
+        displayName: info['hostname'] ? info['hostname'].replace(/\.local$/i, '') : address,
+        connectionAddress: ipv4 || address,
+        ...asic,
+        ...info,
+        ...this.numerizeDeviceBestDiffs(info),
+        ipv4
+      };
+      this.swarm.push(device);
       this.sortSwarm();
-      this.localStorageService.setObject(SWARM_DATA, this.swarm);
+      this.saveSwarmData();
       this.calculateTotals();
     });
   }
 
-  public edit(axe: any) {
-    this.selectedAxeOs = axe;
+  public edit(device: any) {
+    this.selectedAxeOs = device;
     this.modalComponent.isVisible = true;
   }
 
-  public restart(axe: any) {
-    this.httpClient.post(`http://${axe.IP}/api/system/restart`, {}).pipe(
+  public postAction(device: any, action: string) {
+    if (action === 'restart' && !confirm('Are you sure you want to restart the device?')) {
+      return;
+    }
+    this.httpClient.post(`http://${device.connectionAddress}/api/system/${action}`, {}, { responseType: 'text' }).pipe(
+      timeout(800),
       catchError(error => {
-        if (error.status === 0 || error.status === 200 || error.name === 'HttpErrorResponse') {
-          return of('success');
-        } else {
-          this.toastr.error(`Failed to restart device at ${axe.IP}`);
-          return of(null);
+        if ((action === 'restart' || action === 'identify') && (error.status === 200 || error.status === 0 || error.name === 'HttpErrorResponse' || error.statusText === 'Unknown Error')) {
+          if (action === 'restart') {
+            return of('System will restart shortly');
+          } else {
+            return of('Identify signal sent - device should say "Hi!"');
+          }
         }
+        let errorMsg = `Failed to ${action} device at ${this.getDeviceDisplayName(device)}`;
+        if (error.name === 'TimeoutError') {
+          errorMsg = 'Request timed out';
+        } else if (error.message) {
+          errorMsg += `: ${error.message}`;
+        }
+        this.toastr.error(errorMsg, `Device at ${this.getDeviceDisplayName(device)}`);
+        return of(null);
       })
-    ).subscribe(res => {
-      if (res !== null && res == 'success') {
-        this.toastr.success(`Device at ${axe.IP} restarted`);
+    ).subscribe((res: any) => {
+      if (res !== null) {
+        let message = res;
+        try { message = JSON.parse(res)?.message ?? res; } catch {}
+        this.toastr.success(message, `Device at ${this.getDeviceDisplayName(device)}`);
+        this.refreshList(false);
       }
     });
   }
 
-  public remove(axeOs: any) {
-    this.swarm = this.swarm.filter(axe => axe.IP !== axeOs.IP);
-    this.localStorageService.setObject(SWARM_DATA, this.swarm);
+  public remove(device: any) {
+    this.swarm = this.swarm.filter(axe => axe.address !== device.address);
+    this.saveSwarmData();
     this.calculateTotals();
   }
 
-  public refreshErrorHandler = (error: any, ip: string) => {
+  public refreshErrorHandler = (error: any, address: string) => {
     const errorMessage = error?.message || error?.statusText || error?.toString() || 'Unknown error';
-    this.toastr.error(`Failed to get info from ${ip}`);
-    const existingDevice = this.swarm.find(axeOs => axeOs.IP === ip);
+    this.toastr.error(`Failed to get info: ${errorMessage}`, `Device at ${address}`);
+    const existingDevice = this.swarm.find(axeOs => axeOs.connectionAddress === address);
     return of({
       ...existingDevice,
+      address: existingDevice?.address || address,
+      connectionAddress: address,
+      ASICModel: existingDevice?.ASICModel || '',
+      deviceModel: existingDevice?.deviceModel || 'Other',
+      swarmColor: existingDevice?.swarmColor || 'gray',
+      asicCount: existingDevice?.asicCount || 1,
       hashRate: 0,
       sharesAccepted: 0,
       power: 0,
       voltage: 0,
       temp: 0,
       bestDiff: 0,
-      version: 0,
+      version: '',
       uptimeSeconds: 0,
       poolDifficulty: 0,
     });
@@ -232,16 +527,23 @@ export class SwarmComponent implements OnInit, OnDestroy {
     }
 
     this.refreshIntervalTime = this.refreshTimeSet;
-    const ips = this.swarm.map(axeOs => axeOs.IP);
+    const addresses = this.swarm.filter(Boolean).map(axeOs => axeOs.connectionAddress);
     this.isRefreshing = true;
 
-    this.getAllDeviceInfo(ips, this.refreshErrorHandler, fetchAsic).subscribe({
-      next: (result) => {
-        this.swarm = result;
-        this.sortSwarm();
-        this.localStorageService.setObject(SWARM_DATA, this.swarm);
-        this.calculateTotals();
-        this.isRefreshing = false;
+    this.getAllDeviceInfo(addresses, this.refreshErrorHandler, fetchAsic).subscribe({
+      next: (device) => {
+        if (device) {
+          const index = this.swarm.findIndex(item => item.connectionAddress === device.connectionAddress);
+          if (index !== -1) {
+            this.swarm[index] = device;
+            this.swarm = [...this.swarm];
+          } else {
+            this.swarm = [...this.swarm, device];
+          }
+          this.sortSwarm();
+          this.saveSwarmData();
+          this.calculateTotals();
+        }
       },
       complete: () => {
         this.isRefreshing = false;
@@ -249,75 +551,63 @@ export class SwarmComponent implements OnInit, OnDestroy {
     });
   }
 
-  sortBy(field: string) {
-    // If clicking the same field, toggle direction
-    if (this.sortField === field) {
-      this.sortDirection = this.sortDirection === 'asc' ? 'desc' : 'asc';
+  sortBy(sortField: string, sortDirection?: 'asc' | 'desc' | undefined) {
+    if (sortDirection) {
+      this.selectedSort = { sortField, sortDirection };
+    } else if (this.selectedSort.sortField === sortField) {
+      this.selectedSort = { sortField, sortDirection: this.selectedSort.sortDirection === 'asc' ? 'desc' : 'asc' };
     } else {
-      // New field, set to ascending by default
-      this.sortField = field;
-      this.sortDirection = 'asc';
+      this.selectedSort = { sortField, sortDirection: 'asc' };
     }
 
-    this.localStorageService.setObject(SWARM_SORTING, {
-      sortField: this.sortField,
-      sortDirection: this.sortDirection
-    });
-
+    this.localStorageService.setObject(SWARM_SORTING, this.selectedSort);
     this.sortSwarm();
   }
 
   private sortSwarm() {
     this.swarm.sort((a, b) => {
       let comparison = 0;
-      const fieldType = typeof a[this.sortField];
+      const aVal = a[this.selectedSort.sortField];
+      const bVal = b[this.selectedSort.sortField];
+      const fieldType = typeof aVal;
 
-      if (this.sortField === 'IP') {
-        // Split IP into octets and compare numerically
-        const aOctets = a[this.sortField].split('.').map(Number);
-        const bOctets = b[this.sortField].split('.').map(Number);
-        for (let i = 0; i < 4; i++) {
-          if (aOctets[i] !== bOctets[i]) {
-            comparison = aOctets[i] - bOctets[i];
-            break;
+      if (this.selectedSort.sortField === 'address') {
+        const aValue = aVal || '';
+        const bValue = bVal || '';
+        const aIsIp = this.isIpAddress(aValue);
+        const bIsIp = this.isIpAddress(bValue);
+
+        if (aIsIp && bIsIp) {
+          const aOctets = aValue.split('.').map(Number);
+          const bOctets = bValue.split('.').map(Number);
+          for (let i = 0; i < 4; i++) {
+            if (aOctets[i] !== bOctets[i]) {
+              comparison = aOctets[i] - bOctets[i];
+              break;
+            }
           }
+        } else if (!aIsIp && !bIsIp) {
+          comparison = aValue.localeCompare(bValue);
+        } else {
+          comparison = aIsIp ? -1 : 1;
         }
       } else if (fieldType === 'number') {
-        comparison = a[this.sortField] - b[this.sortField];
+        comparison = (aVal || 0) - (bVal || 0);
       } else if (fieldType === 'string') {
-        comparison = a[this.sortField].localeCompare(b[this.sortField], undefined, { numeric: true });
+        comparison = (aVal || '').localeCompare(bVal || '', undefined, { numeric: true });
       }
-      return this.sortDirection === 'asc' ? comparison : -comparison;
+      return this.selectedSort.sortDirection === 'asc' ? comparison : -comparison;
     });
-  }
-
-  private compareBestDiff(a: string, b: string): string {
-    if (!a || a === '0') return b || '0';
-    if (!b || b === '0') return a;
-
-    const units = 'kMGTPE';
-    const unitA = units.indexOf(a.slice(-1));
-    const unitB = units.indexOf(b.slice(-1));
-
-    if (unitA !== unitB) {
-      return unitA > unitB ? a : b;
-    }
-
-    const valueA = parseFloat(a.slice(0, unitA >= 0 ? -1 : 0));
-    const valueB = parseFloat(b.slice(0, unitB >= 0 ? -1 : 0));
-    return valueA >= valueB ? a : b;
   }
 
   private calculateTotals() {
     this.totals.hashRate = this.swarm.reduce((sum, axe) => sum + (axe.hashRate || 0), 0);
     this.totals.power = this.swarm.reduce((sum, axe) => sum + (axe.power || 0), 0);
-    this.totals.bestDiff = this.swarm
-      .map(axe => axe.bestDiff || '0')
-      .reduce((max, curr) => this.compareBestDiff(max, curr), '0');
+    this.totals.bestDiff = this.swarm.reduce((max, axe) => Math.max(max, axe.bestDiff || 0), 0);
   }
 
-  get getFamilies(): SwarmDevice[] {
-    return this.swarm.filter((v, i, a) =>
+  get deviceFamilies(): SwarmDevice[] {
+    return this.filteredSwarm.filter(Boolean).filter((v, i, a) =>
       a.findIndex(({ deviceModel, ASICModel, asicCount }) =>
         v.deviceModel === deviceModel &&
         v.ASICModel === ASICModel &&
@@ -326,13 +616,24 @@ export class SwarmComponent implements OnInit, OnDestroy {
     );
   }
 
-  // Fallback logic to derive deviceModel and swarmColor, can be removed after some time
   private fallbackDeviceModel(data: any): any {
-    if (data.deviceModel && data.swarmColor && data.poolDifficulty) return data;
+    if (data.deviceModel && data.swarmColor && data.poolDifficulty && data.hashRate) return data;
     const deviceModel = data.deviceModel || this.deriveDeviceModel(data);
     const swarmColor = data.swarmColor || this.deriveSwarmColor(deviceModel);
     const poolDifficulty = data.poolDifficulty || data.stratumDiff;
-    return { ...data, deviceModel, swarmColor, poolDifficulty };
+    const hashRate = data.hashRate || data.hashRate_10m;
+    return { ...data, deviceModel, swarmColor, poolDifficulty, hashRate };
+  }
+
+  private numerizeDeviceBestDiffs(info: ISystemInfo) {
+    const parseAsNumber = (val: number | string): number => {
+      return typeof val === 'string' ? this.parseSuffixString(val) : val;
+    };
+
+    return {
+      bestDiff: parseAsNumber(info.bestDiff),
+      bestSessionDiff: parseAsNumber(info.bestSessionDiff),
+    };
   }
 
   private deriveDeviceModel(data: any): string {
@@ -357,5 +658,139 @@ export class SwarmComponent implements OnInit, OnDestroy {
       case 'GammaTurbo': return 'cyan';
       default:           return 'gray';
     }
+  }
+
+  private mergeDeviceData(IP: string, existing: Partial<SwarmDevice>, info: any, asic: any): SwarmDevice {
+    const merged: any = {
+      IP,
+      ...existing,
+      power_fault: null,
+      overheat_mode: null,
+      isUsingFallbackStratum: null,
+      blockFound: null,
+      ...info,
+      ...asic,
+    };
+
+    merged.deviceModel = merged.deviceModel || this.deriveDeviceModel(merged);
+    merged.swarmColor = merged.swarmColor || this.deriveSwarmColor(merged.deviceModel);
+    merged.asicCount = merged.asicCount || 1;
+
+    merged.poolDifficulty = merged.poolDifficulty || info.stratumDiff;
+    merged.hashRate = merged.hashRate || info.hashRate_10m;
+    if (typeof merged.bestDiff === 'string') merged.bestDiff = this.parseSuffixString(merged.bestDiff);
+    if (typeof merged.bestSessionDiff === 'string') merged.bestSessionDiff = this.parseSuffixString(merged.bestSessionDiff);
+
+    return merged as SwarmDevice;
+  }
+
+  private parseSuffixString(input: string): number {
+    input = input.trim();
+    const value = parseFloat(input);
+    const lastChar = input.charAt(input.length - 1).toUpperCase();
+
+    const multipliers: Record<string, number> = {
+      K: 1e3,
+      M: 1e6,
+      G: 1e9,
+      T: 1e12,
+      P: 1e15,
+      E: 1e18,
+    };
+
+    const multiplier = multipliers[lastChar] ?? 1;
+
+    return value * multiplier;
+  }
+
+  public stringifyDeviceLabel(data: any): string {
+    const model = data.deviceModel || 'Other';
+    const asicCountPart = data.asicCount > 1 ? data.asicCount + 'x ' : '';
+    const asicModel = data.ASICModel || '';
+
+    return model + ' (' + asicCountPart + asicModel + ')';
+  };
+
+
+  public toggleGridView(gridView: boolean): void {
+    this.localStorageService.setBool(SWARM_GRID_VIEW, this.gridView = gridView);
+  }
+
+  get sortOptions() {
+    return [
+      { label: 'Hostname', value: { sortField: 'hostname', sortDirection: 'desc' } },
+      { label: 'Hostname', value: { sortField: 'hostname', sortDirection: 'asc' } },
+      { label: 'Address', value: { sortField: 'address', sortDirection: 'desc' } },
+      { label: 'Address', value: { sortField: 'address', sortDirection: 'asc' } },
+      { label: 'Hashrate', value: { sortField: 'hashRate', sortDirection: 'desc' } },
+      { label: 'Hashrate', value: { sortField: 'hashRate', sortDirection: 'asc' } },
+      { label: 'Shares', value: { sortField: 'sharesAccepted', sortDirection: 'desc' } },
+      { label: 'Shares', value: { sortField: 'sharesAccepted', sortDirection: 'asc' } },
+      { label: 'Best Diff', value: { sortField: 'bestDiff', sortDirection: 'desc' } },
+      { label: 'Best Diff', value: { sortField: 'bestDiff', sortDirection: 'asc' } },
+      { label: 'Uptime', value: { sortField: 'uptimeSeconds', sortDirection: 'desc' } },
+      { label: 'Uptime', value: { sortField: 'uptimeSeconds', sortDirection: 'asc' } },
+      { label: 'Power', value: { sortField: 'power', sortDirection: 'desc' } },
+      { label: 'Power', value: { sortField: 'power', sortDirection: 'asc' } },
+      { label: 'Temp', value: { sortField: 'temp', sortDirection: 'desc' } },
+      { label: 'Temp', value: { sortField: 'temp', sortDirection: 'asc' } },
+      { label: 'Pool Diff', value: { sortField: 'poolDifficulty', sortDirection: 'desc' } },
+      { label: 'Pool Diff', value: { sortField: 'poolDifficulty', sortDirection: 'asc' } },
+      { label: 'Version', value: { sortField: 'version', sortDirection: 'desc' } },
+      { label: 'Version', value: { sortField: 'version', sortDirection: 'asc' } },
+    ];
+  }
+
+  onSortChange(event: {value: {sortField: string; sortDirection: 'asc' | 'desc'}}) {
+    const {sortField, sortDirection} = event.value;
+
+    this.sortBy(sortField, sortDirection);
+  }
+
+  get filteredSwarm() {
+    if (!this.filterText) {
+      return this.swarm;
+    }
+
+    const filter = this.filterText.toLowerCase();
+return this.swarm.filter(axe =>
+      this.getDeviceDisplayName(axe).toLowerCase().includes(filter) ||
+      (axe.ASICModel || '').toLowerCase().includes(filter) ||
+      (axe.deviceModel || '').toLowerCase().includes(filter) ||
+      (axe.address || '').toLowerCase().includes(filter)
+    );
+  }
+
+  getDeviceNotification(axe: any): { color: string; msg: string } | undefined {
+    switch (true) {
+      case !!axe.miningPaused:
+        return { color: 'yellow', msg: 'Paused' };
+      case axe.overheat_mode === 1:
+        return { color: 'red', msg: 'Overheated' };
+      case !!axe.power_fault:
+        return { color: 'red', msg: 'Power Fault' };
+      case isFrequencyLow(axe.frequency, axe.frequencyOptions):
+        return { color: 'orange', msg: 'Frequency Low' };
+      case axe.isUsingFallbackStratum === 1:
+        return { color: 'orange', msg: 'Fallback Pool' };
+      case axe.showNewBlock === 1:
+        return { color: 'green', msg: 'Block found' };
+      default:
+        return undefined;
+    }
+  }
+
+  isThisDevice(device: SwarmDevice): boolean {
+    const hostname = window.location.hostname;
+    
+    if (device.address === hostname || device.connectionAddress === hostname) {
+      return true;
+    }
+    
+    if (this.currentDeviceIp !== null && device['ipv4'] === this.currentDeviceIp) {
+      return true;
+    }
+    
+    return false;
   }
 }

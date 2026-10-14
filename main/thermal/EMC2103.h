@@ -3,11 +3,6 @@
 
 #include "i2c_bitaxe.h"
 
-typedef struct {
-    float temp1;
-    float temp2;
-} EMC2103_temps_t;
-
 #define EMC2103_I2CADDR_DEFAULT 0x2E ///< EMC2103 default i2c address
 
 #define EMC2103_INTERNAL_TEMP_MSB 0x00
@@ -29,6 +24,12 @@ typedef struct {
 
 #define EMC2103_PWM_CONFIG  0x2A
 #define EMC2103_PWM_BASE_FREQ 0x2B
+
+#define EMC2103_PWM_CONFIG_PUSH_PULL_NORMAL 0x10
+#define EMC2103_PWM_BASE_FREQ_26KHZ         0x00
+#define EMC2103_PWM_DIVIDE_BY_1             0x01
+#define EMC2103_FAN_CONFIG1_DIRECT_PWM      0x2B
+#define EMC2103_LUT_CONFIG1_DISABLED        0x00
 
 #define EMC2103_FAN_SETTING 0x40
 #define EMC2103_PWM_DIVIDE  0x41
@@ -67,9 +68,10 @@ typedef struct {
 
 esp_err_t EMC2103_set_fan_speed(float);
 uint16_t EMC2103_get_fan_speed(void);
-esp_err_t EMC2103_init();
+esp_err_t EMC2103_init(int temp_offset_param, bool flip_param, bool direct_pwm);
 float EMC2103_get_external_temp(void);
 float EMC2103_get_external_temp2(void);
-esp_err_t EMC2103_set_ideality_factor(uint8_t);
-esp_err_t EMC2103_set_beta_compensation(uint8_t);
+esp_err_t EMC2103_set_external_temp_calibration(uint8_t diode, float scale, float offset_c);
+esp_err_t EMC2103_set_ideality_factor(uint8_t ideality);
+esp_err_t EMC2103_set_beta_compensation(uint8_t beta);
 #endif /* EMC2103_H_ */

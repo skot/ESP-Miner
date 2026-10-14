@@ -1,6 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 
 import { NetworkEditComponent } from './network.edit.component';
+import { provideHttpClient } from '@angular/common/http';
+import { provideToastr } from 'ngx-toastr';
+import { DialogService } from 'src/app/services/dialog.service';
 
 describe('NetworkEditComponent', () => {
   let component: NetworkEditComponent;
@@ -8,7 +11,8 @@ describe('NetworkEditComponent', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      declarations: [NetworkEditComponent]
+      declarations: [NetworkEditComponent],
+      providers: [provideHttpClient(), provideToastr(), DialogService]
     });
     fixture = TestBed.createComponent(NetworkEditComponent);
     component = fixture.componentInstance;

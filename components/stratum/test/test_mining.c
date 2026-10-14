@@ -1,24 +1,55 @@
 #include "unity.h"
 #include "mining.h"
+#include "stratum_api.h"
 #include "utils.h"
 
 #include <limits.h>
+#include <string.h>
 
 TEST_CASE("Check coinbase tx construction", "[mining]")
 {
     const char *coinbase_1 = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff20020862062f503253482f04b8864e5008";
     const char *coinbase_2 = "072f736c7573682f000000000100f2052a010000001976a914d23fcdf86f7e756a64a7a9688ef9903327048ed988ac00000000";
     const char *extranonce = "e9695791";
-    const char *extranonce_2 = "99999999";
-    char *coinbase_tx = construct_coinbase_tx(coinbase_1, coinbase_2, extranonce, extranonce_2);
-    TEST_ASSERT_EQUAL_STRING(coinbase_tx, "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff20020862062f503253482f04b8864e5008e969579199999999072f736c7573682f000000000100f2052a010000001976a914d23fcdf86f7e756a64a7a9688ef9903327048ed988ac00000000");
-    free(coinbase_tx);
+    const char *extranonce_2 = "99999999";    
+
+    uint8_t c1_bin[128], c2_bin[128], en1_bin[32], en2_bin[32];
+    size_t c1_len = hex2bin(coinbase_1, c1_bin, sizeof(c1_bin));
+    size_t c2_len = hex2bin(coinbase_2, c2_bin, sizeof(c2_bin));
+    size_t en1_len = hex2bin(extranonce, en1_bin, sizeof(en1_bin));
+    size_t en2_len = hex2bin(extranonce_2, en2_bin, sizeof(en2_bin));
+
+    uint8_t coinbase_tx_hash[32];
+    calculate_coinbase_tx_hash_bin(c1_bin, c1_len, en1_bin, en1_len, en2_bin, en2_len, c2_bin, c2_len, coinbase_tx_hash);
+
+    char expected_coinbase_tx[] = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff20020862062f503253482f04b8864e5008e969579199999999072f736c7573682f000000000100f2052a010000001976a914d23fcdf86f7e756a64a7a9688ef9903327048ed988ac00000000";
+    size_t expected_coinbase_tx_len = strlen(expected_coinbase_tx) / 2;
+    uint8_t expected_coinbase_tx_bin[expected_coinbase_tx_len];
+    hex2bin(expected_coinbase_tx, expected_coinbase_tx_bin, expected_coinbase_tx_len);
+
+    uint8_t expected_coinbase_tx_hash[32];
+    TEST_ASSERT_TRUE(double_sha256_bin(expected_coinbase_tx_bin, expected_coinbase_tx_len, expected_coinbase_tx_hash));
+
+    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_coinbase_tx_hash, coinbase_tx_hash, 32);
 }
 
 // Values calculated from esp-miner/components/stratum/test/verifiers/merklecalc.py
 TEST_CASE("Validate merkle root calculation", "[mining]")
 {
-    const char *coinbase_tx = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff20020862062f503253482f04b8864e5008e969579199999999072f736c7573682f000000000100f2052a010000001976a914d23fcdf86f7e756a64a7a9688ef9903327048ed988ac00000000";
+    const char *coinbase_1 = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff20020862062f503253482f04b8864e5008e969579199999999072f736c7573682f0000000001";
+    const char *coinbase_2 = "1976a914d23fcdf86f7e756a64a7a9688ef9903327048ed988ac00000000";
+    const char *extranonce = "00f2052a";
+    const char *extranonce_2 = "01000000";
+
+    uint8_t c1_bin[128], c2_bin[128], en1_bin[32], en2_bin[32];
+    size_t c1_len = hex2bin(coinbase_1, c1_bin, sizeof(c1_bin));
+    size_t c2_len = hex2bin(coinbase_2, c2_bin, sizeof(c2_bin));
+    size_t en1_len = hex2bin(extranonce, en1_bin, sizeof(en1_bin));
+    size_t en2_len = hex2bin(extranonce_2, en2_bin, sizeof(en2_bin));
+
+    uint8_t coinbase_tx_hash[32];
+    calculate_coinbase_tx_hash_bin(c1_bin, c1_len, en1_bin, en1_len, en2_bin, en2_len, c2_bin, c2_len, coinbase_tx_hash);
+
     uint8_t merkles[12][32];
     int num_merkles = 12;
 
@@ -35,14 +66,29 @@ TEST_CASE("Validate merkle root calculation", "[mining]")
     hex2bin("463c19427286342120039a83218fa87ce45448e246895abac11fff0036076758", merkles[10], 32);
     hex2bin("03d287f655813e540ddb9c4e7aeb922478662b0f5d8e9d0cbd564b20146bab76", merkles[11], 32);
 
-    char *root_hash = calculate_merkle_root_hash(coinbase_tx, merkles, num_merkles);
+    uint8_t root_hash_bin[32];
+    calculate_merkle_root_hash(coinbase_tx_hash, merkles, num_merkles, root_hash_bin);
+    char root_hash[65];
+    bin2hex(root_hash_bin, 32, root_hash, 65);
     TEST_ASSERT_EQUAL_STRING("adbcbc21e20388422198a55957aedfa0e61be0b8f2b87d7c08510bb9f099a893", root_hash);
-    free(root_hash);
 }
 
 TEST_CASE("Validate another merkle root calculation", "[mining]")
 {
-    const char *coinbase_tx = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff2503777d07062f503253482f0405b8c75208f800880e000000000b2f436f696e48756e74722f0000000001603f352a010000001976a914c633315d376c20a973a758f7422d67f7bfed9c5888ac00000000";
+    const char *coinbase_1 = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff2503777d07062f503253482f0405b8c75208f800880e000000000b2f436f696e48756e74722f0000000001";
+    const char *coinbase_2 = "1976a914c633315d376c20a973a758f7422d67f7bfed9c5888ac00000000";
+    const char *extranonce = "603f352a";
+    const char *extranonce_2 = "01000000";
+
+    uint8_t c1_bin[128], c2_bin[128], en1_bin[32], en2_bin[32];
+    size_t c1_len = hex2bin(coinbase_1, c1_bin, sizeof(c1_bin));
+    size_t c2_len = hex2bin(coinbase_2, c2_bin, sizeof(c2_bin));
+    size_t en1_len = hex2bin(extranonce, en1_bin, sizeof(en1_bin));
+    size_t en2_len = hex2bin(extranonce_2, en2_bin, sizeof(en2_bin));
+
+    uint8_t coinbase_tx_hash[32];
+    calculate_coinbase_tx_hash_bin(c1_bin, c1_len, en1_bin, en1_len, en2_bin, en2_len, c2_bin, c2_len, coinbase_tx_hash);
+
     uint8_t merkles[5][32];
     int num_merkles = 5;
 
@@ -52,27 +98,11 @@ TEST_CASE("Validate another merkle root calculation", "[mining]")
     hex2bin("9f64f3b0d9edddb14be6f71c3ac2e80455916e207ffc003316c6a515452aa7b4", merkles[3], 32);
     hex2bin("2d0b54af60fad4ae59ec02031f661d026f2bb95e2eeb1e6657a35036c017c595", merkles[4], 32);
 
-    char *root_hash = calculate_merkle_root_hash(coinbase_tx, merkles, num_merkles);
+    uint8_t root_hash_bin[32];
+    calculate_merkle_root_hash(coinbase_tx_hash, merkles, num_merkles, root_hash_bin);
+    char root_hash[65];
+    bin2hex(root_hash_bin, 32, root_hash, 65);    
     TEST_ASSERT_EQUAL_STRING("5cc58f5e84aafc740d521b92a7bf72f4e56c4cc3ad1c2159f1d094f97ac34eee", root_hash);
-    free(root_hash);
-}
-
-// Values calculated from esp-miner/components/stratum/test/verifiers/bm1397.py
-TEST_CASE("Validate bm job construction", "[mining]")
-{
-    mining_notify notify_message;
-    notify_message.prev_block_hash = "bf44fd3513dc7b837d60e5c628b572b448d204a8000007490000000000000000";
-    notify_message.version = 0x20000004;
-    notify_message.target = 0x1705dd01;
-    notify_message.ntime = 0x64658bd8;
-    const char *merkle_root = "cd1be82132ef0d12053dcece1fa0247fcfdb61d4dbd3eb32ea9ef9b4c604a846";
-    bm_job job = construct_bm_job(&notify_message, merkle_root, 0, 1000);
-
-    uint8_t expected_midstate_bin[32];
-    hex2bin("91DFEA528A9F73683D0D495DD6DD7415E1CA21CB411759E3E05D7D5FF285314D", expected_midstate_bin, 32);
-    // bytes are reversed for the midstate on the bm job command packet
-    reverse_bytes(expected_midstate_bin, 32);
-    TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_midstate_bin, job.midstate, 32);
 }
 
 TEST_CASE("Validate version mask incrementing", "[mining]")
@@ -90,78 +120,79 @@ TEST_CASE("Validate version mask incrementing", "[mining]")
     TEST_ASSERT_EQUAL_UINT32(0x20000404, rolled_version);
 }
 
-// Values calculated from esp-miner/components/stratum/test/verifiers/bm1397.py
-// TEST_CASE("Validate bm job construction 2", "[mining]")
-// {
-//     const char * notify_json_str = "{\"id\":null,\"method\":\"mining.notify\","
-//     "\"params\":[\"21554471e8\",\"8bc8707eb169ad3bda101ae60c8d48bd00aff68a00006c8b0000000000000000\",\"01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff4b03d8130cfabe6d6db0ba74b36edc62c9268c945b53ebf1a7865b88bcdd40235a7a63d0f5ed5b6c400100000000000000\",\"e8714455212f736c7573682f00000000033de04728000000001976a9147c154ed1dc59609e3d26abb2df2ea3d587cd8c4188ac00000000000000002c6a4c2952534b424c4f434b3ae8c3686251b5ced65b6a65ea3e0491ac2975cd87c02b0640d3ec3c20005167770000000000000000266a24aa21a9eddffbecb5ef0a46324a3dd902fa84509a38d2c91548768845db5d6c2de0e33f6100000000\","
-//     "[\"8ef6b79382a1fc5152c7e69b2dd4e3795ed758d6fe7748ef4d96e3ad8ac180b8\",\"5b6e1cfecd94050b763c2c6a08d4caabd54daee665aa8e41b53b39ec76b62707\",\"f85b768f83fffbb3927f7f440cb57a5ed386f368aae88ad9b9d92e7bc1cdce15\",\"e51b9391c39019d8a2a27becc048cc770f5d33b49a29779fdc7bed04767ca962\",\"9f5d08316ead260455ec532a58935411a3eecf3c9948a52325de495d7dd7b776\",\"57e10cad23a646ad3a87fcd34eae454567dbd44946e746ee6310a86b98afa4ac\",\"f3b65cc08b25901b657efb22f0a9a23e1a61ce1e268f801d8cfe782b4a0c5e5d\",\"648e00fe2a57dca155c7d4260bc52273b28adb42e1bceb45d5ee03f4a4c5d174\",\"43ad393f7efe4b7a29775dbbc10b3b2737e9457764a7b39bc8ac6b470b968ac8\",\"4964b9b2bf601dfb2bd62067acafe556650412b1e6fe32df48c39310f7dc255d\",\"44d354ac57fcb68b408df7f5396122195384914dd2db13d5766c334fc48c2069\",\"568514a2db82a055772218f52db2f5fa157c37a9ba16c1a239819e57f0d16218\"],"
-//     "\"20000004\",\"1705ae3a\",\"6470e2a1\",true]}";
-//     mining_notify * params = parse_mining_notify_message(notify_json_str, 512);
-//     char * coinbase_tx = construct_coinbase_tx(params->coinbase_1, params->coinbase_2, "336508070fca95", "0000000000000000");
-//     char * merkle_root = calculate_merkle_root_hash(coinbase_tx, (uint8_t(*)[32])params->merkle_branches, params->n_merkle_branches);
-//     bm_job job = construct_bm_job(params, merkle_root, 1000);
-
-//     uint8_t expected_midstate_bin[32];
-//     hex2bin("5FD281AF6A1750EAEE502C04067738BD46C82FC22112FFE797CE7F035D276126", expected_midstate_bin, 32);
-//     // bytes are reversed for the midstate on the bm job command packet
-//     reverse_bytes(expected_midstate_bin, 32);
-//     TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_midstate_bin, job.midstate, 32);
-//     TEST_ASSERT_EQUAL_UINT32(0x1705ae3a, job.target);
-//     TEST_ASSERT_EQUAL_UINT32(0x6470e2a1, job.ntime);
-//     TEST_ASSERT_EQUAL_UINT8(0x8a, job.merkle_root[28]);
-//     TEST_ASSERT_EQUAL_UINT8(0xdd, job.merkle_root[29]);
-//     TEST_ASSERT_EQUAL_UINT8(0xa8, job.merkle_root[30]);
-//     TEST_ASSERT_EQUAL_UINT8(0x6a, job.merkle_root[31]);
-// }
-
-TEST_CASE("Test extranonce 2 generation", "[mining extranonce2]")
+TEST_CASE("Version mask increment preserves unmasked bits across carries and wraparound", "[mining]")
 {
-    char *first = extranonce_2_generate(0, 4);
-    TEST_ASSERT_EQUAL_STRING("00000000", first);
-    free(first);
+    static const struct {
+        uint32_t value;
+        uint32_t mask;
+        uint32_t expected;
+    } cases[] = {
+        {0x20000004, 0x00000000, 0x20000004},
+        {0xffffffff, 0x00000000, 0xffffffff},
+        {0x20000004, 0x1fffe000, 0x20002004},
+        {0x3fffe004, 0x1fffe000, 0x20000004},
+        {0x20002004, 0x1000a000, 0x20008004},
+        {0x2000a004, 0x1000a000, 0x30000004},
+        {0x3000a004, 0x1000a000, 0x20000004},
+        {0x80000001, 0x80000001, 0x00000000},
+        {0x00000001, 0x80000001, 0x80000000},
+        {0xffffffff, 0xffffffff, 0x00000000},
+        {0x7fffffff, 0xffffffff, 0x80000000},
+    };
 
-    char *second = extranonce_2_generate(1, 4);
-    TEST_ASSERT_EQUAL_STRING("01000000", second);
-    free(second);
-
-    char *third = extranonce_2_generate(2, 4);
-    TEST_ASSERT_EQUAL_STRING("02000000", third);
-    free(third);
-
-    char *fourth = extranonce_2_generate(UINT_MAX - 1, 4);
-    TEST_ASSERT_EQUAL_STRING("feffffff", fourth);
-    free(fourth);
-
-    char *fifth = extranonce_2_generate(UINT_MAX / 2, 6);
-    TEST_ASSERT_EQUAL_STRING("ffffff7f0000", fifth);
-    free(fifth);
+    for (size_t i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
+        TEST_ASSERT_EQUAL_HEX32(cases[i].expected, increment_bitmask(cases[i].value, cases[i].mask));
+    }
 }
 
-TEST_CASE("Test nonce diff checking", "[mining test_nonce][not-on-qemu]")
+TEST_CASE("Test nonce diff checking", "[mining][test-nonce]")
 {
-    mining_notify notify_message;
-    notify_message.prev_block_hash = "d02b10fc0d4711eae1a805af50a8a83312a2215e00017f2b0000000000000000";
-    notify_message.version = 0x20000004;
-    notify_message.target = 0x1705ae3a;
-    notify_message.ntime = 0x646ff1a9;
-    const char *merkle_root = "6d0359c451434605c52a5a9ce074340be47c2c63840731f9edf1db3f26b1cdd9a9f16f64";
-    bm_job job = construct_bm_job(&notify_message, merkle_root, 0, 1000);
+    asic_job_t mjob;
+    memset(&mjob, 0, sizeof(mjob));
+    hex2bin("d02b10fc0d4711eae1a805af50a8a83312a2215e00017f2b0000000000000000", mjob.prev_hash, 32);
+    // Normalize the SV1 fixture to header bytes, as the pool parser does.
+    reverse_endianness_per_word(mjob.prev_hash);
+    mjob.version = 0x20000004;
+    mjob.nbits = 0x1705ae3a;
+    mjob.ntime = 0x646ff1a9;
+
+    uint8_t merkle_root[32];
+    hex2bin("6d0359c451434605c52a5a9ce074340be47c2c63840731f9edf1db3f26b1cdd9", merkle_root, 32);
+    memcpy(mjob.merkle_root, merkle_root, sizeof(mjob.merkle_root));
 
     uint32_t nonce = 0x276E8947;
-    double diff = test_nonce_value(&job, nonce, 0);
+    uint32_t version_bits = 0;
+    uint32_t rolled_version = mjob.version | version_bits;
+    uint8_t hash_result[32];
+    TEST_ASSERT_TRUE(mining_nonce_hash(&mjob, nonce, rolled_version, hash_result));
+    double diff = target_to_diff(hash_result);
     TEST_ASSERT_EQUAL_INT(18, (int)diff);
 }
 
-TEST_CASE("Test nonce diff checking 2", "[mining test_nonce][not-on-qemu]")
+TEST_CASE("Test nonce diff checking 2", "[mining][test-nonce]")
 {
-    mining_notify notify_message;
-    notify_message.prev_block_hash = "0c859545a3498373a57452fac22eb7113df2a465000543520000000000000000";
-    notify_message.version = 0x20000004;
-    notify_message.target = 0x1705ae3a;
-    notify_message.ntime = 0x647025b5;
+    asic_job_t mjob;
+    memset(&mjob, 0, sizeof(mjob));
+    hex2bin("0c859545a3498373a57452fac22eb7113df2a465000543520000000000000000", mjob.prev_hash, 32);
+    // Normalize the SV1 fixture to header bytes, as the pool parser does.
+    reverse_endianness_per_word(mjob.prev_hash);
+    mjob.version = 0x20000004;
+    mjob.nbits = 0x1705ae3a;
+    mjob.ntime = 0x647025b5;
 
-    const char *coinbase_tx = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff4b0389130cfabe6d6d5cbab26a2599e92916edec5657a94a0708ddb970f5c45b5d12905085617eff8e010000000000000031650707758de07b010000000000001cfd7038212f736c7573682f000000000379ad0c2a000000001976a9147c154ed1dc59609e3d26abb2df2ea3d587cd8c4188ac00000000000000002c6a4c2952534b424c4f434b3ae725d3994b811572c1f345deb98b56b465ef8e153ecbbd27fa37bf1b005161380000000000000000266a24aa21a9ed63b06a7946b190a3fda1d76165b25c9b883bcc6621b040773050ee2a1bb18f1800000000";
+    const char *c1_hex = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff4b0389130cfabe6d6d5cbab26a2599e92916edec5657a94a0708ddb970f5c45b5d12905085617eff8e";
+    const char *c2_hex = "31650707758de07b010000000000001cfd7038212f736c7573682f000000000379ad0c2a000000001976a9147c154ed1dc59609e3d26abb2df2ea3d587cd8c4188ac00000000000000002c6a4c2952534b424c4f434b3ae725d3994b811572c1f345deb98b56b465ef8e153ecbbd27fa37bf1b005161380000000000000000266a24aa21a9ed63b06a7946b190a3fda1d76165b25c9b883bcc6621b040773050ee2a1bb18f1800000000";
+    const char *en1_hex = "01000000";
+    const char *en2_hex = "00000000";
+
+    uint8_t c1_bin[128], c2_bin[256], en1_bin[32], en2_bin[32];
+    size_t c1_len = hex2bin(c1_hex, c1_bin, sizeof(c1_bin));
+    size_t c2_len = hex2bin(c2_hex, c2_bin, sizeof(c2_bin));
+    size_t en1_len = hex2bin(en1_hex, en1_bin, sizeof(en1_bin));
+    size_t en2_len = hex2bin(en2_hex, en2_bin, sizeof(en2_bin));
+
+    uint8_t coinbase_tx_hash[32];
+    calculate_coinbase_tx_hash_bin(c1_bin, c1_len, en1_bin, en1_len, en2_bin, en2_len, c2_bin, c2_len, coinbase_tx_hash);
     uint8_t merkles[13][32];
     int num_merkles = 13;
 
@@ -179,12 +210,19 @@ TEST_CASE("Test nonce diff checking 2", "[mining test_nonce][not-on-qemu]")
     hex2bin("c4f5ab01913fc186d550c1a28f3f3e9ffaca2016b961a6a751f8cca0089df924", merkles[11], 32);
     hex2bin("cff737e1d00176dd6bbfa73071adbb370f227cfb5fba186562e4060fcec877e1", merkles[12], 32);
 
-    char *merkle_root = calculate_merkle_root_hash(coinbase_tx, merkles, num_merkles);
+    uint8_t merkle_root_hash[32];
+    calculate_merkle_root_hash(coinbase_tx_hash, merkles, num_merkles, merkle_root_hash);
+    char merkle_root[65];
+    bin2hex(merkle_root_hash, 32, merkle_root, 65);
     TEST_ASSERT_EQUAL_STRING("5bdc1968499c3393873edf8e07a1c3a50a97fc3a9d1a376bbf77087dd63778eb", merkle_root);
 
-    bm_job job = construct_bm_job(&notify_message, merkle_root, 0, 1000);
+    memcpy(mjob.merkle_root, merkle_root_hash, sizeof(mjob.merkle_root));
 
     uint32_t nonce = 0x0a029ed1;
-    double diff = test_nonce_value(&job, nonce, 0);
+    uint32_t version_bits = 0;
+    uint32_t rolled_version = mjob.version | version_bits;
+    uint8_t hash_result[32];
+    TEST_ASSERT_TRUE(mining_nonce_hash(&mjob, nonce, rolled_version, hash_result));
+    double diff = target_to_diff(hash_result);
     TEST_ASSERT_EQUAL_INT(683, (int)diff);
 }

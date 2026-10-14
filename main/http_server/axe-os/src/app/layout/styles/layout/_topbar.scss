@@ -6,11 +6,14 @@
     top: 0;
     width: 100%;
     padding: 0 2rem;
-    background-color: var(--surface-card);
+    background-color: var(--color-bg-card);
     transition: left $transitionDuration;
     display: flex;
     align-items: center;
-    box-shadow: 0px 3px 5px rgba(0,0,0,.02), 0px 0px 2px rgba(0,0,0,.05), 0px 1px 4px rgba(0,0,0,.08);
+    box-shadow:
+        0px 3px 5px rgba(0, 0, 0, 0.02),
+        0px 0px 2px rgba(0, 0, 0, 0.05),
+        0px 1px 4px rgba(0, 0, 0, 0.08);
 
     @media screen and (max-width: 575px) {
         justify-content: space-between;
@@ -24,20 +27,25 @@
         justify-content: center;
         align-items: center;
         position: relative;
-        color: var(--primary-color);
+        color: var(--color-text-main);
+        background: transparent !important;
+        border: none;
         border-radius: 50%;
         width: 3rem;
         height: 3rem;
         cursor: pointer;
-        transition: background-color color $transitionDuration;
+        transition:
+            background-color $transitionDuration,
+            color $transitionDuration;
+        margin-left: 2rem;
 
         @media screen and (min-width: 576px) {
-            margin-left: 11rem;
+            margin-left: 5rem;
         }
 
         &:hover {
-            color: var(--text-color);
-            background-color: var(--surface-hover);
+            color: var(--color-primary);
+            background-color: var(--color-bg-hover);
         }
 
         &:focus {

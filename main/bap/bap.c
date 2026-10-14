@@ -12,6 +12,7 @@
 #include "freertos/queue.h"
 #include "freertos/semphr.h"
 #include "bap.h"
+#include "global_state.h"
 
 static const char *TAG = "BAP";
 
@@ -26,6 +27,11 @@ esp_err_t BAP_init(GlobalState *state) {
     if (!state) {
         ESP_LOGE(TAG, "Invalid global state pointer");
         return ESP_ERR_INVALID_ARG;
+    }
+
+    if (state->DEVICE_CONFIG.pins.bap == NULL) {
+        ESP_LOGI(TAG, "BAP UART disabled on %s", state->DEVICE_CONFIG.family.name);
+        return ESP_OK;
     }
     
     bap_global_state = state;
@@ -45,7 +51,7 @@ esp_err_t BAP_init(GlobalState *state) {
         return ESP_ERR_NO_MEM;
     }
 
-    bap_uart_send_queue = xQueueCreate(10, sizeof(bap_message_t));
+    bap_uart_send_queue = xQueueCreateWithCaps(10, sizeof(bap_message_t), MALLOC_CAP_SPIRAM);
     if (bap_uart_send_queue == NULL) {
         ESP_LOGE(TAG, "Failed to create UART send queue");
         vSemaphoreDelete(bap_subscription_mutex);

@@ -1,40 +1,75 @@
 #include "thermal.h"
+#include "device_config.h"
+#include "global_state.h"
 
 #include "esp_log.h"
+#include "esp_check.h"
+
 #include "EMC2101.h"
 #include "EMC2103.h"
+#include "EMC2302.h"
+#include "TMP1075.h"
 
 static const char * TAG = "thermal";
+
+#define BM1373_TEMP_SCALE 0.9613546f
+#define BM1373_TEMP_OFFSET (-5.0858026f)
+#define NAJA_DUO_DIODE2_TEMP_OFFSET (-10.7f)
 
 esp_err_t Thermal_init(DeviceConfig * DEVICE_CONFIG)
 {
     if (DEVICE_CONFIG->EMC2101) {
-        ESP_LOGI(TAG, "Initializing EMC2101 (Temperature offset: %dC)", DEVICE_CONFIG->emc_temp_offset);
-        esp_err_t res = EMC2101_init();
+        ESP_RETURN_ON_ERROR(EMC2101_init(DEVICE_CONFIG->temp_offset), TAG, "Failed to initialise EMC2101");
         // TODO: Improve this check.
         if (DEVICE_CONFIG->emc_ideality_factor != 0x00) {
             ESP_LOGI(TAG, "EMC2101 configuration: Ideality Factor: %02x, Beta Compensation: %02x", DEVICE_CONFIG->emc_ideality_factor, DEVICE_CONFIG->emc_beta_compensation);
             EMC2101_set_ideality_factor(DEVICE_CONFIG->emc_ideality_factor);
             EMC2101_set_beta_compensation(DEVICE_CONFIG->emc_beta_compensation);
         }
-        return res;
     }
     if (DEVICE_CONFIG->EMC2103) {
-        ESP_LOGI(TAG, "Initializing EMC2103 (Temperature offset: %dC)", DEVICE_CONFIG->emc_temp_offset);
-        return EMC2103_init();
+        ESP_RETURN_ON_ERROR(EMC2103_init(DEVICE_CONFIG->temp_offset,
+                                         DEVICE_CONFIG->temp_flip,
+                                         DEVICE_CONFIG->emc_direct_pwm),
+                            TAG,
+                            "Failed to initialise EMC2103");
+        if (DEVICE_CONFIG->emc_ideality_factor != 0x00) {
+            ESP_RETURN_ON_ERROR(EMC2103_set_ideality_factor(DEVICE_CONFIG->emc_ideality_factor),
+                                TAG, "Failed to set EMC2103 ideality factor");
+            ESP_RETURN_ON_ERROR(EMC2103_set_beta_compensation(DEVICE_CONFIG->emc_beta_compensation),
+                                TAG, "Failed to set EMC2103 beta compensation");
+        }
+        if (DEVICE_CONFIG->family.asic.id == BM1373) {
+            ESP_RETURN_ON_ERROR(EMC2103_set_external_temp_calibration(
+                                    1, BM1373_TEMP_SCALE, BM1373_TEMP_OFFSET),
+                                TAG, "Failed to calibrate BM1373 diode 1");
+            ESP_RETURN_ON_ERROR(EMC2103_set_external_temp_calibration(
+                                    2, BM1373_TEMP_SCALE,
+                                    BM1373_TEMP_OFFSET + NAJA_DUO_DIODE2_TEMP_OFFSET),
+                                TAG, "Failed to calibrate BM1373 diode 2");
+        }
+    }
+    if (DEVICE_CONFIG->EMC2302) {
+        ESP_RETURN_ON_ERROR(EMC2302_init(), TAG, "Failed to initialise EMC2302");
+    }
+    if (DEVICE_CONFIG->TMP1075) {
+        ESP_RETURN_ON_ERROR(TMP1075_init(DEVICE_CONFIG->temp_offset), TAG, "Failed to initialise TMP1075");
     }
 
-    return ESP_FAIL;
+    return ESP_OK;
 }
 
 //percent is a float between 0.0 and 1.0
 esp_err_t Thermal_set_fan_percent(DeviceConfig * DEVICE_CONFIG, float percent)
 {
     if (DEVICE_CONFIG->EMC2101) {
-        EMC2101_set_fan_speed(percent);
+        return EMC2101_set_fan_speed(percent);
     }
     if (DEVICE_CONFIG->EMC2103) {
-        EMC2103_set_fan_speed(percent);
+        return EMC2103_set_fan_speed(percent);
+    }
+    if (DEVICE_CONFIG->EMC2302) {
+        return EMC2302_set_fan_speed(percent);
     }
     return ESP_OK;
 }
@@ -47,6 +82,17 @@ uint16_t Thermal_get_fan_speed(DeviceConfig * DEVICE_CONFIG)
     if (DEVICE_CONFIG->EMC2103) {
         return EMC2103_get_fan_speed();
     }
+    if (DEVICE_CONFIG->EMC2302) {
+        return EMC2302_get_fan_speed();
+    }
+    return 0;
+}
+
+uint16_t Thermal_get_fan2_speed(DeviceConfig * DEVICE_CONFIG) 
+{
+    if (DEVICE_CONFIG->EMC2302) {
+        return EMC2302_get_fan2_speed();
+    }
     return 0;
 }
 
@@ -56,16 +102,18 @@ float Thermal_get_chip_temp(GlobalState * GLOBAL_STATE)
         return -1;
     }
 
-    int8_t temp_offset = GLOBAL_STATE->DEVICE_CONFIG.emc_temp_offset;
     if (GLOBAL_STATE->DEVICE_CONFIG.EMC2101) {
         if (GLOBAL_STATE->DEVICE_CONFIG.emc_internal_temp) {
-            return EMC2101_get_internal_temp() + temp_offset;
+            return EMC2101_get_internal_temp();
         } else {
-            return EMC2101_get_external_temp() + temp_offset;
+            return EMC2101_get_external_temp();
         }
     }
     if (GLOBAL_STATE->DEVICE_CONFIG.EMC2103) {
-        return EMC2103_get_external_temp() + temp_offset;
+        return EMC2103_get_external_temp();
+    }
+    if (GLOBAL_STATE->DEVICE_CONFIG.TMP1075) {
+        return TMP1075_read_temperature(0);
     }
     return -1;
 }
@@ -75,10 +123,11 @@ float Thermal_get_chip_temp2(GlobalState * GLOBAL_STATE)
     if (!GLOBAL_STATE->ASIC_initalized) {
         return -1;
     }
-
-    int8_t temp_offset = GLOBAL_STATE->DEVICE_CONFIG.emc_temp_offset;
     if (GLOBAL_STATE->DEVICE_CONFIG.EMC2103) {
-        return EMC2103_get_external_temp2() + temp_offset;
+        return EMC2103_get_external_temp2();
+    }
+    if (GLOBAL_STATE->DEVICE_CONFIG.TMP1075) {
+        return TMP1075_read_temperature(1);
     }
     return -1;
 }

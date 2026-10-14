@@ -1,29 +1,31 @@
 import { TestBed } from '@angular/core/testing';
-import { RouterTestingModule } from '@angular/router/testing';
 import { AppComponent } from './app.component';
+import { SnowflakesComponent } from './components/snowflakes/snowflakes.component';
+import { provideRouter, RouterModule } from '@angular/router';
+import { LayoutService } from './layout/service/app.layout.service';
+import { ThemeService } from './services/theme.service';
+import { LocalStorageService } from './local-storage.service';
+import { provideHttpClient } from '@angular/common/http';
+import { provideToastr } from 'ngx-toastr';
+import { DialogListComponent } from './services/dialog.service';
 
 describe('AppComponent', () => {
   beforeEach(() => TestBed.configureTestingModule({
-    imports: [RouterTestingModule],
-    declarations: [AppComponent]
+    imports: [RouterModule],
+    declarations: [AppComponent, SnowflakesComponent, DialogListComponent],
+    providers: [
+      provideRouter([]),
+      LayoutService,
+      ThemeService,
+      LocalStorageService,
+      provideHttpClient(),
+      provideToastr()
+    ]
   }));
 
   it('should create the app', () => {
     const fixture = TestBed.createComponent(AppComponent);
     const app = fixture.componentInstance;
     expect(app).toBeTruthy();
-  });
-
-  it(`should have as title 'axe-os'`, () => {
-    const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.componentInstance;
-    expect(app.title).toEqual('axe-os');
-  });
-
-  it('should render title', () => {
-    const fixture = TestBed.createComponent(AppComponent);
-    fixture.detectChanges();
-    const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('.content span')?.textContent).toContain('axe-os app is running!');
   });
 });

@@ -1,0 +1,16 @@
+@if (tooltip) {
+  @if (split) {
+    @if (preLastWords) {
+      <span>{{ preLastWords }}&nbsp;</span>
+    }
+    <span class="whitespace-nowrap">
+      {{ lastWord }}<tooltip-icon [tooltip]="tooltip" [icon]="icon" />
+    </span>
+  } @else {
+    <span class="whitespace-nowrap">
+      {{ text }}<tooltip-icon [tooltip]="tooltip" [icon]="icon" />
+    </span>
+  }
+} @else {
+  {{ text }}
+}

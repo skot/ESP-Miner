@@ -5,6 +5,10 @@
 /tmp
 /out-tsc
 /bazel-out
+report.xml
+
+# Openapi generator
+**/generated
 
 # Node
 /node_modules

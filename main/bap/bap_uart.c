@@ -14,6 +14,7 @@
 #include "esp_log.h"
 #include "esp_err.h"
 #include "device_config.h"
+#include "global_state.h"
 #include "bap_uart.h"
 #include "bap_protocol.h"
 #include "bap.h"
@@ -24,9 +25,6 @@
 #define UART_SEND_QUEUE_ITEM_SIZE sizeof(bap_message_t)
 #define UART_SEND_TIMEOUT_MS 1000
 #define UART_BUFFER_THRESHOLD (BAP_BUF_SIZE / 2)
-
-#define GPIO_BAP_RX CONFIG_GPIO_BAP_RX
-#define GPIO_BAP_TX CONFIG_GPIO_BAP_TX
 
 static const char *TAG = "BAP_UART";
 
@@ -59,7 +57,7 @@ void BAP_send_message(bap_command_t cmd, const char *parameter, const char *valu
         uart_write_bytes(BAP_UART_NUM, message, len);
         xSemaphoreGive(bap_uart_send_mutex);
         
-        ESP_LOGI(TAG, "Sent: %s", message);
+        //ESP_LOGI(TAG, "Sent: %s", message);
     } else {
         ESP_LOGW(TAG, "Failed to take UART mutex for immediate send, message dropped");
     }
@@ -150,12 +148,9 @@ static void uart_receive_task(void *pvParameters) {
                         
                         //ESP_LOGI(TAG, "Received complete message: %s", message);
                         BAP_parse_message(message);
-                        
-                        if (c == '\r') {
-                            ESP_LOGD(TAG, "Got CR, waiting for possible LF");
-                        } else {
-                            in_message = false;
-                        }
+
+                        // End on either terminator; a trailing LF would re-parse the buffer.
+                        in_message = false;
                     } else if (message_len >= BAP_MAX_MESSAGE_LEN) {
                         ESP_LOGE(TAG, "Message too long, discarding");
                         in_message = false;
@@ -210,13 +205,14 @@ static void uart_send_task(void *pvParameters) {
 }
 
 esp_err_t BAP_start_uart_receive_task(void) {
-    xTaskCreate(
+    xTaskCreateWithCaps(
         uart_receive_task,
         "uart_receive_ta",
-        4096,
+        8192,
         NULL,
-        5,
-        &uart_receive_task_handle
+        4,
+        &uart_receive_task_handle,
+        MALLOC_CAP_SPIRAM
     );
 
     //ESP_LOGI(TAG, "UART receive task started");
@@ -224,12 +220,7 @@ esp_err_t BAP_start_uart_receive_task(void) {
 }
 
 esp_err_t BAP_uart_init(void) {
-    ESP_LOGI(TAG, "Initializing BAP UART interface");
-    
-    if (GPIO_BAP_TX > 47 || GPIO_BAP_RX > 47) {
-        ESP_LOGE(TAG, "Invalid GPIO pins: TX=%d, RX=%d", GPIO_BAP_TX, GPIO_BAP_RX);
-        return ESP_ERR_INVALID_ARG;
-    }
+    //ESP_LOGI(TAG, "Initializing BAP UART interface");
     
     uart_config_t uart_config = {
         .baud_rate = 115200,
@@ -246,7 +237,10 @@ esp_err_t BAP_uart_init(void) {
         return ret;
     }
     
-    ret = uart_set_pin(BAP_UART_NUM, GPIO_BAP_TX, GPIO_BAP_RX, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
+    gpio_num_t bap_tx = bap_global_state->DEVICE_CONFIG.pins.bap->tx;
+    gpio_num_t bap_rx = bap_global_state->DEVICE_CONFIG.pins.bap->rx;
+
+    ret = uart_set_pin(BAP_UART_NUM, bap_tx, bap_rx, UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE);
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Failed to set UART pins: %d", ret);
         return ret;
@@ -258,15 +252,15 @@ esp_err_t BAP_uart_init(void) {
         return ret;
     }
     
-    ESP_LOGI(TAG, "BAP UART interface initialized successfully");
     
-    BaseType_t task_result = xTaskCreate(
+    BaseType_t task_result = xTaskCreateWithCaps(
         uart_send_task,
         "uart_send_task",
-        3072,
+        8192,
         NULL,
-        5,
-        &uart_send_task_handle
+        4,
+        &uart_send_task_handle,
+        MALLOC_CAP_SPIRAM
     );
     
     if (task_result != pdPASS) {
@@ -274,6 +268,6 @@ esp_err_t BAP_uart_init(void) {
         return ESP_ERR_NO_MEM;
     }
     
-    ESP_LOGI(TAG, "UART send task created successfully");
+    //ESP_LOGI(TAG, "UART send task created successfully");
     return ESP_OK;
 }

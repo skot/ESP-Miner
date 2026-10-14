@@ -21,6 +21,7 @@ build/config/*
 
 # Test folder
 test/build/*
+test-ci/
 
 # HTML documentation
 html_doc/
@@ -34,3 +35,8 @@ managed_components/*
 .DS_Store
 Thumbs.db
 debug.log
+.vscode
+.cache
+
+# Device list file for tools/upload2device.py
+devices.txt
