@@ -81,24 +81,92 @@ void print_hex(const uint8_t *b, size_t len,
     fflush(stdout);
 }
 
-void sha256_bin(const uint8_t *data, size_t data_len, uint8_t dest[32])
+bool sha256_bin(const uint8_t *data, size_t data_len, uint8_t dest[32])
 {
     size_t output_len = 0;
     psa_status_t status = psa_hash_compute(PSA_ALG_SHA_256, data, data_len,
                                            dest, 32, &output_len);
     if (status != PSA_SUCCESS || output_len != 32) {
-        memset(dest, 0, 32);
+        memset(dest, 0xff, 32); // fail-close, never lower than difficulty target
+        return false;
+    }
+    return true;
+}
+
+bool double_sha256_bin(const uint8_t *data, const size_t data_len, uint8_t dest[32])
+{
+    uint8_t first_hash_output[32];
+    if (!sha256_bin(data, data_len, first_hash_output)) {
+        memset(dest, 0xff, 32); // fail-close, never lower than difficulty target
+        return false;
+    }
+    return sha256_bin(first_hash_output, sizeof(first_hash_output), dest);
+}
+
+void nbits_to_target(uint32_t nbits, uint8_t target[32])
+{
+    memset(target, 0, 32);
+    if (nbits & 0x00800000) {
+        return;
+    }
+    uint32_t mantissa = nbits & 0x007fffff;
+    uint8_t exponent = (nbits >> 24) & 0xff;
+
+    if (exponent <= 3) {
+        mantissa >>= 8 * (3 - exponent);
+        memcpy(target, &mantissa, 4);
+    } else {
+        size_t offset = exponent - 3;
+        if (offset <= 28) {
+            memcpy(target + offset, &mantissa, 4);
+        } else if (offset < 32) {
+            size_t copy_len = 32 - offset;
+            memcpy(target + offset, &mantissa, copy_len);
+        }
     }
 }
 
-void double_sha256_bin(const uint8_t *data, const size_t data_len, uint8_t dest[32])
+void diff_to_target(double diff, uint8_t target[32])
 {
-    uint8_t first_hash_output[32];
-    sha256_bin(data, data_len, first_hash_output);
-    sha256_bin(first_hash_output, sizeof(first_hash_output), dest);
+    memset(target, 0, 32);
+    if (diff <= 0.0 || isnan(diff)) return;
+
+    double d64 = TRUEDIFFONE / diff;
+
+    double dcut64 = d64 / BITS192;
+    uint64_t h64 = (uint64_t)dcut64;
+    for (int i = 0; i < 8; i++) target[24 + i] = (uint8_t)(h64 >> (i * 8));
+    d64 -= ((double)h64) * BITS192;
+
+    dcut64 = d64 / BITS128;
+    h64 = (uint64_t)dcut64;
+    for (int i = 0; i < 8; i++) target[16 + i] = (uint8_t)(h64 >> (i * 8));
+    d64 -= ((double)h64) * BITS128;
+
+    dcut64 = d64 / BITS64;
+    h64 = (uint64_t)dcut64;
+    for (int i = 0; i < 8; i++) target[8 + i] = (uint8_t)(h64 >> (i * 8));
+    d64 -= ((double)h64) * BITS64;
+
+    h64 = (uint64_t)d64;
+    for (int i = 0; i < 8; i++) target[i] = (uint8_t)(h64 >> (i * 8));
 }
 
-const double truediffone = 26959535291011309493156476344723991336010898738574164086137773096960.0;
+double target_to_diff(const uint8_t target[32])
+{
+    if (!target) return (double)UINT32_MAX;
+
+    uint64_t w0, w1, w2, w3;
+    memcpy(&w0, target,      8);
+    memcpy(&w1, target + 8,  8);
+    memcpy(&w2, target + 16, 8);
+    memcpy(&w3, target + 24, 8);
+
+    if ((w0 | w1 | w2 | w3) == 0) return (double)UINT32_MAX;
+
+    double s64 = (double)w3 * BITS192 + (double)w2 * BITS128 + (double)w1 * BITS64 + (double)w0;
+    return TRUEDIFFONE / s64;
+}
 
 void prettyHex(unsigned char *buf, int len)
 {
@@ -109,19 +177,6 @@ void prettyHex(unsigned char *buf, int len)
         printf("%02X ", buf[i]);
     }
     printf("%02X]", buf[len - 1]);
-}
-
-/* Calculate the network difficulty from nBits */
-double networkDifficulty(uint32_t nBits)
-{
-    uint32_t mantissa = nBits & 0x007fffff;  // Extract the mantissa from nBits
-    uint8_t exponent = (nBits >> 24) & 0xff; // Extract the exponent from nBits
-
-    double target = (double) mantissa * pow(256, (exponent - 3)); // Calculate the target value
-
-    double difficulty = (pow(2, 208) * 65535) / target; // Calculate the difficulty
-
-    return difficulty;
 }
 
 /* Convert a uint64_t value into a truncated string for displaying with its

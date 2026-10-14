@@ -14,7 +14,6 @@
 #include <string.h>
 
 #define TAG "stratum_task"
-#define TRANSPORT_TIMEOUT_MS 5000
 #define MAX_RETRY_ATTEMPTS 3
 #define HEARTBEAT_INTERVAL_MS 60000
 #define INITIAL_HEARTBEAT_DELAY_MS 10000

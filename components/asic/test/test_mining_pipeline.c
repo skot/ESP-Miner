@@ -61,7 +61,7 @@ static void assert_bitmain_job_fields(const asic_job_t *job,
     TEST_ASSERT_EQUAL_UINT32(0, job->starting_nonce);
     TEST_ASSERT_EQUAL_UINT8(pool_id, job->pool_id);
     TEST_ASSERT_EQUAL_INT(type, job->source_type);
-    TEST_ASSERT_EQUAL_DOUBLE(pool_diff, job->pool_diff);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4, pool_diff, target_to_diff(job->pool_target));
     bm13xx_job_packet_t packet;
     bm13xx_build_job_packet(job, 0, &packet);
     TEST_ASSERT_EQUAL_UINT8(1, packet.num_midstates);
@@ -115,7 +115,7 @@ TEST_CASE("SV1 notify produces expected Bitmain job fields",
     TEST_ASSERT_EQUAL_UINT8(7, miner_job->extranonce1_len);
     miner_job->extranonce2_len = 8;
     miner_job->pool_id = 3;
-    miner_job->pool_diff = 2048.0;
+    diff_to_target(2048.0, miner_job->pool_target);
     miner_job->version_mask = BIP320_VERSION_ROLLING_MASK;
 
     assert_hex32(
@@ -242,7 +242,7 @@ TEST_CASE("SV2 standard messages produce expected Bitmain job fields",
     miner_job->ntime = min_ntime;
     miner_job->nbits = nbits;
     miner_job->clean_jobs = true;
-    miner_job->pool_diff = 2048.0;
+    diff_to_target(2048.0, miner_job->pool_target);
     miner_job->version_mask = BIP320_VERSION_ROLLING_MASK;
     miner_job->pool_id = 3;
     (void)snprintf(miner_job->job_id, sizeof(miner_job->job_id), "%lu",
@@ -404,7 +404,7 @@ TEST_CASE("SV2 extended messages roll extranonce into the ASIC job byte exact",
     TEST_ASSERT_EQUAL_UINT32(43, prev_job_id);
 
     miner_job->clean_jobs = true;
-    miner_job->pool_diff = 1024.0;
+    diff_to_target(1024.0, miner_job->pool_target);
     miner_job->version_mask = BIP320_VERSION_ROLLING_MASK;
     miner_job->pool_id = 4;
     miner_job->extranonce1[0] = 0xaa;
@@ -467,7 +467,7 @@ TEST_CASE("job task harness preserves idle and staged work behavior",
     job->ntime = 0x64658bd8;
     job->nbits = 0x1705dd01;
     job->clean_jobs = false;
-    job->pool_diff = 512.0;
+    diff_to_target(512.0, job->pool_target);
     job->pool_id = 2;
     TEST_ASSERT_EQUAL_UINT32(
         32, hex2bin(
@@ -544,7 +544,7 @@ static miner_job_t *prepare_followup_job(uint8_t extranonce_len, bool large_coin
     job->clean_jobs = true;
     job->ntime = 0x64658bd8;
     job->nbits = 0x1705dd01;
-    job->pool_diff = 256.0;
+    diff_to_target(256.0, job->pool_target);
     job->extranonce2_len = extranonce_len;
     job->coinbase_prefix_len = large_coinbase ? 1024 : 1;
     memset(job->coinbase_prefix, large_coinbase ? 0xa5 : 0x01, job->coinbase_prefix_len);
@@ -560,7 +560,7 @@ TEST_CASE("job task preserves maximum accepted metadata and detached ownership",
     const char *job_id = "0123456789012345678901234567890";
     memcpy(job->job_id, job_id, 32);
     job->pool_id = UINT8_MAX;
-    job->pool_diff = 256.125;
+    diff_to_target(256.125, job->pool_target);
     const job_pipeline_harness_event_t events[] = {
         { .type = JOB_PIPELINE_HARNESS_NOTIFY, .slot = 0 },
         { .type = JOB_PIPELINE_HARNESS_TIMEOUT },
@@ -585,35 +585,8 @@ TEST_CASE("job task preserves maximum accepted metadata and detached ownership",
         "0100000000000000000000000000000000000000000000000000000000000000",
         result.jobs[1]->extranonce2);
     TEST_ASSERT_EQUAL_UINT8(UINT8_MAX, result.jobs[0]->pool_id);
-    TEST_ASSERT_EQUAL_DOUBLE(256.125, result.jobs[0]->pool_diff);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4, 256.125, target_to_diff(result.jobs[0]->pool_target));
     assert_packet_merkle("e7154b58fec3d73f1e4b8a80535df7bd7e4e0a98228be8375762ed1f77eb40de", result.jobs[0]);
-    job_pipeline_harness_result_free(&result);
-}
-
-TEST_CASE("job allocation failure skips a send and permits the next cycle",
-          "[mining][job-building][job-task]")
-{
-    (void)prepare_followup_job(1, false);
-    const job_pipeline_harness_event_t events[] = {
-        { .type = JOB_PIPELINE_HARNESS_NOTIFY, .slot = 0 },
-        { .type = JOB_PIPELINE_HARNESS_TIMEOUT },
-    };
-    job_pipeline_harness_result_t result;
-    job_pipeline_harness_run(
-        (job_pipeline_harness_config_t) {
-            .hardware_version_rolling = true,
-            .asic_initialized = true,
-            .job_frequency_ms = 1,
-            .allocation_failure_at = 1,
-        }, events, sizeof(events) / sizeof(events[0]), &result);
-
-    TEST_ASSERT_EQUAL_UINT32(2, result.allocation_count);
-    TEST_ASSERT_EQUAL_UINT32(1, result.job_count);
-    TEST_ASSERT_EQUAL_UINT32(1, result.coinbase_decode_count);
-    TEST_ASSERT_EQUAL_UINT32(1, result.version_mask_count);
-    TEST_ASSERT_EQUAL_STRING("followup", result.jobs[0]->job_id);
-    TEST_ASSERT_EQUAL_STRING("01", result.jobs[0]->extranonce2);
-    assert_packet_merkle("c528516952ea823ab4cd034973550175c63ebf0f49cb126ccee58049a3fc487c", result.jobs[0]);
     job_pipeline_harness_result_free(&result);
 }
 
@@ -635,7 +608,7 @@ TEST_CASE("zero-length extranonce waits for new work and preserves owned metadat
         }, events, sizeof(events) / sizeof(events[0]), &result);
 
     TEST_ASSERT_EQUAL_UINT32(2, result.job_count);
-    TEST_ASSERT_EQUAL_UINT32(2, result.allocation_count);
+    TEST_ASSERT_EQUAL_UINT32(0, result.allocation_count);
     TEST_ASSERT_EQUAL_UINT32(2, result.coinbase_decode_count);
     job->job_id[0] = 'x';
     for (size_t i = 0; i < result.job_count; ++i) {
@@ -650,7 +623,7 @@ TEST_CASE("zero-length extranonce waits for new work and preserves owned metadat
     job_pipeline_harness_result_free(&result);
 }
 
-TEST_CASE("large coinbase job uses heap hashing and retains extranonce order",
+TEST_CASE("large coinbase job streams hashing and retains extranonce order",
           "[mining][job-building][job-task]")
 {
     (void)prepare_followup_job(1, true);
@@ -667,11 +640,40 @@ TEST_CASE("large coinbase job uses heap hashing and retains extranonce order",
         }, events, sizeof(events) / sizeof(events[0]), &result);
 
     TEST_ASSERT_EQUAL_UINT32(2, result.job_count);
-    TEST_ASSERT_EQUAL_UINT32(4, result.allocation_count);
+    TEST_ASSERT_EQUAL_UINT32(0, result.allocation_count);
     TEST_ASSERT_EQUAL_UINT32(1, result.coinbase_decode_count);
     TEST_ASSERT_EQUAL_STRING("00", result.jobs[0]->extranonce2);
     TEST_ASSERT_EQUAL_STRING("01", result.jobs[1]->extranonce2);
     assert_packet_merkle("8f15704dd6a5716fe3390d9ee30f6081fa9a52e7b0c68650dbbebbad69f306a3", result.jobs[0]);
     assert_packet_merkle("81d3867d9d36bed64c0a3ecdae4792715cb93cd46f02f9dc3720d004b2850a23", result.jobs[1]);
     job_pipeline_harness_result_free(&result);
+}
+
+TEST_CASE("coinbase hash failures skip sending work and permit the next cycle",
+          "[mining][job-building][job-task]")
+{
+    const job_pipeline_harness_event_t events[] = {
+        { .type = JOB_PIPELINE_HARNESS_NOTIFY, .slot = 0 },
+        { .type = JOB_PIPELINE_HARNESS_TIMEOUT },
+    };
+    // This fixture uses setup, three non-empty segments, finish, and the second hash.
+    for (size_t failure_at = 1; failure_at <= 6; ++failure_at) {
+        (void)prepare_followup_job(1, false);
+        job_pipeline_harness_result_t result;
+        job_pipeline_harness_run(
+            (job_pipeline_harness_config_t) {
+                .hardware_version_rolling = true,
+                .asic_initialized = true,
+                .job_frequency_ms = 1,
+                .hash_failure_at = failure_at,
+            }, events, sizeof(events) / sizeof(events[0]), &result);
+
+        TEST_ASSERT_EQUAL_UINT32(0, result.allocation_count);
+        TEST_ASSERT_EQUAL_UINT32(failure_at <= 5 ? 1 : 0, result.hash_abort_count);
+        TEST_ASSERT_EQUAL_UINT32(1, result.job_count);
+        TEST_ASSERT_EQUAL_STRING("followup", result.jobs[0]->job_id);
+        TEST_ASSERT_EQUAL_STRING("01", result.jobs[0]->extranonce2);
+        assert_packet_merkle("c528516952ea823ab4cd034973550175c63ebf0f49cb126ccee58049a3fc487c", result.jobs[0]);
+        job_pipeline_harness_result_free(&result);
+    }
 }

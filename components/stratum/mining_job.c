@@ -14,10 +14,10 @@ bool mining_build_asic_job(const miner_job_t *source, uint64_t extranonce2,
         .version_mask = source->version_mask,
         .ntime = source->ntime,
         .nbits = source->nbits,
-        .pool_diff = source->pool_diff,
         .pool_id = source->pool_id,
         .source_type = source->type,
     };
+    memcpy(job.pool_target, source->pool_target, sizeof(job.pool_target));
     memcpy(job.prev_hash, source->prev_hash, sizeof(job.prev_hash));
     memcpy(job.job_id, source->job_id, sizeof(job.job_id));
     if (source->type == JOB_TYPE_SV2_STANDARD) {
@@ -33,10 +33,12 @@ bool mining_build_asic_job(const miner_job_t *source, uint64_t extranonce2,
         }
         bin2hex(extranonce2_bytes, extranonce2_length, job.extranonce2, sizeof(job.extranonce2));
         uint8_t coinbase_hash[32];
-        calculate_coinbase_tx_hash_bin(source->coinbase_prefix,
+        if (!calculate_coinbase_tx_hash_bin(source->coinbase_prefix,
             source->coinbase_prefix_len, source->extranonce1,
             source->extranonce1_len, extranonce2_bytes, extranonce2_length, source->coinbase_suffix,
-            source->coinbase_suffix_len, coinbase_hash);
+            source->coinbase_suffix_len, coinbase_hash)) {
+            return false;
+        }
         calculate_merkle_root_hash(coinbase_hash,
             (const uint8_t (*)[32])source->merkle_path,
             source->merkle_path_count, job.merkle_root);

@@ -51,23 +51,3 @@ void reverse_endianness_per_word(uint8_t data[32])
 
     memcpy(data, words, sizeof(words));
 }
-
-static uint64_t load_le64(const uint8_t *data)
-{
-    uint64_t value = 0;
-    for (unsigned i = 0; i < 8; ++i) {
-        value |= (uint64_t)data[i] << (8 * i);
-    }
-    return value;
-}
-
-double le256todouble(const void *target)
-{
-    const uint8_t *data = target;
-    /* Keep the original high-to-low accumulation and rounding. */
-    double value = (double)load_le64(data + 24) * 0x1p192;
-    value += (double)load_le64(data + 16) * 0x1p128;
-    value += (double)load_le64(data + 8) * 0x1p64;
-    value += (double)load_le64(data);
-    return value;
-}

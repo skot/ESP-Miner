@@ -19,7 +19,7 @@ static asic_job_t *make_job(void)
     job->nbits = 0x1705dd01;
     job->ntime = 0x64658bd8;
     job->starting_nonce = 0x12345678;
-    job->pool_diff = 256.125;
+    diff_to_target(256.125, job->pool_target);
     job->pool_id = UINT8_MAX;
     job->source_type = JOB_TYPE_V1;
     strcpy(job->job_id, "packet-job");

@@ -5,11 +5,11 @@
 #include "asic_common.h"
 #include "global_state.h"
 #include "hashrate_monitor_task.h"
-#include "mining.h"
 #include "scoreboard.h"
 #include "self_test.h"
 #include "stratum_task.h"
 #include "system.h"
+#include "utils.h"
 #include "unity.h"
 
 #include <float.h>
@@ -22,6 +22,7 @@ typedef struct {
     bool paused;
     bool no_share;
     bool self_test;
+    bool hash_failure;
     unsigned repeated_results;
     double pool_diff;
     int submit_result;
@@ -48,6 +49,18 @@ void result_task_spy_delay(TickType_t ticks)
     TEST_ASSERT_EQUAL_UINT32(pdMS_TO_TICKS(100), ticks);
     fixture_delays++;
     fixture_state.ASIC_initalized = true;
+}
+
+bool result_task_fake_mining_nonce_hash(const asic_job_t *job, uint32_t nonce,
+                                        uint32_t rolled_version, uint8_t hash[32])
+{
+    if (fixture_case.hash_failure) {
+        memset(hash, 0xff, 32);
+        return false;
+    }
+    uint8_t header[80];
+    asic_job_header(job, nonce, rolled_version, header);
+    return double_sha256_bin(header, sizeof(header), hash);
 }
 
 task_result *result_task_fake_process_work(GlobalState *state)
@@ -78,7 +91,7 @@ int result_task_fake_submit_share(GlobalState *state, const asic_job_t *job,
     TEST_ASSERT_EQUAL_UINT32(123, job->ntime);
     TEST_ASSERT_EQUAL(fixture_case.protocol, job->source_type);
     TEST_ASSERT_EQUAL_UINT8(UINT8_MAX, job->pool_id);
-    TEST_ASSERT_EQUAL_DOUBLE(fixture_case.pool_diff, job->pool_diff);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4, fixture_case.pool_diff, target_to_diff(job->pool_target));
     TEST_ASSERT_EQUAL_STRING("42", job->job_id);
     TEST_ASSERT_EQUAL_STRING("aabb", job->extranonce2);
     snprintf(fixture_submitted_id, sizeof(fixture_submitted_id), "%s",
@@ -89,19 +102,19 @@ int result_task_fake_submit_share(GlobalState *state, const asic_job_t *job,
     return fixture_case.submit_result;
 }
 
-void result_task_spy_record_nonce(GlobalState *state, double difficulty)
+void result_task_spy_record_nonce(GlobalState *state, const uint8_t hash[32])
 {
     TEST_ASSERT_EQUAL_PTR(&fixture_state, state);
-    TEST_ASSERT_TRUE(difficulty > 0);
+    TEST_ASSERT_NOT_NULL(hash);
     fixture_self_tests++;
 }
 
 void result_task_spy_notify_found_nonce(GlobalState *state, double difficulty,
-                                        uint32_t target)
+                                        bool is_block)
 {
     TEST_ASSERT_EQUAL_PTR(&fixture_state, state);
     TEST_ASSERT_TRUE(difficulty > 0);
-    TEST_ASSERT_EQUAL_HEX32(0x1705dd01, target);
+    TEST_ASSERT_FALSE(is_block);
     fixture_notifications++;
 }
 
@@ -154,7 +167,6 @@ static void run_result_case(result_case_t test_case)
             .version_mask = 0x1fffe000,
             .ntime = 123,
             .nbits = 0x1705dd01,
-            .pool_diff = fixture_case.pool_diff,
             .pool_id = UINT8_MAX,
             .source_type = fixture_case.protocol,
             .job_id = "42",
@@ -164,6 +176,7 @@ static void run_result_case(result_case_t test_case)
         .rolled_version = 0x20002004,
         .timestamp_us = 1000,
     };
+    diff_to_target(fixture_case.pool_diff, fixture_events[1].job.pool_target);
     fixture_event_index = 0;
     fixture_delays = 0;
     fixture_submissions = 0;
@@ -247,4 +260,26 @@ TEST_CASE("result task preserves thresholds self test and repeated delivery",
     TEST_ASSERT_EQUAL_UINT32(2, fixture_submissions);
     TEST_ASSERT_EQUAL_UINT32(2, fixture_scores);
     TEST_ASSERT_EQUAL_UINT32(2, fixture_notifications);
+}
+
+TEST_CASE("result task discards results when nonce hashing fails",
+          "[asic][result][characterization]")
+{
+    run_result_case((result_case_t) {
+        .pool_diff = 1e-30,
+        .hash_failure = true,
+    });
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_submissions);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_scores);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_notifications);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_self_tests);
+
+    run_result_case((result_case_t) {
+        .self_test = true,
+        .hash_failure = true,
+    });
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_submissions);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_scores);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_notifications);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_self_tests);
 }

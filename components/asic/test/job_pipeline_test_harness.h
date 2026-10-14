@@ -18,6 +18,7 @@ typedef struct {
     bool asic_initialized;
     int job_frequency_ms;
     size_t allocation_failure_at;
+    size_t hash_failure_at;
 } job_pipeline_harness_config_t;
 
 #define JOB_PIPELINE_HARNESS_MAX_EVENTS 8
@@ -42,6 +43,7 @@ typedef struct {
     size_t delay_count;
     uint8_t active_job_slot;
     size_t allocation_count;
+    size_t hash_abort_count;
 } job_pipeline_harness_result_t;
 
 /* Captured jobs are owned by result; release them with job_pipeline_harness_result_free(). */

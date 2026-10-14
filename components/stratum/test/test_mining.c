@@ -28,7 +28,7 @@ TEST_CASE("Check coinbase tx construction", "[mining]")
     hex2bin(expected_coinbase_tx, expected_coinbase_tx_bin, expected_coinbase_tx_len);
 
     uint8_t expected_coinbase_tx_hash[32];
-    double_sha256_bin(expected_coinbase_tx_bin, expected_coinbase_tx_len, expected_coinbase_tx_hash);
+    TEST_ASSERT_TRUE(double_sha256_bin(expected_coinbase_tx_bin, expected_coinbase_tx_len, expected_coinbase_tx_hash));
 
     TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_coinbase_tx_hash, coinbase_tx_hash, 32);
 }
@@ -155,7 +155,6 @@ TEST_CASE("Test nonce diff checking", "[mining][test-nonce]")
     mjob.version = 0x20000004;
     mjob.nbits = 0x1705ae3a;
     mjob.ntime = 0x646ff1a9;
-    mjob.pool_diff = 1000;
 
     uint8_t merkle_root[32];
     hex2bin("6d0359c451434605c52a5a9ce074340be47c2c63840731f9edf1db3f26b1cdd9", merkle_root, 32);
@@ -164,7 +163,9 @@ TEST_CASE("Test nonce diff checking", "[mining][test-nonce]")
     uint32_t nonce = 0x276E8947;
     uint32_t version_bits = 0;
     uint32_t rolled_version = mjob.version | version_bits;
-    double diff = mining_nonce_difficulty(&mjob, nonce, rolled_version);
+    uint8_t hash_result[32];
+    TEST_ASSERT_TRUE(mining_nonce_hash(&mjob, nonce, rolled_version, hash_result));
+    double diff = target_to_diff(hash_result);
     TEST_ASSERT_EQUAL_INT(18, (int)diff);
 }
 
@@ -178,7 +179,6 @@ TEST_CASE("Test nonce diff checking 2", "[mining][test-nonce]")
     mjob.version = 0x20000004;
     mjob.nbits = 0x1705ae3a;
     mjob.ntime = 0x647025b5;
-    mjob.pool_diff = 1000;
 
     const char *c1_hex = "01000000010000000000000000000000000000000000000000000000000000000000000000ffffffff4b0389130cfabe6d6d5cbab26a2599e92916edec5657a94a0708ddb970f5c45b5d12905085617eff8e";
     const char *c2_hex = "31650707758de07b010000000000001cfd7038212f736c7573682f000000000379ad0c2a000000001976a9147c154ed1dc59609e3d26abb2df2ea3d587cd8c4188ac00000000000000002c6a4c2952534b424c4f434b3ae725d3994b811572c1f345deb98b56b465ef8e153ecbbd27fa37bf1b005161380000000000000000266a24aa21a9ed63b06a7946b190a3fda1d76165b25c9b883bcc6621b040773050ee2a1bb18f1800000000";
@@ -221,6 +221,8 @@ TEST_CASE("Test nonce diff checking 2", "[mining][test-nonce]")
     uint32_t nonce = 0x0a029ed1;
     uint32_t version_bits = 0;
     uint32_t rolled_version = mjob.version | version_bits;
-    double diff = mining_nonce_difficulty(&mjob, nonce, rolled_version);
+    uint8_t hash_result[32];
+    TEST_ASSERT_TRUE(mining_nonce_hash(&mjob, nonce, rolled_version, hash_result));
+    double diff = target_to_diff(hash_result);
     TEST_ASSERT_EQUAL_INT(683, (int)diff);
 }

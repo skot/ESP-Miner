@@ -1,6 +1,7 @@
 #include "unity.h"
 #include "bitmain_job_test_bindings.h"
 #include "job_pipeline_test_harness.h"
+#include "utils.h"
 #include <string.h>
 #undef malloc
 
@@ -25,7 +26,8 @@ TEST_CASE("job submission rejects unterminated metadata before allocation",
     TEST_ASSERT_EQUAL_STRING("", result.jobs[0]->extranonce2);
     TEST_ASSERT_EQUAL_HEX32(0, result.jobs[0]->version);
     TEST_ASSERT_EQUAL_HEX32(0, result.jobs[0]->version_mask);
-    TEST_ASSERT_EQUAL_DOUBLE(0, result.jobs[0]->pool_diff);
+    uint8_t zero_target[32] = {0};
+    TEST_ASSERT_EQUAL_MEMORY(zero_target, result.jobs[0]->pool_target, 32);
     job_pipeline_harness_result_free(&result);
     bitmain_job_allocator_fault_injector_reset(0);
 }
@@ -35,8 +37,9 @@ TEST_CASE("job submission owns metadata and recovers from allocation failures",
 {
     asic_job_t source = {
         .version = 0x20000004, .starting_nonce = 0x12345678,
-        .job_id = "send", .extranonce2 = "aabbcc", .pool_diff = 256,
+        .job_id = "send", .extranonce2 = "aabbcc",
     };
+    diff_to_target(256.0, source.pool_target);
     job_pipeline_harness_result_t result;
     bitmain_job_allocator_fault_injector_reset(1);
     job_pipeline_harness_send_job(&source, &result);
@@ -54,7 +57,9 @@ TEST_CASE("job submission owns metadata and recovers from allocation failures",
     TEST_ASSERT_EQUAL_STRING("aabbcc", result.jobs[0]->extranonce2);
     TEST_ASSERT_EQUAL_UINT32(0x12345678, result.jobs[0]->starting_nonce);
     TEST_ASSERT_EQUAL_UINT32(0x20000004, result.jobs[0]->version);
-    TEST_ASSERT_EQUAL_DOUBLE(256, result.jobs[0]->pool_diff);
+    uint8_t expected_target[32];
+    diff_to_target(256.0, expected_target);
+    TEST_ASSERT_EQUAL_MEMORY(expected_target, result.jobs[0]->pool_target, 32);
     job_pipeline_harness_result_free(&result);
     bitmain_job_allocator_fault_injector_reset(0);
 }
