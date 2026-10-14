@@ -24,14 +24,17 @@ static const char *TAG = "usb_net";
 // Static configuration structures
 static esp_netif_driver_ifconfig_t driver_cfg;
 static esp_netif_inherent_config_t netif_cfg;
-
-// Static configuration structures
+static esp_netif_t *s_usb_netif = NULL;
+static bool s_usb_suspended = false;
 
 /**
  * @brief Transmit function for sending packets to USB
  */
 static esp_err_t netif_transmit(void *h, void *buffer, size_t len)
 {
+    if (s_usb_suspended) {
+        return ESP_ERR_INVALID_STATE;
+    }
     esp_err_t err = tinyusb_net_send_sync(buffer, len, NULL, pdMS_TO_TICKS(100));
     if (err != ESP_OK && err != ESP_ERR_INVALID_STATE) {
         // ESP_ERR_INVALID_STATE during startup is expected - USB link not ready yet
@@ -81,6 +84,75 @@ static void cdc_acm_line_state_changed_callback(int itf, cdcacm_event_t *event)
         cdcacm_event_line_state_changed_data_t line_state = event->line_state_changed_data;
         ESP_LOGI(TAG, "CDC ACM Line state changed - Interface: %d, DTR: %s, RTS: %s",
                   itf, line_state.dtr ? "true" : "false", line_state.rts ? "true" : "false");
+    }
+}
+
+// Callback for TinyUSB device events (attach, detach, suspend, resume)
+static void usb_device_event_callback(tinyusb_event_t *event, void *arg)
+{
+    GlobalState *GLOBAL_STATE = (GlobalState *)arg;
+    if (!GLOBAL_STATE) {
+        return;
+    }
+
+    switch (event->id) {
+        case TINYUSB_EVENT_ATTACHED:
+            ESP_LOGI(TAG, "USB attached and mounted by host");
+            s_usb_suspended = false;
+            if (s_usb_netif) {
+                esp_netif_action_connected(s_usb_netif, NULL, 0, NULL);
+                esp_err_t err = esp_netif_dhcpc_start(s_usb_netif);
+                if (err != ESP_OK) {
+                    ESP_LOGD(TAG, "DHCP start on attach: %s", esp_err_to_name(err));
+                }
+            }
+            if (!GLOBAL_STATE->SYSTEM_MODULE.is_connected) {
+                strcpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Acquiring IP...");
+            }
+            break;
+
+        case TINYUSB_EVENT_DETACHED:
+            ESP_LOGW(TAG, "USB detached / unmounted from host");
+            s_usb_suspended = false;
+            if (s_usb_netif) {
+                esp_netif_action_disconnected(s_usb_netif, NULL, 0, NULL);
+            }
+            GLOBAL_STATE->SYSTEM_MODULE.is_connected = false;
+            GLOBAL_STATE->SYSTEM_MODULE.ip_addr_str[0] = '\0';
+            GLOBAL_STATE->SYSTEM_MODULE.ipv6_addr_str[0] = '\0';
+            strcpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "USB Disconnected");
+            break;
+
+#ifdef CONFIG_TINYUSB_SUSPEND_CALLBACK
+        case TINYUSB_EVENT_SUSPENDED:
+            ESP_LOGI(TAG, "USB bus suspended by host");
+            s_usb_suspended = true;
+            strcpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Host Sleeping");
+            break;
+#endif
+
+#ifdef CONFIG_TINYUSB_RESUME_CALLBACK
+        case TINYUSB_EVENT_RESUMED:
+            ESP_LOGI(TAG, "USB bus resumed by host");
+            s_usb_suspended = false;
+            if (s_usb_netif) {
+                esp_netif_action_connected(s_usb_netif, NULL, 0, NULL);
+                esp_err_t err = esp_netif_dhcpc_start(s_usb_netif);
+                if (err != ESP_OK) {
+                    ESP_LOGD(TAG, "DHCP restart on resume: %s", esp_err_to_name(err));
+                }
+            }
+            if (GLOBAL_STATE->SYSTEM_MODULE.ip_addr_str[0] != '\0') {
+                strcpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Connected!");
+                GLOBAL_STATE->SYSTEM_MODULE.is_connected = true;
+            } else {
+                strcpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Acquiring IP...");
+            }
+            break;
+#endif
+
+        default:
+            break;
     }
 }
 
@@ -178,6 +250,8 @@ void usb_net_init(void * pvParameters)
     usb_cfg.descriptor.string = (const char **)string_descriptors;
     usb_cfg.descriptor.string_count = 4;
     usb_cfg.task = TINYUSB_TASK_CUSTOM(4096, 5, 0);  // 4KB stack, priority 5, CPU0
+    usb_cfg.event_cb = &usb_device_event_callback;
+    usb_cfg.event_arg = GLOBAL_STATE;
 
     ESP_ERROR_CHECK(tinyusb_driver_install(&usb_cfg));
 
@@ -214,8 +288,8 @@ void usb_net_init(void * pvParameters)
     };
 
     // Create the network interface
-    esp_netif_t *netif = esp_netif_new(&cfg);
-    if (!netif) {
+    s_usb_netif = esp_netif_new(&cfg);
+    if (!s_usb_netif) {
         ESP_LOGE(TAG, "Failed to create netif");
         return;
     }
@@ -224,7 +298,7 @@ void usb_net_init(void * pvParameters)
     ESP_LOGI(TAG, "Initializing TinyUSB NCM");
     tinyusb_net_config_t net_cfg = {
         .on_recv_callback = netif_recv_callback,
-        .user_context = netif,
+        .user_context = s_usb_netif,
     };
 
     // Get and derive MAC address from eFuse
@@ -245,20 +319,19 @@ void usb_net_init(void * pvParameters)
 
     // Manually start the interface
     ESP_LOGI(TAG, "Starting network interface");
-    esp_netif_action_start(netif, NULL, 0, NULL);
+    esp_netif_action_start(s_usb_netif, NULL, 0, NULL);
+    ESP_ERROR_CHECK(esp_netif_set_mac(s_usb_netif, net_cfg.mac_addr));
 
-    // Mark interface as connected (link up)
-    esp_netif_action_connected(netif, NULL, 0, NULL);
+    if (tud_mounted()) {
+        ESP_LOGI(TAG, "USB already mounted by host, connecting netif");
+        esp_netif_action_connected(s_usb_netif, NULL, 0, NULL);
+        vTaskDelay(pdMS_TO_TICKS(100));
+        esp_netif_dhcpc_start(s_usb_netif);
+        strcpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Acquiring IP...");
+    } else {
+        ESP_LOGI(TAG, "Waiting for USB host connection");
+        strcpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "USB Disconnected");
+    }
 
-    // Give USB a moment to stabilize before starting DHCP
-    vTaskDelay(pdMS_TO_TICKS(100));
-
-    // Start the DHCP client
-    ESP_LOGI(TAG, "Starting DHCP client for Ethernet-over-USB");
-    ESP_ERROR_CHECK(esp_netif_set_mac(netif, net_cfg.mac_addr));
-    ESP_ERROR_CHECK(esp_netif_dhcpc_start(netif));
-
-    ESP_LOGI(TAG, "Ethernet-over-USB initialized successfully - waiting for IP from DHCP");
-
-    strcpy(GLOBAL_STATE->SYSTEM_MODULE.wifi_status, "Acquiring IP...");
+    ESP_LOGI(TAG, "Ethernet-over-USB initialized successfully");
 }
