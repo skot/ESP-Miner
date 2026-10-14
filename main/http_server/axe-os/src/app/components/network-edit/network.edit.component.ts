@@ -14,12 +14,13 @@ import { first } from 'rxjs/operators';
 import { ISystemUpdateResponse } from 'src/models/ISystemUpdateResponse';
 import { TooltipTextIconComponent } from '../tooltip-text-icon/tooltip-text-icon.component';
 import { TooltipDirective } from '../../directives/tooltip.directive';
+import { CheckboxComponent } from '../checkbox/checkbox.component';
 
 @Component({
   selector: 'app-network-edit',
   templateUrl: './network.edit.component.html',
   styleUrls: ['./network.edit.component.scss'],
-  imports: [FormsModule, ReactiveFormsModule, TooltipTextIconComponent, TooltipDirective]
+  imports: [FormsModule, ReactiveFormsModule, TooltipTextIconComponent, TooltipDirective, CheckboxComponent]
 })
 export class NetworkEditComponent implements OnInit {
   private formSubject = new BehaviorSubject<FormGroup | null>(null);
@@ -50,6 +51,7 @@ export class NetworkEditComponent implements OnInit {
           hostname: [info.hostname, [Validators.required]],
           ssid: [info.ssid, [Validators.required]],
           wifiPass: ['*****'],
+          useNTP: [info.useNTP],
         });
         this.formSubject.next(this.form);
       });

@@ -1,4 +1,7 @@
+#include "asic_internal.h"
 #include <string.h>
+#include <math.h>
+#include <stdlib.h>
 
 #include <esp_log.h>
 
@@ -9,6 +12,7 @@
 #include "bm1373.h"
 
 #include "asic.h"
+#include "asic_common.h"
 #include "global_state.h"
 #include "mining.h"
 #include "device_config.h"
@@ -71,7 +75,7 @@ int ASIC_set_max_baud(GlobalState * GLOBAL_STATE)
     return 0;
 }
 
-void ASIC_send_work(GlobalState * GLOBAL_STATE, bm_job * next_job)
+void ASIC_send_work(GlobalState * GLOBAL_STATE, asic_job_t * next_job)
 {
     switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
         case BM1397:
@@ -91,6 +95,7 @@ void ASIC_send_work(GlobalState * GLOBAL_STATE, bm_job * next_job)
             break;
         default:
             ESP_LOGE(TAG, "Unknown ASIC id %d — cannot send work", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
+            free(next_job);
             break;
     }
 }
@@ -178,7 +183,7 @@ double ASIC_get_asic_job_frequency_ms(GlobalState * GLOBAL_STATE)
     switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
         case BM1397:
             // no version-rolling so same Nonce Space is splitted between Big Cores
-            return calculate_bm_timeout_ms(freq, asic_count, small_cores, cores, 4, 1.0, asic_default_timeout_divided);
+            return calculate_bm_timeout_ms(freq, asic_count, small_cores, cores, GLOBAL_STATE->DEVICE_CONFIG.family.asic.software_midstates, 1.0, asic_default_timeout_divided);
         case BM1366:
         case BM1368:
         case BM1370:
@@ -193,16 +198,16 @@ void ASIC_read_registers(GlobalState * GLOBAL_STATE)
 {
     switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
         case BM1397:
-            BM1397_read_registers();
+            BM1397_read_registers(GLOBAL_STATE);
             break;
         case BM1366:
-            BM1366_read_registers();
+            BM1366_read_registers(GLOBAL_STATE);
             break;
         case BM1368:
-            BM1368_read_registers();
+            BM1368_read_registers(GLOBAL_STATE);
             break;
         case BM1370:
-            BM1370_read_registers();
+            BM1370_read_registers(GLOBAL_STATE);
             break;
         case BM1373:
             BM1373_read_registers();
@@ -211,4 +216,56 @@ void ASIC_read_registers(GlobalState * GLOBAL_STATE)
             ESP_LOGE(TAG, "Unknown ASIC id %d — cannot read registers", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
             break;
     }
+}
+
+esp_err_t ASIC_get_domain_measurement(GlobalState * GLOBAL_STATE, uint8_t asic_nr,
+                                      uint8_t domain_nr, asic_domain_measurement_t * measurement)
+{
+    if (GLOBAL_STATE == NULL || measurement == NULL) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    HashrateMonitorModule * monitor = &GLOBAL_STATE->HASHRATE_MONITOR_MODULE;
+    if (!monitor->is_initialized) {
+        return ESP_ERR_INVALID_STATE;
+    }
+
+    if (asic_nr >= GLOBAL_STATE->DEVICE_CONFIG.family.asic_count ||
+        domain_nr >= GLOBAL_STATE->DEVICE_CONFIG.family.asic.hash_domains) {
+        return ESP_ERR_INVALID_ARG;
+    }
+
+    pthread_mutex_lock(&monitor->lock);
+    measurement_t register_measurement = monitor->domain_measurements[asic_nr][domain_nr];
+    pthread_mutex_unlock(&monitor->lock);
+
+    measurement->time_us = register_measurement.time_us;
+    measurement->hashrate = register_measurement.hashrate;
+    return ESP_OK;
+}
+
+void ASIC_set_difficulty(GlobalState * GLOBAL_STATE, uint8_t difficulty_power)
+{
+    if (!GLOBAL_STATE || !GLOBAL_STATE->ASIC_initalized || difficulty_power == 0) {
+        return;
+    }
+
+    switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
+        case BM1397:
+            BM1397_set_difficulty(difficulty_power);
+            return;
+        case BM1366:
+            BM1366_set_difficulty(difficulty_power);
+            return;
+        case BM1368:
+            BM1368_set_difficulty(difficulty_power);
+            return;
+        case BM1370:
+            BM1370_set_difficulty(difficulty_power);
+            return;
+        case BM1373:
+            BM1373_set_difficulty(difficulty_power);
+            return;
+    }
+    ESP_LOGE(TAG, "Unknown ASIC id %d — cannot set difficulty", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
 }
