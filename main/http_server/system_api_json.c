@@ -17,7 +17,7 @@
 #include "hashrate_monitor_task.h"
 #include "cjson_utils.h"
 #include "statistics_task.h"
-#include "stratum_v2_task.h"
+#include "asic.h"
 
 
 static const char *get_reset_reason_str(esp_reset_reason_t reason)
@@ -71,7 +71,7 @@ static void system_api_add_telemetry(cJSON *root, GlobalState *g) {
     cJSON_AddNumberToObject(root, "sharesPending", g->SYSTEM_MODULE.shares_pending);
     cJSON_AddNumberToObject(root, "bestDiff", g->SYSTEM_MODULE.best_nonce_diff);
     cJSON_AddNumberToObject(root, "bestSessionDiff", g->SYSTEM_MODULE.best_session_nonce_diff);
-    cJSON_AddNumberToObject(root, "poolDifficulty", g->pool_difficulty);
+    cJSON_AddNumberToObject(root, "poolDifficulty", g->SYSTEM_MODULE.pool_difficulty);
     cJSON_AddFloatToObject(root, "responseTime", g->SYSTEM_MODULE.response_time);
     cJSON_AddNumberToObject(root, "responseShareBatch", g->SYSTEM_MODULE.response_share_batch);
     cJSON_AddFloatToObject(root, "processTime", g->SYSTEM_MODULE.process_time);
@@ -80,13 +80,11 @@ static void system_api_add_telemetry(cJSON *root, GlobalState *g) {
     // Dynamic Block Info
     cJSON_AddNumberToObject(root, "blockFound", g->SYSTEM_MODULE.block_found);
     cJSON_AddBoolToObject(root, "showNewBlock", g->SYSTEM_MODULE.show_new_block);
-    if (g->block_height > 0) {
-        cJSON_AddNumberToObject(root, "blockHeight", g->block_height);
-        cJSON_AddStringToObject(root, "scriptsig", g->scriptsig);
-        cJSON_AddNumberToObject(root, "networkDifficulty", g->network_nonce_diff);
-        cJSON_AddNumberToObject(root, "coinbaseValueTotalSatoshis", g->coinbase_value_total_satoshis);
-        cJSON_AddNumberToObject(root, "coinbaseValueUserSatoshis", g->coinbase_value_user_satoshis);
-    }
+    cJSON_AddNumberToObject(root, "blockHeight", g->block_height);
+    cJSON_AddStringToObject(root, "scriptsig", g->coinbase.scriptsig);
+    cJSON_AddNumberToObject(root, "networkDifficulty", g->network_nonce_diff);
+    cJSON_AddNumberToObject(root, "coinbaseValueTotalSatoshis", g->coinbase.total_value_satoshis);
+    cJSON_AddNumberToObject(root, "coinbaseValueUserSatoshis", g->coinbase.user_value_satoshis);
 
     // Dynamic System Stats
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
@@ -154,6 +152,7 @@ static void system_api_add_config(cJSON *root, GlobalState *g) {
     cJSON_AddStringToObject(root, "ipv4", g->SYSTEM_MODULE.ip_addr_str);
     cJSON_AddStringToObject(root, "ipv6", g->SYSTEM_MODULE.ipv6_addr_str);
     cJSON_AddNumberToObject(root, "apEnabled", g->SYSTEM_MODULE.ap_enabled ? 1 : 0);
+    cJSON_AddNumberToObject(root, "useNTP", nvs_config_get_bool(NVS_CONFIG_USE_NTP) ? 1 : 0);
 
     // Pool Configuration
     cJSON_AddStringToObject(root, "poolConnectionInfo", g->SYSTEM_MODULE.pool_connection_info);
@@ -183,7 +182,8 @@ static void system_api_add_config(cJSON *root, GlobalState *g) {
             cJSON_AddNumberToObject(p_obj, "stratumTLS", p->tls);
             cJSON_AddStringToObject(p_obj, "stratumCert", p->cert ? p->cert : "");
             cJSON_AddBoolToObject(p_obj, "stratumDecodeCoinbase", p->decode_coinbase_tx);
-            cJSON_AddStringToObject(p_obj, "stratumV2ChannelType", p->sv2_channel_type == SV2_CHANNEL_STANDARD ? SV2_CHANNEL_TYPE_STANDARD : SV2_CHANNEL_TYPE_EXTENDED);
+            cJSON_AddBoolToObject(p_obj, "stratumShareWarning", p->share_warning);
+            cJSON_AddStringToObject(p_obj, "stratumV2ChannelType", sv2_channel_type_to_string(p->sv2_channel_type));
             cJSON_AddStringToObject(p_obj, "stratumV2AuthorityPubkey", p->sv2_authority_pubkey ? p->sv2_authority_pubkey : "");
             cJSON_AddBoolToObject(p_obj, "stratumV2RequireAuth", p->sv2_require_auth);
 
@@ -203,9 +203,10 @@ static void system_api_add_config(cJSON *root, GlobalState *g) {
     cJSON_AddNumberToObject(root, "stratumTLS", prim_pool->tls);
     cJSON_AddStringToObject(root, "stratumCert", prim_pool->cert ? prim_pool->cert : "");
     cJSON_AddBoolToObject(root, "stratumDecodeCoinbase", prim_pool->decode_coinbase_tx);
+    cJSON_AddBoolToObject(root, "stratumShareWarning", prim_pool->share_warning);
     cJSON_AddStringToObject(root, "stratumProtocol", prim_pool->protocol == STRATUM_PROTOCOL_V2 ? STRATUM_V2 : STRATUM_V1);
     cJSON_AddStringToObject(root, "stratumV2AuthorityPubkey", prim_pool->sv2_authority_pubkey ? prim_pool->sv2_authority_pubkey : "");
-    cJSON_AddStringToObject(root, "stratumV2ChannelType", prim_pool->sv2_channel_type == SV2_CHANNEL_STANDARD ? SV2_CHANNEL_TYPE_STANDARD : SV2_CHANNEL_TYPE_EXTENDED);
+    cJSON_AddStringToObject(root, "stratumV2ChannelType", sv2_channel_type_to_string(prim_pool->sv2_channel_type));
 
     cJSON_AddStringToObject(root, "fallbackStratumURL", sec_pool->url ? sec_pool->url : "");
     cJSON_AddNumberToObject(root, "fallbackStratumPort", sec_pool->port);
@@ -215,9 +216,10 @@ static void system_api_add_config(cJSON *root, GlobalState *g) {
     cJSON_AddNumberToObject(root, "fallbackStratumTLS", sec_pool->tls);
     cJSON_AddStringToObject(root, "fallbackStratumCert", sec_pool->cert ? sec_pool->cert : "");
     cJSON_AddBoolToObject(root, "fallbackStratumDecodeCoinbase", sec_pool->decode_coinbase_tx);
+    cJSON_AddBoolToObject(root, "fallbackStratumShareWarning", sec_pool->share_warning);
     cJSON_AddStringToObject(root, "fallbackStratumProtocol", sec_pool->protocol == STRATUM_PROTOCOL_V2 ? STRATUM_V2 : STRATUM_V1);
     cJSON_AddStringToObject(root, "fallbackStratumV2AuthorityPubkey", sec_pool->sv2_authority_pubkey ? sec_pool->sv2_authority_pubkey : "");
-    cJSON_AddStringToObject(root, "fallbackStratumV2ChannelType", sec_pool->sv2_channel_type == SV2_CHANNEL_STANDARD ? SV2_CHANNEL_TYPE_STANDARD : SV2_CHANNEL_TYPE_EXTENDED);
+    cJSON_AddStringToObject(root, "fallbackStratumV2ChannelType", sv2_channel_type_to_string(sec_pool->sv2_channel_type));
 
     // User Preferences
     cJSON_AddNumberToObject(root, "useCustomWWW", nvs_config_get_bool(NVS_CONFIG_USE_CUSTOM_WWW) ? 1 : 0);
@@ -260,7 +262,9 @@ static void system_api_add_hashrate_monitor(cJSON *root, GlobalState *g) {
         cJSON *domains = cJSON_CreateArray();
         cJSON_AddItemToObject(asic, "domains", domains);
         for (int j = 0; j < hash_domains; j++) {
-            cJSON_AddItemToArray(domains, cJSON_CreateNumber(g->HASHRATE_MONITOR_MODULE.domain_measurements[i][j].hashrate));
+            asic_domain_measurement_t measurement = {0};
+            ASIC_get_domain_measurement(g, i, j, &measurement);
+            cJSON_AddItemToArray(domains, cJSON_CreateNumber(measurement.hashrate));
         }
     }
 }
@@ -282,7 +286,7 @@ static void system_api_add_rejected_reasons(cJSON *root, GlobalState *g) {
 }
 
 static void system_api_add_block_info(cJSON *root, GlobalState *g) {
-    if (!root || !g || g->block_height <= 0) return;
+    if (!root || !g) return;
 
     cJSON *signals = cJSON_CreateArray();
     if (signals) {
@@ -294,16 +298,26 @@ static void system_api_add_block_info(cJSON *root, GlobalState *g) {
 
     cJSON *outputs = cJSON_CreateArray();
     if (outputs) {
-        for (int i = 0; i < g->coinbase_output_count; i++) {
+        int count = g->coinbase.output_count;
+        if (count > MAX_COINBASE_TX_OUTPUTS) {
+            count = MAX_COINBASE_TX_OUTPUTS;
+        } else if (count < 0) {
+            count = 0;
+        }
+        for (int i = 0; i < count; i++) {
             cJSON *obj = cJSON_CreateObject();
             if (obj) {
-                cJSON_AddNumberToObject(obj, "value", g->coinbase_outputs[i].value_satoshis);
-                cJSON_AddStringToObject(obj, "address", g->coinbase_outputs[i].address);
+                cJSON_AddNumberToObject(obj, "value", g->coinbase.outputs[i].value_satoshis);
+                cJSON_AddStringToObject(obj, "address", g->coinbase.outputs[i].address);
                 cJSON_AddItemToArray(outputs, obj);
             }
         }
         cJSON_AddItemToObject(root, "coinbaseOutputs", outputs);
     }
+
+    // Outputs beyond the capacity of coinbaseOutputs, aggregated into a single entry
+    cJSON_AddNumberToObject(root, "coinbaseOthersCount", g->coinbase.others_count);
+    cJSON_AddNumberToObject(root, "coinbaseOthersValueSatoshis", g->coinbase.others_value_satoshis);
 }
 
 static void system_api_add_partitions(cJSON *root, GlobalState * GLOBAL_STATE) {

@@ -4,7 +4,8 @@ import { HttpClient, provideHttpClient } from '@angular/common/http';
 import { provideToastr } from 'ngx-toastr';
 import { of } from 'rxjs';
 
-import { SwarmComponent } from './swarm.component';
+import { FormControl } from '@angular/forms';
+import { addressValidator, SwarmComponent } from './swarm.component';
 import { ModalComponent } from '../modal/modal.component';
 import { TooltipTextIconComponent } from 'src/app/components/tooltip-text-icon/tooltip-text-icon.component';
 import { DropdownComponent } from 'src/app/components/dropdown/dropdown.component';
@@ -105,6 +106,18 @@ describe('SwarmComponent', () => {
     expect(component.getDeviceNotification(device2)).toEqual({ color: 'yellow', msg: 'Paused' });
   });
 
+  it('uses each peer\'s own presets for low and normal frequencies', () => {
+    expect(component.getDeviceNotification({ frequency: 150, frequencyOptions: [100, 200] })).toBeUndefined();
+    expect(component.getDeviceNotification({ frequency: 150, frequencyOptions: [200, 300] })?.msg).toBe('Frequency Low');
+  });
+
+  it('does not guess a minimum for a legacy peer or hide higher-priority faults', () => {
+    expect(component.getDeviceNotification({ frequency: 100 })).toBeUndefined();
+    expect(component.getDeviceNotification({ frequency: 0 })?.msg).toBe('Frequency Low');
+    expect(component.getDeviceNotification({ frequency: 100, frequencyOptions: [200], overheat_mode: 1 })?.msg).toBe('Overheated');
+    expect(component.getDeviceNotification({ frequency: 100, frequencyOptions: [200], miningPaused: true })?.msg).toBe('Paused');
+  });
+
   it('should render swarm list details and custom components when devices are present', () => {
     component.swarm = [
       {
@@ -144,8 +157,81 @@ describe('SwarmComponent', () => {
       hashRate: 0
     }];
 
-    (component as any).getAllDeviceInfo(['192.168.1.104'], component.refreshErrorHandler, true).subscribe((result: any[]) => {
-      expect(result[0].notAccessible).toBeFalse();
+    (component as any).getAllDeviceInfo(['192.168.1.104'], component.refreshErrorHandler, true).subscribe((result: any) => {
+      const device = Array.isArray(result) ? result[0] : result;
+      expect(device.notAccessible).toBeFalse();
+    });
+  });
+
+  describe('addressValidator', () => {
+    it('should allow valid IPv4 addresses', () => {
+      expect(addressValidator(new FormControl('192.168.1.1'))).toBeNull();
+      expect(addressValidator(new FormControl('10.0.0.1'))).toBeNull();
+      expect(addressValidator(new FormControl('172.16.0.50'))).toBeNull();
+    });
+
+    it('should allow bare hostnames', () => {
+      expect(addressValidator(new FormControl('bitaxe'))).toBeNull();
+      expect(addressValidator(new FormControl('bitaxe-gamma-1'))).toBeNull();
+      expect(addressValidator(new FormControl('miner01'))).toBeNull();
+    });
+
+    it('should allow hostnames with .local, .lan, .home.arpa, .internal, and other TLDs', () => {
+      expect(addressValidator(new FormControl('bitaxe-1.local'))).toBeNull();
+      expect(addressValidator(new FormControl('bitaxe-gamma-1.lan'))).toBeNull();
+      expect(addressValidator(new FormControl('miner.home.arpa'))).toBeNull();
+      expect(addressValidator(new FormControl('sub.corp.internal'))).toBeNull();
+      expect(addressValidator(new FormControl('node-1.custom.domain'))).toBeNull();
+    });
+
+    it('should reject invalid addresses and hostnames', () => {
+      expect(addressValidator(new FormControl('192.168.1.256'))).toEqual({ invalidAddress: true });
+      expect(addressValidator(new FormControl('192.168.1'))).toEqual({ invalidAddress: true });
+      expect(addressValidator(new FormControl('-bitaxe'))).toEqual({ invalidAddress: true });
+      expect(addressValidator(new FormControl('bitaxe-'))).toEqual({ invalidAddress: true });
+      expect(addressValidator(new FormControl('bitaxe..local'))).toEqual({ invalidAddress: true });
+      expect(addressValidator(new FormControl('bitaxe space.lan'))).toEqual({ invalidAddress: true });
+      expect(addressValidator(new FormControl('bitaxe_1.lan'))).toEqual({ invalidAddress: true });
+    });
+
+    it('should return null for empty input', () => {
+      expect(addressValidator(new FormControl(''))).toBeNull();
+      expect(addressValidator(new FormControl(null))).toBeNull();
+    });
+  });
+
+  describe('getDeviceLink', () => {
+    const mockDevice: any = {
+      address: 'bitaxe-gamma-1.local',
+      hostname: 'bitaxe-gamma-1',
+      fullHostname: 'bitaxe-gamma-1.local',
+      ipv4: '192.168.1.51',
+      connectionAddress: '192.168.1.51'
+    };
+
+    it('should link via IP when dashboard is accessed via IP', () => {
+      spyOn(component, 'getCurrentHostname').and.returnValue('192.168.1.50');
+      expect(component.getDeviceLink(mockDevice)).toBe('192.168.1.51');
+    });
+
+    it('should link via .local when dashboard is accessed via .local', () => {
+      spyOn(component, 'getCurrentHostname').and.returnValue('bitaxe-gamma-0.local');
+      expect(component.getDeviceLink(mockDevice)).toBe('bitaxe-gamma-1.local');
+    });
+
+    it('should link via .lan when dashboard is accessed via .lan', () => {
+      spyOn(component, 'getCurrentHostname').and.returnValue('bitaxe-gamma-0.lan');
+      expect(component.getDeviceLink(mockDevice)).toBe('bitaxe-gamma-1.lan');
+    });
+
+    it('should link via .home.arpa when dashboard is accessed via .home.arpa', () => {
+      spyOn(component, 'getCurrentHostname').and.returnValue('bitaxe-gamma-0.home.arpa');
+      expect(component.getDeviceLink(mockDevice)).toBe('bitaxe-gamma-1.home.arpa');
+    });
+
+    it('should link via bare hostname when dashboard is accessed via bare hostname', () => {
+      spyOn(component, 'getCurrentHostname').and.returnValue('bitaxe-gamma-0');
+      expect(component.getDeviceLink(mockDevice)).toBe('bitaxe-gamma-1');
     });
   });
 });
