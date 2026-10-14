@@ -1,12 +1,10 @@
 #include <stdio.h>
 #include <string.h>
 #include "esp_partition.h"
-#include "esp_image_format.h"
 #include "esp_wifi.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
-#include "esp_timer.h"
 #include "global_state.h"
 #include "system_api_json.h"
 #include "system.h"
@@ -85,6 +83,7 @@ static void system_api_add_telemetry(cJSON *root, GlobalState *g) {
     cJSON_AddNumberToObject(root, "networkDifficulty", g->network_nonce_diff);
     cJSON_AddNumberToObject(root, "coinbaseValueTotalSatoshis", g->coinbase.total_value_satoshis);
     cJSON_AddNumberToObject(root, "coinbaseValueUserSatoshis", g->coinbase.user_value_satoshis);
+    cJSON_AddStringToObject(root, "coinbasePayoutStatus", coinbase_payout_status_to_string(g->coinbase.payout_status));
 
     // Dynamic System Stats
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
@@ -309,15 +308,14 @@ static void system_api_add_block_info(cJSON *root, GlobalState *g) {
             if (obj) {
                 cJSON_AddNumberToObject(obj, "value", g->coinbase.outputs[i].value_satoshis);
                 cJSON_AddStringToObject(obj, "address", g->coinbase.outputs[i].address);
+                cJSON_AddNumberToObject(obj, "isUserOutput", g->coinbase.outputs[i].is_user_output ? 1 : 0);
                 cJSON_AddItemToArray(outputs, obj);
             }
         }
         cJSON_AddItemToObject(root, "coinbaseOutputs", outputs);
+        cJSON_AddNumberToObject(root, "coinbaseOthersCount", g->coinbase.others_count);
+        cJSON_AddNumberToObject(root, "coinbaseOthersValueSatoshis", g->coinbase.others_value_satoshis);
     }
-
-    // Outputs beyond the capacity of coinbaseOutputs, aggregated into a single entry
-    cJSON_AddNumberToObject(root, "coinbaseOthersCount", g->coinbase.others_count);
-    cJSON_AddNumberToObject(root, "coinbaseOthersValueSatoshis", g->coinbase.others_value_satoshis);
 }
 
 static void system_api_add_partitions(cJSON *root, GlobalState * GLOBAL_STATE) {
