@@ -363,9 +363,9 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
                 break;
 
             case CLIENT_SHOW_MESSAGE:
-                if (s_v1_msg->show_message) {
+                if (v1_msg.show_message) {
                     strlcpy(GLOBAL_STATE->SYSTEM_MODULE.pool_banner,
-                            s_v1_msg->show_message,
+                            v1_msg.show_message,
                             sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_banner));
                 }
                 break;
@@ -405,7 +405,7 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
                         if (v1_msg.message_id == authorize_message_id) {
                             snprintf(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info,
                                      sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "Auth rejected");
-                        } else if (s_v1_msg->message_id == subscribe_message_id) {
+                        } else if (v1_msg.message_id == subscribe_message_id) {
                             snprintf(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info,
                                      sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "Subscribe rejected");
                         } else {
