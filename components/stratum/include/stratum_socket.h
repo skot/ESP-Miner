@@ -7,6 +7,8 @@
 #include <lwip/sockets.h>
 #include <lwip/netdb.h>
 
+#define TRANSPORT_TIMEOUT_MS 5000
+
 // Resolved pool address, including the textual host_ip (with IPv6 zone id when
 // applicable) used for connecting and logging.
 typedef struct {
