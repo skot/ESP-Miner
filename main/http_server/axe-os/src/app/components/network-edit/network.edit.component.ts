@@ -55,6 +55,7 @@ export class NetworkEditComponent implements OnInit {
           hostname: [info.hostname, [Validators.required, Validators.pattern('^[a-zA-Z0-9-]+$')]],
           ssid: [info.ssid, initialValidators],
           wifiPass: ['*****'],
+          useNTP: [info.useNTP],
         });
         
         // Update validators when network mode changes
