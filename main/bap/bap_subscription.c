@@ -14,6 +14,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include "esp_heap_caps.h"
+#include "global_state.h"
 #include "bap_subscription.h"
 #include "bap_protocol.h"
 #include "bap_uart.h"
@@ -430,7 +431,7 @@ esp_err_t BAP_start_mode_management_task(GlobalState *state) {
         "bap_mode_mgmt",
         8192,
         state,
-        5,
+        4,
         NULL,
         MALLOC_CAP_SPIRAM
     );
@@ -450,7 +451,7 @@ esp_err_t BAP_start_subscription_task(GlobalState *state) {
         "subscription_up",
         8192,
         state,
-        5,
+        4,
         &subscription_task_handle,
         MALLOC_CAP_SPIRAM
     );

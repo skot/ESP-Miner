@@ -16,9 +16,11 @@
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "esp_vfs.h"
+#include "esp_psram.h"
 
 #include "dns_server.h"
 #include "esp_ota_ops.h"
+#include "esp_app_desc.h"
 #include "esp_wifi.h"
 #include "lwip/inet.h"
 #include <arpa/inet.h>
@@ -27,9 +29,12 @@
 #include "lwip/sockets.h"
 
 #include "cJSON.h"
+#include "yyjson.h"
+#include "yyjson_psram.h"
 #include "global_state.h"
 #include "nvs_config.h"
 #include "system.h"
+#include "firmware_checksum.h"
 #include "connect.h"
 #include "statistics_task.h"
 #include "theme_api.h"
@@ -37,86 +42,31 @@
 #include "display.h"
 #include "mdns.h"
 #include "http_server.h"
+#include "embedded_web_ui.h"
+#include "sv2_protocol.h"
+#include "tasks/stratum_task.h"
 #include "websocket.h"
 #include "websocket_log.h"
 #include "websocket_api.h"
 #include "system_api_json.h"
 #include "log_buffer.h"
-#include "cjson_utils.h"
 #include "utils.h"
 
 static const char * TAG = "http_server";
 static const char * CORS_TAG = "CORS";
 
-static const char * STATS_LABEL_HASHRATE = "hashrate";
-static const char * STATS_LABEL_HASHRATE_1m = "hashrate_1m";
-static const char * STATS_LABEL_HASHRATE_10m = "hashrate_10m";
-static const char * STATS_LABEL_HASHRATE_1h = "hashrate_1h";
-static const char * STATS_LABEL_ERROR_PERCENTAGE = "errorPercentage";
-static const char * STATS_LABEL_TIMESTAMP = "timestamp";
-static const char * STATS_LABEL_ASIC_TEMP = "asicTemp";
-static const char * STATS_LABEL_ASIC_TEMP2 = "asicTemp2";
-static const char * STATS_LABEL_VR_TEMP = "vrTemp";
-static const char * STATS_LABEL_ASIC_VOLTAGE = "asicVoltage";
-static const char * STATS_LABEL_VOLTAGE = "voltage";
-static const char * STATS_LABEL_POWER = "power";
-static const char * STATS_LABEL_CURRENT = "current";
-static const char * STATS_LABEL_FAN_SPEED = "fanSpeed";
-static const char * STATS_LABEL_FAN_RPM = "fanRpm";
-static const char * STATS_LABEL_FAN2_RPM = "fan2Rpm";
-static const char * STATS_LABEL_WIFI_RSSI = "wifiRssi";
-static const char * STATS_LABEL_FREE_HEAP = "freeHeap";
-static const char * STATS_LABEL_RESPONSE_TIME = "responseTime";
-
 static int system_info_prebuffer_len = 256;
-static int system_statistics_prebuffer_len = 256;
 static int system_wifi_scan_prebuffer_len = 256;
 static int api_common_prebuffer_len = 256;
-
-typedef enum
-{
-    SRC_HASHRATE,
-    SRC_HASHRATE_1m,
-    SRC_HASHRATE_10m,
-    SRC_HASHRATE_1h,
-    SRC_ERROR_PERCENTAGE,
-    SRC_ASIC_TEMP,
-    SRC_ASIC_TEMP2,
-    SRC_VR_TEMP,
-    SRC_ASIC_VOLTAGE,
-    SRC_VOLTAGE,
-    SRC_POWER,
-    SRC_CURRENT,
-    SRC_FAN_SPEED,
-    SRC_FAN_RPM,
-    SRC_FAN2_RPM,
-    SRC_WIFI_RSSI,
-    SRC_FREE_HEAP,
-    SRC_RESPONSE_TIME,
-    SRC_NONE // last
-} DataSource;
 
 DataSource strToDataSource(const char * sourceStr)
 {
     if (NULL != sourceStr) {
-        if (strcmp(sourceStr, STATS_LABEL_HASHRATE) == 0)     return SRC_HASHRATE;
-        if (strcmp(sourceStr, STATS_LABEL_HASHRATE_1m) == 0)  return SRC_HASHRATE_1m;
-        if (strcmp(sourceStr, STATS_LABEL_HASHRATE_10m) == 0) return SRC_HASHRATE_10m;
-        if (strcmp(sourceStr, STATS_LABEL_HASHRATE_1h) == 0)  return SRC_HASHRATE_1h;
-        if (strcmp(sourceStr, STATS_LABEL_ERROR_PERCENTAGE) == 0)  return SRC_ERROR_PERCENTAGE;
-        if (strcmp(sourceStr, STATS_LABEL_VOLTAGE) == 0)      return SRC_VOLTAGE;
-        if (strcmp(sourceStr, STATS_LABEL_POWER) == 0)        return SRC_POWER;
-        if (strcmp(sourceStr, STATS_LABEL_CURRENT) == 0)      return SRC_CURRENT;
-        if (strcmp(sourceStr, STATS_LABEL_ASIC_TEMP) == 0)    return SRC_ASIC_TEMP;
-        if (strcmp(sourceStr, STATS_LABEL_ASIC_TEMP2) == 0)   return SRC_ASIC_TEMP2;
-        if (strcmp(sourceStr, STATS_LABEL_VR_TEMP) == 0)      return SRC_VR_TEMP;
-        if (strcmp(sourceStr, STATS_LABEL_ASIC_VOLTAGE) == 0) return SRC_ASIC_VOLTAGE;
-        if (strcmp(sourceStr, STATS_LABEL_FAN_SPEED) == 0)    return SRC_FAN_SPEED;
-        if (strcmp(sourceStr, STATS_LABEL_FAN_RPM) == 0)      return SRC_FAN_RPM;
-        if (strcmp(sourceStr, STATS_LABEL_FAN2_RPM) == 0)     return SRC_FAN2_RPM;
-        if (strcmp(sourceStr, STATS_LABEL_WIFI_RSSI) == 0)    return SRC_WIFI_RSSI;
-        if (strcmp(sourceStr, STATS_LABEL_FREE_HEAP) == 0)    return SRC_FREE_HEAP;
-        if (strcmp(sourceStr, STATS_LABEL_RESPONSE_TIME) == 0) return SRC_RESPONSE_TIME;
+        for (int i = 0; i < SRC_NONE; i++) {
+            if (strcmp(sourceStr, STATS_LABELS[i]) == 0) {
+                return (DataSource)i;
+            }
+        }
     }
     return SRC_NONE;
 }
@@ -306,6 +256,39 @@ static void normalize_hostname(char *hostname, size_t max_len) {
     }
 }
 
+// Helper function to check if a hostname is a local network or reserved private domain
+static bool is_local_network_hostname(const char *host_str) {
+    if (host_str == NULL || *host_str == '\0') {
+        return false;
+    }
+
+    // Bare hostname (no dots, only resolvable on local network)
+    if (strchr(host_str, '.') == NULL) {
+        return true;
+    }
+
+    // Reserved / non-routable private local domain suffixes
+    static const char *local_suffixes[] = {
+        ".local",       // RFC 6762 (mDNS)
+        ".lan",         // Common router private LAN domain
+        ".home.arpa",   // RFC 8375 (IETF Home Network)
+        ".internal",    // ICANN-reserved private use
+        ".localdomain", // RFC 6761
+        ".home",        // Common router default
+        ".localhost"    // RFC 6761
+    };
+
+    size_t host_len = strlen(host_str);
+    for (size_t i = 0; i < sizeof(local_suffixes) / sizeof(local_suffixes[0]); i++) {
+        size_t suffix_len = strlen(local_suffixes[i]);
+        if (host_len > suffix_len && strcasecmp(host_str + host_len - suffix_len, local_suffixes[i]) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 esp_err_t is_network_allowed(httpd_req_t * req)
 {
     if (GLOBAL_STATE->SYSTEM_MODULE.ap_enabled == true) {
@@ -379,16 +362,10 @@ esp_err_t is_network_allowed(httpd_req_t * req)
                 strncpy(host_str, host_start, host_len);
                 host_str[host_len] = '\0';
 
-                // Allow any .local hostname (mDNS, inherently local network)
-                size_t hlen = strlen(host_str);
-                if (hlen > 6 && strcasecmp(host_str + hlen - 6, ".local") == 0) {
+                // Allow local network hostnames (bare, .local, .lan, .home.arpa, .internal, etc.)
+                if (is_local_network_hostname(host_str)) {
                     is_local_hostname = true;
-                    ESP_LOGD(CORS_TAG, "Origin host '%s' is a .local mDNS hostname - allowing", host_str);
-                }
-                // Allow any bare hostname (no dots, only resolvable on local network)
-                else if (strchr(host_str, '.') == NULL) {
-                    is_local_hostname = true;
-                    ESP_LOGD(CORS_TAG, "Origin host '%s' is a bare local hostname - allowing", host_str);
+                    ESP_LOGD(CORS_TAG, "Origin host '%s' is a local network hostname - allowing", host_str);
                 }
             }
         }
@@ -482,6 +459,24 @@ esp_err_t set_cors_headers(httpd_req_t * req)
     return ESP_OK;
 }
 
+esp_err_t HTTP_send_json_error(httpd_req_t * req, const char * status, const char * message)
+{
+    httpd_resp_set_status(req, status);
+    httpd_resp_set_type(req, "application/json");
+    set_cors_headers(req);
+
+    cJSON * root = cJSON_CreateObject();
+    if (root == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    cJSON_AddStringToObject(root, "message", message);
+
+    int prebuffer_len = 128;
+    esp_err_t res = HTTP_send_json(req, root, &prebuffer_len);
+    cJSON_Delete(root);
+    return res;
+}
+
 /* Recovery handler */
 static esp_err_t rest_recovery_handler(httpd_req_t * req)
 {
@@ -530,7 +525,7 @@ static bool file_exists(const char *path) {
 }
 
 /* Send HTTP response with the contents of the requested file */
-static esp_err_t rest_common_get_handler(httpd_req_t * req)
+static esp_err_t rest_common_get_handler_spiffs(httpd_req_t * req)
 {
     char filepath[FILE_PATH_MAX];
     char gz_file[FILE_PATH_MAX];
@@ -596,6 +591,36 @@ static esp_err_t rest_common_get_handler(httpd_req_t * req)
     ESP_LOGI(TAG, "File sending complete");
     /* Respond with an empty chunk to signal HTTP response completion */
     httpd_resp_send_chunk(req, NULL, 0);
+    return ESP_OK;   
+}
+
+static esp_err_t rest_common_get_handler_embedded(httpd_req_t * req)
+{
+    char rel_path[FILE_PATH_MAX];
+    if (req->uri[strlen(req->uri) - 1] == '/') {
+        strlcpy(rel_path, "/index.html", sizeof(rel_path));
+    } else {
+        strlcpy(rel_path, req->uri, sizeof(rel_path));
+    }
+
+    const EmbeddedFile *ef = get_embedded_file(rel_path);
+    if (ef != NULL) {
+        set_content_type_from_file(req, rel_path);
+        if (req->uri[strlen(req->uri) - 1] != '/') {
+            httpd_resp_set_hdr(req, "Cache-Control", "max-age=2592000");
+        }
+        if (ef->is_gzipped) {
+            httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
+        }
+        return httpd_resp_send(req, (const char *)ef->data, ef->size);
+    }
+
+    // Redirect to the "/" root directory if not found in embedded
+    httpd_resp_set_status(req, "302 Temporary Redirect");
+    httpd_resp_set_hdr(req, "Location", "/");
+    httpd_resp_send(req, "Redirect to the captive portal", HTTPD_RESP_USE_STRLEN);
+
+    ESP_LOGI(TAG, "Redirecting to root");
     return ESP_OK;
 }
 
@@ -615,6 +640,177 @@ static esp_err_t handle_options_request(httpd_req_t * req)
     httpd_resp_send(req, NULL, 0);
 
     return ESP_OK;
+}
+
+static bool validate_string_field(const cJSON *item, const char *field, size_t max_len, int i) {
+    if (item) {
+        if (!cJSON_IsString(item)) {
+            ESP_LOGW(TAG, "Pool %d: %s must be string", i, field);
+            return false;
+        }
+        if (strlen(item->valuestring) > max_len) {
+            ESP_LOGW(TAG, "Pool %d: %s too long", i, field);
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool validate_number_range(const cJSON *item, const char *field, double min, double max, int i) {
+    if (item) {
+        if (!cJSON_IsNumber(item)) {
+            ESP_LOGW(TAG, "Pool %d: %s must be number", i, field);
+            return false;
+        }
+        if (item->valuedouble < min || item->valuedouble > max) {
+            ESP_LOGW(TAG, "Pool %d: %s out of range: %.0f", i, field, item->valuedouble);
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool validate_bool_or_num(const cJSON *item, const char *field, int i) {
+    if (item && !cJSON_IsBool(item) && !cJSON_IsNumber(item)) {
+        ESP_LOGW(TAG, "Pool %d: %s must be bool or number", i, field);
+        return false;
+    }
+    return true;
+}
+
+static void add_string_field_default(cJSON *obj, const cJSON *pool_item, const char *field, const char *default_val) {
+    cJSON *item = cJSON_GetObjectItem(pool_item, field);
+    cJSON_AddStringToObject(obj, field, item && cJSON_IsString(item) ? item->valuestring : default_val);
+}
+
+static void add_number_field_default(cJSON *obj, const cJSON *pool_item, const char *field, double default_val) {
+    cJSON *item = cJSON_GetObjectItem(pool_item, field);
+    cJSON_AddNumberToObject(obj, field, item && cJSON_IsNumber(item) ? item->valuedouble : default_val);
+}
+
+static void add_bool_field_default(cJSON *obj, const cJSON *pool_item, const char *field, bool default_val) {
+    cJSON *item = cJSON_GetObjectItem(pool_item, field);
+    cJSON_AddBoolToObject(obj, field, item ? (cJSON_IsTrue(item) || (cJSON_IsNumber(item) && item->valueint != 0)) : default_val);
+}
+
+static bool validate_pool_json(const cJSON *pool_item, int i) {
+    if (!cJSON_IsObject(pool_item)) {
+        ESP_LOGW(TAG, "Pool index %d is not an object", i);
+        return false;
+    }
+
+    cJSON *url = cJSON_GetObjectItem(pool_item, "stratumURL");
+    if (!url || !cJSON_IsString(url) || strlen(url->valuestring) == 0) {
+        ESP_LOGW(TAG, "Pool %d: stratumURL is required and cannot be empty", i);
+        return false;
+    }
+
+    cJSON *port = cJSON_GetObjectItem(pool_item, "stratumPort");
+    if (!port || !cJSON_IsNumber(port)) {
+        ESP_LOGW(TAG, "Pool %d: stratumPort is required", i);
+        return false;
+    }
+
+    cJSON *user = cJSON_GetObjectItem(pool_item, "stratumUser");
+    if (!user || !cJSON_IsString(user) || strlen(user->valuestring) == 0) {
+        ESP_LOGW(TAG, "Pool %d: stratumUser is required and cannot be empty", i);
+        return false;
+    }
+
+    cJSON *proto = cJSON_GetObjectItem(pool_item, "stratumProtocol");
+    if (proto) {
+        if (!validate_string_field(proto, "stratumProtocol", 255, i)) return false;
+        if (stratum_protocol_from_string(proto->valuestring) == STRATUM_PROTOCOL_UNKNOWN) {
+            ESP_LOGW(TAG, "Pool %d: invalid stratumProtocol: '%s'", i, proto->valuestring);
+            return false;
+        }
+    }
+
+    if (!validate_string_field(url, "stratumURL", 255, i)) return false;
+    if (!validate_number_range(port, "stratumPort", 1, 65535, i)) return false;
+    if (!validate_string_field(user, "stratumUser", 255, i)) return false;
+    if (!validate_string_field(cJSON_GetObjectItem(pool_item, "stratumPassword"), "stratumPassword", 255, i)) return false;
+    if (!validate_number_range(cJSON_GetObjectItem(pool_item, "stratumSuggestedDifficulty"), "stratumSuggestedDifficulty", 0, 1e18, i)) return false;
+    if (!validate_bool_or_num(cJSON_GetObjectItem(pool_item, "stratumExtranonceSubscribe"), "stratumExtranonceSubscribe", i)) return false;
+    if (!validate_number_range(cJSON_GetObjectItem(pool_item, "stratumTLS"), "stratumTLS", 0, 2, i)) return false;
+    if (!validate_string_field(cJSON_GetObjectItem(pool_item, "stratumCert"), "stratumCert", 3000, i)) return false;
+    if (!validate_bool_or_num(cJSON_GetObjectItem(pool_item, "stratumDecodeCoinbase"), "stratumDecodeCoinbase", i)) return false;
+    if (!validate_bool_or_num(cJSON_GetObjectItem(pool_item, "stratumShareWarning"), "stratumShareWarning", i)) return false;
+
+    cJSON *v2chan = cJSON_GetObjectItem(pool_item, "stratumV2ChannelType");
+    if (v2chan) {
+        if (!validate_string_field(v2chan, "stratumV2ChannelType", 255, i)) return false;
+        if (sv2_channel_type_from_string(v2chan->valuestring) == SV2_CHANNEL_UNKNOWN) {
+            ESP_LOGW(TAG, "Pool %d: invalid stratumV2ChannelType: '%s'", i, v2chan->valuestring);
+            return false;
+        }
+    }
+
+    if (!validate_string_field(cJSON_GetObjectItem(pool_item, "stratumV2AuthorityPubkey"), "stratumV2AuthorityPubkey", 128, i)) return false;
+    if (!validate_bool_or_num(cJSON_GetObjectItem(pool_item, "stratumV2RequireAuth"), "stratumV2RequireAuth", i)) return false;
+
+    return true;
+}
+
+static bool update_pool_nvs(const cJSON *pool_item, int i) {
+    cJSON *p_obj = cJSON_CreateObject();
+    
+    char *old_json_str = nvs_config_get_string_indexed(NVS_CONFIG_POOL, i);
+    cJSON *new_pass = cJSON_GetObjectItem(pool_item, "stratumPassword");
+    const char *pass_to_save = NULL;
+    char *old_pass = NULL;
+    
+    if (new_pass && cJSON_IsString(new_pass) && strcmp(new_pass->valuestring, "*****") == 0) {
+        if (old_json_str && strlen(old_json_str) > 0) {
+            cJSON *old_json = cJSON_Parse(old_json_str);
+            if (old_json) {
+                cJSON *old_pass_item = cJSON_GetObjectItem(old_json, "stratumPassword");
+                if (old_pass_item && cJSON_IsString(old_pass_item)) {
+                    old_pass = strdup(old_pass_item->valuestring);
+                }
+                cJSON_Delete(old_json);
+            }
+        }
+        pass_to_save = old_pass ? old_pass : "x";
+    } else if (new_pass && cJSON_IsString(new_pass)) {
+        pass_to_save = new_pass->valuestring;
+    } else {
+        pass_to_save = "x";
+    }
+
+    add_string_field_default(p_obj, pool_item, "stratumProtocol", STRATUM_V1);
+    add_string_field_default(p_obj, pool_item, "stratumURL", "");
+    add_number_field_default(p_obj, pool_item, "stratumPort", 3333);
+    add_string_field_default(p_obj, pool_item, "stratumUser", "");
+    cJSON_AddStringToObject(p_obj, "stratumPassword", pass_to_save);
+    add_number_field_default(p_obj, pool_item, "stratumSuggestedDifficulty", 0);
+    add_bool_field_default(p_obj, pool_item, "stratumExtranonceSubscribe", false);
+    add_number_field_default(p_obj, pool_item, "stratumTLS", 0);
+    add_string_field_default(p_obj, pool_item, "stratumCert", "");
+    add_bool_field_default(p_obj, pool_item, "stratumDecodeCoinbase", true);
+    add_bool_field_default(p_obj, pool_item, "stratumShareWarning", true);
+    add_string_field_default(p_obj, pool_item, "stratumV2ChannelType", sv2_channel_type_to_string(SV2_CHANNEL_EXTENDED));
+    add_string_field_default(p_obj, pool_item, "stratumV2AuthorityPubkey", "");
+    add_bool_field_default(p_obj, pool_item, "stratumV2RequireAuth", false);
+
+    char *json_str = cJSON_PrintUnformatted(p_obj);
+    bool modified = true;
+    if (json_str) {
+        if (old_json_str && strcmp(old_json_str, json_str) == 0) {
+            modified = false;
+        } else {
+            nvs_config_set_string_indexed(NVS_CONFIG_POOL, i, json_str);
+        }
+        free(json_str);
+    }
+    cJSON_Delete(p_obj);
+    if (old_pass) free(old_pass);
+    if (old_json_str) free(old_json_str);
+
+    if (modified) {
+        SYSTEM_load_pool_from_nvs(GLOBAL_STATE, i);
+    }
+    return modified;
 }
 
 bool check_settings_and_update(const cJSON * const root, char **redirect_url)
@@ -639,6 +835,7 @@ bool check_settings_and_update(const cJSON * const root, char **redirect_url)
     for (NvsConfigKey key = 0; key < NVS_CONFIG_COUNT; key++) {
         Settings *setting = nvs_config_get_settings(key);
         if (!setting->rest_name) continue;
+        if (key == NVS_CONFIG_POOL) continue;
 
         cJSON * item = cJSON_GetObjectItem(root, setting->rest_name);
         if (!item) continue;
@@ -708,16 +905,34 @@ bool check_settings_and_update(const cJSON * const root, char **redirect_url)
             ESP_LOGW(TAG, "Invalid display rotation: '%d'", item->valueint);
             result = false;
         }
-        if ((key == NVS_CONFIG_STRATUM_PROTOCOL || key == NVS_CONFIG_FALLBACK_STRATUM_PROTOCOL) && cJSON_IsString(item)) {
-            if (stratum_protocol_from_string(item->valuestring) == STRATUM_PROTOCOL_UNKNOWN) {
-                ESP_LOGW(TAG, "Invalid stratum protocol: '%s'", item->valuestring);
-                result = false;
-            }
-        }
-        if ((key == NVS_CONFIG_SV2_CHANNEL_TYPE || key == NVS_CONFIG_FALLBACK_SV2_CHANNEL_TYPE) && cJSON_IsString(item)) {
-            if (sv2_channel_type_from_string(item->valuestring) == SV2_CHANNEL_UNKNOWN) {
-                ESP_LOGW(TAG, "Invalid SV2 channel type: '%s'", item->valuestring);
-                result = false;
+    }
+
+    // Validate pools array separately
+    cJSON *pools_item = cJSON_GetObjectItem(root, "pools");
+    if (pools_item) {
+        if (!cJSON_IsArray(pools_item)) {
+            ESP_LOGW(TAG, "Invalid type for 'pools', expected array");
+            result = false;
+        } else {
+            int size = cJSON_GetArraySize(pools_item);
+            for (int i = 0; i < size; i++) {
+                cJSON *pool_item = cJSON_GetArrayItem(pools_item, i);
+                cJSON *id_item = cJSON_GetObjectItem(pool_item, "id");
+                if (!id_item || !cJSON_IsNumber(id_item)) {
+                    ESP_LOGW(TAG, "Pool item at index %d is missing required 'id' number", i);
+                    result = false;
+                    break;
+                }
+                int idx = id_item->valueint;
+                if (idx < 0 || idx >= MAX_POOLS) {
+                    ESP_LOGW(TAG, "Pool item has invalid 'id': %d", idx);
+                    result = false;
+                    break;
+                }
+                if (!validate_pool_json(pool_item, idx)) {
+                    result = false;
+                    break;
+                }
             }
         }
     }
@@ -727,6 +942,7 @@ bool check_settings_and_update(const cJSON * const root, char **redirect_url)
         for (NvsConfigKey key = 0; key < NVS_CONFIG_COUNT; key++) {
             Settings *setting = nvs_config_get_settings(key);
             if (!setting || !setting->rest_name) continue;
+            if (key == NVS_CONFIG_POOL) continue;
 
             cJSON * item = cJSON_GetObjectItem(root, setting->rest_name);
             if (!item) continue;
@@ -764,6 +980,48 @@ bool check_settings_and_update(const cJSON * const root, char **redirect_url)
                 case TYPE_FLOAT:
                     nvs_config_set_float(key, (float)item->valuedouble);
                     break;
+            }
+        }
+
+        bool modified_pools[MAX_POOLS] = {false};
+        // Save pools array to NVS
+        if (pools_item && cJSON_IsArray(pools_item)) {
+            int size = cJSON_GetArraySize(pools_item);
+            for (int i = 0; i < size; i++) {
+                cJSON *pool_item = cJSON_GetArrayItem(pools_item, i);
+                cJSON *id_item = cJSON_GetObjectItem(pool_item, "id");
+                if (id_item && cJSON_IsNumber(id_item)) {
+                    int idx = id_item->valueint;
+                    if (idx >= 0 && idx < MAX_POOLS) {
+                        if (update_pool_nvs(pool_item, idx)) {
+                            modified_pools[idx] = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        cJSON *use_fallback_item = cJSON_GetObjectItem(root, "useFallbackStratum");
+        bool pool_selection_changed = (cJSON_GetObjectItem(root, "primaryPoolIndex") != NULL) ||
+                                      (cJSON_GetObjectItem(root, "secondaryPoolIndex") != NULL) ||
+                                      (use_fallback_item != NULL);
+        if (pools_item != NULL || pool_selection_changed) {
+            SYSTEM_reload_pool_config(GLOBAL_STATE);
+
+            if (use_fallback_item) {
+                GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback = GLOBAL_STATE->SYSTEM_MODULE.use_fallback_stratum;
+            } else if (cJSON_GetObjectItem(root, "primaryPoolIndex") != NULL && !GLOBAL_STATE->SYSTEM_MODULE.use_fallback_stratum) {
+                GLOBAL_STATE->SYSTEM_MODULE.is_using_fallback = false;
+            }
+
+            for (int i = 0; i < MAX_POOLS; i++) {
+                if (modified_pools[i]) {
+                    stratum_notify_pool_modified(GLOBAL_STATE, i);
+                }
+            }
+
+            if (pool_selection_changed) {
+                stratum_notify_pool_selection_changed(GLOBAL_STATE);
             }
         }
     }
@@ -849,9 +1107,8 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
         }
     }
 
-    // Create response JSON
-    cJSON *response = cJSON_CreateObject();
     if (redirect_url) {
+        cJSON *response = cJSON_CreateObject();
         cJSON_AddStringToObject(response, "status", "success");
         cJSON *redirect = cJSON_CreateObject();
         cJSON_AddStringToObject(redirect, "url", redirect_url);
@@ -983,6 +1240,106 @@ static esp_err_t POST_dismiss_block_found(httpd_req_t * req)
     return res;
 }
 
+static esp_err_t PUT_system_pool(httpd_req_t *req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    const char *last_slash = strrchr(req->uri, '/');
+    if (!last_slash) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing pool index");
+    }
+    int idx = atoi(last_slash + 1);
+    if (idx < 0 || idx >= MAX_POOLS) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid pool index");
+    }
+
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len >= SCRATCH_BUFSIZE) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid request length");
+    }
+
+    char *buf = ((rest_server_context_t *)(req->user_ctx))->scratch;
+    int received = httpd_req_recv(req, buf, total_len);
+    if (received <= 0) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive request data");
+    }
+    buf[received] = '\0';
+
+    cJSON *root = cJSON_Parse(buf);
+    if (!root) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+    }
+
+    if (!validate_pool_json(root, idx)) {
+        cJSON_Delete(root);
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid pool configuration payload");
+    }
+
+    update_pool_nvs(root, idx);
+    cJSON_Delete(root);
+
+    SYSTEM_reload_pool_config(GLOBAL_STATE);
+    stratum_notify_pool_modified(GLOBAL_STATE, idx);
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddStringToObject(resp, "message", "Pool updated successfully");
+    httpd_resp_set_type(req, "application/json");
+    esp_err_t send_res = HTTP_send_json(req, resp, &api_common_prebuffer_len);
+    cJSON_Delete(resp);
+
+    return send_res;
+}
+
+static esp_err_t DELETE_system_pool(httpd_req_t *req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    const char *last_slash = strrchr(req->uri, '/');
+    if (!last_slash) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing pool index");
+    }
+    int idx = atoi(last_slash + 1);
+    if (idx < 0 || idx >= MAX_POOLS) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid pool index");
+    }
+
+    // Check if the index is selected as primary or fallback
+    uint16_t prim = nvs_config_get_u16(NVS_CONFIG_PRIMARY_POOL_INDEX);
+    uint16_t sec = nvs_config_get_u16(NVS_CONFIG_SECONDARY_POOL_INDEX);
+    if (idx == prim || idx == sec) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Cannot delete a pool that is currently selected as primary or fallback");
+    }
+
+    // Clear the slot in NVS
+    nvs_config_set_string_indexed(NVS_CONFIG_POOL, idx, "");
+
+    // Reload in global state memory
+    SYSTEM_load_pool_from_nvs(GLOBAL_STATE, idx);
+    SYSTEM_reload_pool_config(GLOBAL_STATE);
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddStringToObject(resp, "message", "Pool cleared successfully");
+    httpd_resp_set_type(req, "application/json");
+    esp_err_t send_res = HTTP_send_json(req, resp, &api_common_prebuffer_len);
+    cJSON_Delete(resp);
+
+    return send_res;
+}
+
 static esp_err_t POST_mining_pause(httpd_req_t * req)
 {
     if (is_network_allowed(req) != ESP_OK) {
@@ -1077,6 +1434,144 @@ static esp_err_t GET_system_info(httpd_req_t * req)
     return res;
 }
 
+static esp_err_t POST_system_boot(httpd_req_t *req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    // Set CORS headers
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    size_t total_len = req->content_len;
+    if (total_len == 0) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Empty request body");
+    }
+
+    char *buf = malloc(total_len + 1);
+    if (!buf) {
+        return httpd_resp_send_500(req);
+    }
+
+    int ret = httpd_req_recv(req, buf, total_len);
+    if (ret <= 0) {
+        free(buf);
+        return httpd_resp_send_500(req);
+    }
+    buf[ret] = '\0';
+
+    cJSON *root = cJSON_Parse(buf);
+    free(buf);
+    if (!root) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
+    }
+
+    cJSON *p_label = cJSON_GetObjectItem(root, "partition");
+    if (!cJSON_IsString(p_label)) {
+        cJSON_Delete(root);
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing partition label");
+    }
+
+    const esp_partition_t *p = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, p_label->valuestring);
+    if (p == NULL) {
+        cJSON_Delete(root);
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Partition not found");
+    }
+
+    esp_app_desc_t app_desc;
+    if (esp_ota_get_partition_description(p, &app_desc) != ESP_OK) {
+        cJSON_Delete(root);
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "No valid firmware found on partition");
+    }
+
+    esp_err_t err = esp_ota_set_boot_partition(p);
+    cJSON_Delete(root);
+
+    if (err != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to set boot partition");
+    }
+
+    // Reset custom WWW so the booted partition defaults to its matching embedded Web UI
+    SYSTEM_reset_custom_www();
+
+    cJSON *resp = cJSON_CreateObject();
+    cJSON_AddStringToObject(resp, "message", "Next boot partition set successfully. Rebooting...");
+    httpd_resp_set_type(req, "application/json");
+    esp_err_t send_res = HTTP_send_json(req, resp, &api_common_prebuffer_len);
+    cJSON_Delete(resp);
+
+    // Delay to ensure the response is sent
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    // Restart the system
+    esp_restart();
+
+    return send_res;
+}
+
+static esp_err_t GET_system_firmware_checksum(httpd_req_t *req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    httpd_resp_set_type(req, "application/json");
+
+    // Set CORS headers
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    const char *sha256_hex = NULL;
+    uint32_t image_len = 0;
+    if (running == NULL || firmware_checksum_get_running(&sha256_hex, &image_len) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to compute firmware checksum");
+    }
+
+    const esp_app_desc_t *app_desc = esp_app_get_description();
+
+    cJSON *root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "partition", running->label);
+    cJSON_AddStringToObject(root, "version", app_desc->version);
+    cJSON_AddNumberToObject(root, "size", image_len);
+    cJSON_AddStringToObject(root, "sha256", sha256_hex);
+
+    esp_err_t res = HTTP_send_json(req, root, &api_common_prebuffer_len);
+    cJSON_Delete(root);
+
+    return res;
+}
+
+struct StatsSerializeContext {
+    yyjson_mut_doc *doc;
+    yyjson_mut_val *statsArray;
+    const int *active_cols;
+    int num_active;
+    const yyjson_alc *alc;
+    char *json_str;
+    size_t len;
+};
+
+static void serialize_stats_cb(const struct StatisticsData *rows, uint16_t count, void *ctx)
+{
+    struct StatsSerializeContext *sc = (struct StatsSerializeContext *)ctx;
+    for (uint16_t i = 0; i < count; i++) {
+        const struct StatisticsData *row = &rows[i];
+        yyjson_mut_val *valueArray = yyjson_mut_arr_add_arr(sc->doc, sc->statsArray);
+        for (int c = 0; c < sc->num_active; c++) {
+            yyjson_mut_val *v = yyjson_mut_raw(sc->doc, row->tokens[sc->active_cols[c]]);
+            yyjson_mut_arr_add_val(valueArray, v);
+        }
+        yyjson_mut_arr_add_uint(sc->doc, valueArray, row->timestamp);
+    }
+    sc->json_str = yyjson_mut_write_opts(sc->doc, YYJSON_WRITE_NOFLAG, sc->alc, &sc->len, NULL);
+}
+
 static esp_err_t GET_system_statistics(httpd_req_t * req)
 {
     if (is_network_allowed(req) != ESP_OK) {
@@ -1123,66 +1618,60 @@ static esp_err_t GET_system_statistics(httpd_req_t * req)
         }
     }
 
-    // Create object for statistics
-    cJSON * root = cJSON_CreateObject();
-    cJSON_AddNumberToObject(root, "currentTimestamp", (esp_timer_get_time() / 1000));
-
-    cJSON * labelArray = cJSON_CreateArray();
-    if (dataSelection[SRC_HASHRATE]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_HASHRATE)); }
-    if (dataSelection[SRC_HASHRATE_1m]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_HASHRATE_1m)); }
-    if (dataSelection[SRC_HASHRATE_10m]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_HASHRATE_10m)); }
-    if (dataSelection[SRC_HASHRATE_1h]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_HASHRATE_1h)); }
-    if (dataSelection[SRC_ERROR_PERCENTAGE]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_ERROR_PERCENTAGE)); }
-    if (dataSelection[SRC_ASIC_TEMP]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_ASIC_TEMP)); }
-    if (dataSelection[SRC_ASIC_TEMP2]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_ASIC_TEMP2)); }
-    if (dataSelection[SRC_VR_TEMP]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_VR_TEMP)); }
-    if (dataSelection[SRC_ASIC_VOLTAGE]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_ASIC_VOLTAGE)); }
-    if (dataSelection[SRC_VOLTAGE]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_VOLTAGE)); }
-    if (dataSelection[SRC_POWER]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_POWER)); }
-    if (dataSelection[SRC_CURRENT]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_CURRENT)); }
-    if (dataSelection[SRC_FAN_SPEED]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_FAN_SPEED)); }
-    if (dataSelection[SRC_FAN_RPM]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_FAN_RPM)); }
-    if (dataSelection[SRC_FAN2_RPM]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_FAN2_RPM)); }
-    if (dataSelection[SRC_WIFI_RSSI]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_WIFI_RSSI)); }
-    if (dataSelection[SRC_FREE_HEAP]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_FREE_HEAP)); }
-    if (dataSelection[SRC_RESPONSE_TIME]) { cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_RESPONSE_TIME)); }
-    cJSON_AddItemToArray(labelArray, cJSON_CreateString(STATS_LABEL_TIMESTAMP));
-
-    cJSON_AddItemToObject(root, "labels", labelArray);
-
-    cJSON * statsArray = cJSON_AddArrayToObject(root, "statistics");
-    struct StatisticsData statsData;
-    uint16_t index = 0;
-
-    while (getStatisticData(index++, &statsData)) {
-        cJSON * valueArray = cJSON_CreateArray();
-        if (dataSelection[SRC_HASHRATE]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.hashrate)); }
-        if (dataSelection[SRC_HASHRATE_1m]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.hashrate_1m)); }
-        if (dataSelection[SRC_HASHRATE_10m]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.hashrate_10m)); }
-        if (dataSelection[SRC_HASHRATE_1h]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.hashrate_1h)); }
-        if (dataSelection[SRC_ERROR_PERCENTAGE]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.errorPercentage)); }
-        if (dataSelection[SRC_ASIC_TEMP]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.chipTemperature)); }
-        if (dataSelection[SRC_ASIC_TEMP2]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.chipTemperature2)); }
-        if (dataSelection[SRC_VR_TEMP]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.vrTemperature)); }
-        if (dataSelection[SRC_ASIC_VOLTAGE]) { cJSON_AddItemToArray(valueArray, cJSON_CreateNumber(statsData.coreVoltageActual)); }
-        if (dataSelection[SRC_VOLTAGE]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.voltage)); }
-        if (dataSelection[SRC_POWER]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.power)); }
-        if (dataSelection[SRC_CURRENT]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.current)); }
-        if (dataSelection[SRC_FAN_SPEED]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.fanSpeed)); }
-        if (dataSelection[SRC_FAN_RPM]) { cJSON_AddItemToArray(valueArray, cJSON_CreateNumber(statsData.fanRPM)); }
-        if (dataSelection[SRC_FAN2_RPM]) { cJSON_AddItemToArray(valueArray, cJSON_CreateNumber(statsData.fan2RPM)); }
-        if (dataSelection[SRC_WIFI_RSSI]) { cJSON_AddItemToArray(valueArray, cJSON_CreateNumber(statsData.wifiRSSI)); }
-        if (dataSelection[SRC_FREE_HEAP]) { cJSON_AddItemToArray(valueArray, cJSON_CreateNumber(statsData.freeHeap)); }
-        if (dataSelection[SRC_RESPONSE_TIME]) { cJSON_AddItemToArray(valueArray, cJSON_CreateFloat(statsData.responseTime)); }
-        cJSON_AddItemToArray(valueArray, cJSON_CreateNumber(statsData.timestamp));
-
-        cJSON_AddItemToArray(statsArray, valueArray);
+    // Optimize TCP socket latency
+    int sockfd = httpd_req_to_sockfd(req);
+    if (sockfd >= 0) {
+        int enable = 1;
+        setsockopt(sockfd, IPPROTO_TCP, TCP_NODELAY, &enable, sizeof(enable));
     }
 
-    esp_err_t res = HTTP_send_json(req, root, &system_statistics_prebuffer_len);
+    const yyjson_alc *alc = yyjson_psram_alc();
+    yyjson_mut_doc *doc = yyjson_mut_doc_new(alc);
+    if (!doc) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
 
-    cJSON_Delete(root);
+    yyjson_mut_val *root = yyjson_mut_obj(doc);
+    yyjson_mut_doc_set_root(doc, root);
 
+    yyjson_mut_obj_add_uint(doc, root, "currentTimestamp", (uint64_t)(esp_timer_get_time() / 1000));
+
+    yyjson_mut_val *labelArray = yyjson_mut_obj_add_arr(doc, root, "labels");
+    int active_cols[SRC_NONE];
+    int num_active = 0;
+    for (int i = 0; i < SRC_NONE; i++) {
+        if (dataSelection[i]) {
+            active_cols[num_active++] = i;
+            yyjson_mut_arr_add_str(doc, labelArray, STATS_LABELS[i]);
+        }
+    }
+    yyjson_mut_arr_add_str(doc, labelArray, "timestamp");
+
+    yyjson_mut_val *statsArray = yyjson_mut_obj_add_arr(doc, root, "statistics");
+
+    struct StatsSerializeContext serialize_ctx = {
+        .doc = doc,
+        .statsArray = statsArray,
+        .active_cols = active_cols,
+        .num_active = num_active,
+        .alc = alc,
+        .json_str = NULL,
+        .len = 0,
+    };
+
+    withStatisticsData(serialize_stats_cb, &serialize_ctx);
+
+    if (!serialize_ctx.json_str) {
+        yyjson_mut_doc_free(doc);
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    esp_err_t res = httpd_resp_send(req, serialize_ctx.json_str, serialize_ctx.len);
+
+    yyjson_alc_free(alc, serialize_ctx.json_str);
+    yyjson_mut_doc_free(doc);
     return res;
 }
 
@@ -1204,8 +1693,11 @@ static esp_err_t GET_scoreboard(httpd_req_t * req)
     cJSON * root = cJSON_CreateArray();
 
     if (xSemaphoreTake(scoreboard->mutex, portMAX_DELAY) == pdTRUE) {
-        for (int i = 0; i < scoreboard->count; i++) {
+        for (int i = 0; i < MAX_SCOREBOARD; i++) {
             const ScoreboardEntry *e = &scoreboard->entries[i];
+            if (e->difficulty <= 0.0) {
+                break;
+            }
             cJSON *entry = cJSON_CreateObject();
 
             char nonce_str[9], version_bits_str[9];
@@ -1246,7 +1738,7 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
     esp_wifi_get_mode(&mode);
     if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)
     {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Not allowed in AP mode");
+        HTTP_send_json_error(req, "500 Internal Server Error", "Not allowed in AP mode");
         return ESP_OK;
     }
 
@@ -1260,13 +1752,13 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
     const esp_partition_t * www_partition =
         esp_partition_find_first(ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_DATA_SPIFFS, "www");
     if (www_partition == NULL) {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "WWW partition not found");
+        HTTP_send_json_error(req, "500 Internal Server Error", "WWW partition not found");
         return ESP_OK;
     }
 
     // Don't attempt to write more than what can be stored in the partition
     if (remaining > www_partition->size) {
-        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "File provided is too large for device");
+        HTTP_send_json_error(req, "400 Bad Request", "File provided is too large for device");
         return ESP_OK;
     }
 
@@ -1286,14 +1778,14 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
             continue;
         } else if (recv_len <= 0) {
             snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Protocol Error");
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Protocol Error");
-            return ESP_OK;
+            HTTP_send_json_error(req, "500 Internal Server Error", "Protocol Error");
+            return ESP_FAIL;
         }
 
         if (esp_partition_write(www_partition, www_partition->size - remaining, (const void *) buf, recv_len) != ESP_OK) {
             snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Write Error");
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Write Error");
-            return ESP_OK;
+            HTTP_send_json_error(req, "500 Internal Server Error", "Write Error");
+            return ESP_FAIL;
         }
 
 
@@ -1308,11 +1800,13 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
         }
     }
     httpd_resp_set_type(req, "text/plain");
-    httpd_resp_sendstr(req, "WWW update complete\n");
+    httpd_resp_sendstr(req, "WWW update complete, rebooting now!\n");
+    nvs_config_set_bool(NVS_CONFIG_USE_CUSTOM_WWW, true);
 
-    snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Finished...");
+    snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Rebooting...");
     vTaskDelay(1000 / portTICK_PERIOD_MS);
     GLOBAL_STATE->SYSTEM_MODULE.is_firmware_update = false;
+    esp_restart();
 
     return ESP_OK;
 }
@@ -1330,7 +1824,7 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
     esp_wifi_get_mode(&mode);
     if (mode == WIFI_MODE_AP || mode == WIFI_MODE_APSTA)
     {
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Not allowed in AP mode");
+        HTTP_send_json_error(req, "500 Internal Server Error", "Not allowed in AP mode");
         return ESP_OK;
     }
     
@@ -1356,16 +1850,16 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
             // Serious Error: Abort OTA
         } else if (recv_len <= 0) {
             snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Protocol Error");
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Protocol Error");
-            return ESP_OK;
+            HTTP_send_json_error(req, "500 Internal Server Error", "Protocol Error");
+            return ESP_FAIL;
         }
 
         // Successful Upload: Flash firmware chunk
         if (esp_ota_write(ota_handle, (const void *) buf, recv_len) != ESP_OK) {
             esp_ota_abort(ota_handle);
             snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Write Error");
-            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Write Error");
-            return ESP_OK;
+            HTTP_send_json_error(req, "500 Internal Server Error", "Write Error");
+            return ESP_FAIL;
         }
 
         uint8_t percentage = 100 - ((remaining * 100 / req->content_len));
@@ -1383,11 +1877,14 @@ esp_err_t POST_OTA_update(httpd_req_t * req)
     // Validate and switch to new OTA image and reboot
     if (esp_ota_end(ota_handle) != ESP_OK || esp_ota_set_boot_partition(ota_partition) != ESP_OK) {
         snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Validation Error");
-        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Validation / Activation Error");
+        HTTP_send_json_error(req, "500 Internal Server Error", "Validation / Activation Error");
         return ESP_OK;
     }
 
     snprintf(GLOBAL_STATE->SYSTEM_MODULE.firmware_update_status, 20, "Rebooting...");
+
+    // Reset custom WWW so the newly flashed firmware defaults to its matching embedded Web UI
+    SYSTEM_reset_custom_www();
 
     httpd_resp_set_type(req, "text/plain");
     httpd_resp_sendstr(req, "Firmware update complete, rebooting now!\n");
@@ -1412,10 +1909,9 @@ esp_err_t http_404_error_handler(httpd_req_t * req, httpd_err_code_t err)
     return ESP_OK;
 }
 
-esp_err_t start_rest_server(void * pvParameters)
+esp_err_t start_rest_server(GlobalState * global_state)
 {
-    GLOBAL_STATE = (GlobalState *) pvParameters;
-    
+    GLOBAL_STATE = global_state;
     // Initialize the ASIC API with the global state
     asic_api_init(GLOBAL_STATE);
     const char * base_path = "";
@@ -1426,12 +1922,14 @@ esp_err_t start_rest_server(void * pvParameters)
     strlcpy(rest_context->base_path, base_path, sizeof(rest_context->base_path));
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
+    config.task_priority = 4;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192;
     config.max_open_sockets = 20;
-    config.max_uri_handlers = 25;
+    config.max_uri_handlers = 26;
     config.close_fn = websocket_close_fn;
     config.lru_purge_enable = true;
+    config.keep_alive_enable = true;
 
     ESP_LOGI(TAG, "Starting HTTP Server");
     REST_CHECK(httpd_start(&server, &config) == ESP_OK, "Start server failed", err_start);
@@ -1466,6 +1964,24 @@ esp_err_t start_rest_server(void * pvParameters)
         .user_ctx = rest_context
     };
     httpd_register_uri_handler(server, &system_info_get_uri);
+
+    /* URI handler for setting boot partition */
+    httpd_uri_t system_boot_post_uri = {
+        .uri = "/api/system/boot", 
+        .method = HTTP_POST, 
+        .handler = POST_system_boot, 
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &system_boot_post_uri);
+
+    /* URI handler for fetching the running firmware checksum */
+    httpd_uri_t system_firmware_checksum_get_uri = {
+        .uri = "/api/system/firmware/checksum",
+        .method = HTTP_GET,
+        .handler = GET_system_firmware_checksum,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &system_firmware_checksum_get_uri);
 
     /* URI handler for fetching system asic values */
     httpd_uri_t system_asic_get_uri = {
@@ -1557,6 +2073,22 @@ esp_err_t start_rest_server(void * pvParameters)
     };
     httpd_register_uri_handler(server, &update_system_settings_uri);
 
+    httpd_uri_t system_pool_put_uri = {
+        .uri = "/api/system/pools/*",
+        .method = HTTP_PUT,
+        .handler = PUT_system_pool,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &system_pool_put_uri);
+
+    httpd_uri_t system_pool_delete_uri = {
+        .uri = "/api/system/pools/*",
+        .method = HTTP_DELETE,
+        .handler = DELETE_system_pool,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &system_pool_delete_uri);
+
     httpd_uri_t update_post_ota_firmware = {
         .uri = "/api/system/OTA", 
         .method = HTTP_POST, 
@@ -1578,7 +2110,9 @@ esp_err_t start_rest_server(void * pvParameters)
         .method = HTTP_GET, 
         .handler = websocket_handler, 
         .user_ctx = (void *)WS_TYPE_LOGS, 
-        .is_websocket = true
+        .is_websocket = true,
+        .ws_pre_handshake_cb = websocket_pre_handshake,
+        .ws_post_handshake_cb = websocket_post_handshake
     };
     httpd_register_uri_handler(server, &ws);
 
@@ -1587,35 +2121,28 @@ esp_err_t start_rest_server(void * pvParameters)
         .method = HTTP_GET, 
         .handler = websocket_handler, 
         .user_ctx = (void *)WS_TYPE_API, 
-        .is_websocket = true
+        .is_websocket = true,
+        .ws_pre_handshake_cb = websocket_pre_handshake,
+        .ws_post_handshake_cb = websocket_post_handshake
     };
     httpd_register_uri_handler(server, &ws_live);
 
-    if (!GLOBAL_STATE->filesystem_is_available) {
-        /* Make default route serve Recovery */
-        httpd_uri_t recovery_implicit_get_uri = {
-            .uri = "/*", .method = HTTP_GET, 
-            .handler = rest_recovery_handler, 
-            .user_ctx = rest_context
-        };
-        httpd_register_uri_handler(server, &recovery_implicit_get_uri);
-    } else {
-        httpd_uri_t api_common_uri = {
-            .uri = "/api/*",
-            .method = HTTP_ANY,
-            .handler = rest_api_common_handler,
-            .user_ctx = rest_context
-        };
-        httpd_register_uri_handler(server, &api_common_uri);
-        /* URI handler for getting web server files */
-        httpd_uri_t common_get_uri = {
-            .uri = "/*", 
-            .method = HTTP_GET, 
-            .handler = rest_common_get_handler, 
-            .user_ctx = rest_context
-        };
-        httpd_register_uri_handler(server, &common_get_uri);
-    }
+    httpd_uri_t api_common_uri = {
+        .uri = "/api/*",
+        .method = HTTP_ANY,
+        .handler = rest_api_common_handler,
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &api_common_uri);
+    /* URI handler for getting web server files */
+    bool use_custom = nvs_config_get_bool(NVS_CONFIG_USE_CUSTOM_WWW) && GLOBAL_STATE->filesystem_is_available;
+    httpd_uri_t common_get_uri = {
+        .uri = "/*", 
+        .method = HTTP_GET, 
+        .handler = use_custom ? rest_common_get_handler_spiffs : rest_common_get_handler_embedded, 
+        .user_ctx = rest_context
+    };
+    httpd_register_uri_handler(server, &common_get_uri);
 
     httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
 

@@ -3,55 +3,72 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "esp_partition.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
 #include "freertos/portmacro.h"
 #include "power_management_task.h"
 #include "hashrate_monitor_task.h"
-#include "mining.h"
 #include "coinbase_decoder.h"
-#include "work_queue.h"
 #include "device_config.h"
 #include "display.h"
 #include "scoreboard.h"
 #include "esp_transport.h"
+#include "system.h"
 
-typedef enum {
-    STRATUM_PROTOCOL_UNKNOWN = 0,
-    STRATUM_PROTOCOL_V1 = 1,
-    STRATUM_PROTOCOL_V2 = 2,
-} stratum_protocol_t;
+typedef struct PoolConfig
+{
+    char * url;
+    uint16_t port;
+    char * user;
+    char * pass;
+    stratum_protocol_t protocol;
+    uint16_t difficulty;
+    bool extranonce_subscribe;
+    uint16_t tls;
+    char * cert;
+    bool decode_coinbase_tx;
+    bool share_warning;
+    uint16_t sv2_channel_type;
+    char * sv2_authority_pubkey;
+    bool sv2_require_auth;
+} PoolConfig;
 
-#define STRATUM_V1 "SV1"
-#define STRATUM_V2 "SV2"
-
-// Forward declarations
-struct sv2_conn;
-struct sv2_noise_ctx;
-
-#define STRATUM_USER CONFIG_STRATUM_USER
-#define FALLBACK_STRATUM_USER CONFIG_FALLBACK_STRATUM_USER
-
-#define HISTORY_LENGTH 100
 #define DIFF_STRING_SIZE 10
 #define MAX_BLOCK_SIGNALS 8
 #define MAX_BLOCK_SIGNAL_LEN 16
+#define MAX_POOLS 8
 
-typedef struct {
+// Job id slots tracked per ASIC. Job ids are 7-bit (0..127) on all supported
+// BM13xx parts, so both the active_jobs and valid_jobs tables are sized to 128.
+#define MAX_ASIC_JOBS 128
+
+typedef struct RejectedReasonStat
+{
     char message[64];
     uint32_t count;
 } RejectedReasonStat;
 
-typedef struct
+typedef struct {
+    const esp_partition_t *part;
+    char version[32];
+    char compileDate[16];
+    char compileTime[16];
+    int usagePercent;
+    bool isCurrent;
+} cached_partition_t;
+
+typedef struct SystemModule
 {
     float current_hashrate;
     float hashrate_1m;
     float hashrate_10m;
     float hashrate_1h;
     float error_percentage;
-    int64_t start_time;
+    int64_t start_time_us;
     uint64_t shares_accepted;
     uint64_t shares_rejected;
+    uint16_t shares_pending;
     uint64_t work_received;
     RejectedReasonStat rejected_reason_stats[10];
     int rejected_reason_stats_count;
@@ -70,33 +87,16 @@ typedef struct
     bool ap_enabled;
     bool is_connected;
     int identify_mode_time_ms;
-    char * pool_url;
-    char * fallback_pool_url;
-    uint16_t pool_port;
-    uint16_t fallback_pool_port;
-    char * pool_user;
-    char * fallback_pool_user;
-    char * pool_pass;
-    char * fallback_pool_pass;
-    uint16_t pool_difficulty;
-    uint16_t fallback_pool_difficulty;
-    bool pool_extranonce_subscribe;
-    bool fallback_pool_extranonce_subscribe;
-    bool pool_decode_coinbase_tx;
-    bool fallback_pool_decode_coinbase_tx;
+    PoolConfig pools[MAX_POOLS];
+    uint16_t primary_pool_index;
+    uint16_t secondary_pool_index;
+    bool use_fallback_stratum;
+    bool is_using_fallback;
     float response_time;
     uint16_t response_share_batch;
     float process_time;
     float cpu_usage;
-    bool use_fallback_stratum;
-    uint16_t pool_is_tls;
-    uint16_t fallback_pool_is_tls;
-    uint16_t pool_tls;
-    uint16_t fallback_pool_tls;
-    char * pool_cert;
-    char * fallback_pool_cert;
-    bool is_using_fallback;
-    uint16_t fallback_pool_protocol;
+    double pool_difficulty;
     char pool_connection_info[64];
     bool overheat_mode;
     bool mining_paused;
@@ -113,22 +113,27 @@ typedef struct
     char * version;
     char * axeOSVersion;
     Scoreboard scoreboard;
+    uint64_t uptime_seconds;
+    cached_partition_t cached_partitions[3];
+    int cached_partitions_count;
     char mdns_hostname[64];
     char full_hostname[70];
 } SystemModule;
 
-typedef struct
+typedef struct SelfTestNonceMeasurement
 {
     bool is_active;
+    uint8_t target[32];
     uint64_t accepted_count;
     uint64_t rejected_count;
     double hashes;
     pthread_mutex_t lock;
 } SelfTestNonceMeasurement;
 
-typedef struct
+typedef struct SelfTestModule
 {
     bool is_active;
+    bool is_factory;
     bool is_finished;
     SelfTestNonceMeasurement nonce_measurement;
     const char *message;
@@ -137,21 +142,20 @@ typedef struct
     esp_err_t system_init_ret;
 } SelfTestModule;
 
-typedef struct
+typedef struct AsicTaskModule
 {
     // ASIC may not return the nonce in the same order as the jobs were sent
     // it also may return a previous nonce under some circumstances
     // so we keep a list of jobs indexed by the job id
-    bm_job **active_jobs;
-    // Current job to be processed (replaces ASIC_jobs_queue)
-    bm_job *current_job;
-    //semaphone
-    SemaphoreHandle_t semaphore;
+    struct asic_job **active_jobs;
+    uint8_t *valid_jobs;
+    pthread_mutex_t valid_jobs_lock;
 } AsicTaskModule;
 
-typedef struct
+typedef struct GlobalState
 {
-    work_queue stratum_queue;
+    TaskHandle_t create_jobs_task_handle;
+    volatile uint8_t active_job_slot_idx;
 
     SystemModule SYSTEM_MODULE;
     DeviceConfig DEVICE_CONFIG;
@@ -161,38 +165,18 @@ typedef struct
     SelfTestModule SELF_TEST_MODULE;
     HashrateMonitorModule HASHRATE_MONITOR_MODULE;
 
-    char * extranonce_str;
-    int extranonce_2_len;
-
-    uint8_t * valid_jobs;
-    pthread_mutex_t valid_jobs_lock;
-
-    double pool_difficulty;
-    bool new_set_mining_difficulty_msg;
-    uint32_t version_mask;
-    bool new_stratum_version_rolling_msg;
-
+    uint8_t current_difficulty_power;
+    double target_share_interval_s;
     esp_transport_handle_t transport;
-    portMUX_TYPE stratum_mux;
-    
-    // A message ID that must be unique per request that expects a response.
-    // For requests not expecting a response (called notifications), this is null.
-    int send_uid;
-
-    stratum_protocol_t stratum_protocol;
-    struct sv2_conn *sv2_conn;
-    struct sv2_noise_ctx *sv2_noise_ctx;
+    pthread_mutex_t transport_mutex;
 
     bool ASIC_initalized;
     bool psram_is_available;
     bool filesystem_is_available;
 
     int block_height;
-    char scriptsig[128];
-    coinbase_output_t coinbase_outputs[MAX_COINBASE_TX_OUTPUTS];
-    int coinbase_output_count;
-    uint64_t coinbase_value_total_satoshis;
-    uint64_t coinbase_value_user_satoshis;
+    mining_notification_result_t coinbase;
+    mining_notification_result_t coinbase_staging;
     uint64_t network_nonce_diff;
     char network_diff_string[DIFF_STRING_SIZE];
     char block_signals[MAX_BLOCK_SIGNALS][MAX_BLOCK_SIGNAL_LEN];

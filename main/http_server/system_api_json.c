@@ -1,10 +1,13 @@
 #include <stdio.h>
+#include <string.h>
+#include "esp_partition.h"
 #include "esp_wifi.h"
 #include "esp_ota_ops.h"
 #include "esp_system.h"
 #include "esp_heap_caps.h"
-#include "esp_timer.h"
+#include "global_state.h"
 #include "system_api_json.h"
+#include "system.h"
 #include "nvs_config.h"
 #include "sv2_protocol.h"
 #include "vcore.h"
@@ -12,7 +15,7 @@
 #include "hashrate_monitor_task.h"
 #include "cjson_utils.h"
 #include "statistics_task.h"
-#include "stratum_v2_task.h"
+#include "asic.h"
 
 
 static const char *get_reset_reason_str(esp_reset_reason_t reason)
@@ -63,23 +66,24 @@ static void system_api_add_telemetry(cJSON *root, GlobalState *g) {
     cJSON_AddFloatToObject(root, "errorPercentage", g->SYSTEM_MODULE.error_percentage);
     cJSON_AddNumberToObject(root, "sharesAccepted", g->SYSTEM_MODULE.shares_accepted);
     cJSON_AddNumberToObject(root, "sharesRejected", g->SYSTEM_MODULE.shares_rejected);
+    cJSON_AddNumberToObject(root, "sharesPending", g->SYSTEM_MODULE.shares_pending);
     cJSON_AddNumberToObject(root, "bestDiff", g->SYSTEM_MODULE.best_nonce_diff);
     cJSON_AddNumberToObject(root, "bestSessionDiff", g->SYSTEM_MODULE.best_session_nonce_diff);
-    cJSON_AddNumberToObject(root, "poolDifficulty", g->pool_difficulty);
+    cJSON_AddNumberToObject(root, "poolDifficulty", g->SYSTEM_MODULE.pool_difficulty);
     cJSON_AddFloatToObject(root, "responseTime", g->SYSTEM_MODULE.response_time);
     cJSON_AddNumberToObject(root, "responseShareBatch", g->SYSTEM_MODULE.response_share_batch);
     cJSON_AddFloatToObject(root, "processTime", g->SYSTEM_MODULE.process_time);
+    cJSON_AddNumberToObject(root, "workReceived", g->SYSTEM_MODULE.work_received);
 
     // Dynamic Block Info
     cJSON_AddNumberToObject(root, "blockFound", g->SYSTEM_MODULE.block_found);
     cJSON_AddBoolToObject(root, "showNewBlock", g->SYSTEM_MODULE.show_new_block);
-    if (g->block_height > 0) {
-        cJSON_AddNumberToObject(root, "blockHeight", g->block_height);
-        cJSON_AddStringToObject(root, "scriptsig", g->scriptsig);
-        cJSON_AddNumberToObject(root, "networkDifficulty", g->network_nonce_diff);
-        cJSON_AddNumberToObject(root, "coinbaseValueTotalSatoshis", g->coinbase_value_total_satoshis);
-        cJSON_AddNumberToObject(root, "coinbaseValueUserSatoshis", g->coinbase_value_user_satoshis);
-    }
+    cJSON_AddNumberToObject(root, "blockHeight", g->block_height);
+    cJSON_AddStringToObject(root, "scriptsig", g->coinbase.scriptsig);
+    cJSON_AddNumberToObject(root, "networkDifficulty", g->network_nonce_diff);
+    cJSON_AddNumberToObject(root, "coinbaseValueTotalSatoshis", g->coinbase.total_value_satoshis);
+    cJSON_AddNumberToObject(root, "coinbaseValueUserSatoshis", g->coinbase.user_value_satoshis);
+    cJSON_AddStringToObject(root, "coinbasePayoutStatus", coinbase_payout_status_to_string(g->coinbase.payout_status));
 
     // Dynamic System Stats
     cJSON_AddNumberToObject(root, "freeHeap", esp_get_free_heap_size());
@@ -87,7 +91,10 @@ static void system_api_add_telemetry(cJSON *root, GlobalState *g) {
     cJSON_AddNumberToObject(root, "freeHeapSpiram", heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
     cJSON_AddNumberToObject(root, "minFreeHeap", esp_get_minimum_free_heap_size());
     cJSON_AddNumberToObject(root, "maxAllocHeap", heap_caps_get_largest_free_block(MALLOC_CAP_INTERNAL));
-    cJSON_AddNumberToObject(root, "uptimeSeconds", (uint32_t)((esp_timer_get_time() - g->SYSTEM_MODULE.start_time) / 1000000));
+    cJSON_AddNumberToObject(root, "uptimeSeconds", g->SYSTEM_MODULE.uptime_seconds);
+    cJSON_AddNumberToObject(root, "totalUptimeSeconds", SYSTEM_noinit_get_total_uptime_seconds());
+    cJSON_AddNumberToObject(root, "totalHashes", SYSTEM_noinit_get_total_hashes());
+    cJSON_AddNumberToObject(root, "totalLog2Work", SYSTEM_noinit_get_total_log2_work());
     cJSON_AddFloatToObject(root, "cpuUsage", g->SYSTEM_MODULE.cpu_usage);
     cJSON_AddBoolToObject(root, "miningPaused", g->SYSTEM_MODULE.mining_paused);
     cJSON_AddNumberToObject(root, "overheat_mode", g->SYSTEM_MODULE.overheat_mode ? 1 : 0);
@@ -144,66 +151,77 @@ static void system_api_add_config(cJSON *root, GlobalState *g) {
     cJSON_AddStringToObject(root, "ipv4", g->SYSTEM_MODULE.ip_addr_str);
     cJSON_AddStringToObject(root, "ipv6", g->SYSTEM_MODULE.ipv6_addr_str);
     cJSON_AddNumberToObject(root, "apEnabled", g->SYSTEM_MODULE.ap_enabled ? 1 : 0);
+    cJSON_AddNumberToObject(root, "useNTP", nvs_config_get_bool(NVS_CONFIG_USE_NTP) ? 1 : 0);
 
     // Pool Configuration
     cJSON_AddStringToObject(root, "poolConnectionInfo", g->SYSTEM_MODULE.pool_connection_info);
     cJSON_AddNumberToObject(root, "isUsingFallbackStratum", g->SYSTEM_MODULE.is_using_fallback ? 1 : 0);
     
-    char *s_url = nvs_config_get_string(NVS_CONFIG_STRATUM_URL);
-    cJSON_AddStringToObject(root, "stratumURL", s_url ? s_url : "");
-    free(s_url);
-    cJSON_AddNumberToObject(root, "stratumPort", nvs_config_get_u16(NVS_CONFIG_STRATUM_PORT));
-    char *s_user = nvs_config_get_string(NVS_CONFIG_STRATUM_USER);
-    cJSON_AddStringToObject(root, "stratumUser", s_user ? s_user : "");
-    free(s_user);
-    cJSON_AddNumberToObject(root, "stratumSuggestedDifficulty", nvs_config_get_u16(NVS_CONFIG_STRATUM_DIFFICULTY));
-    cJSON_AddBoolToObject(root, "stratumExtranonceSubscribe", nvs_config_get_bool(NVS_CONFIG_STRATUM_EXTRANONCE_SUBSCRIBE));
-    cJSON_AddNumberToObject(root, "stratumTLS", nvs_config_get_u16(NVS_CONFIG_STRATUM_TLS));
-    char *s_cert = nvs_config_get_string(NVS_CONFIG_STRATUM_CERT);
-    cJSON_AddStringToObject(root, "stratumCert", s_cert ? s_cert : "");
-    free(s_cert);
-    cJSON_AddBoolToObject(root, "stratumDecodeCoinbase", nvs_config_get_bool(NVS_CONFIG_STRATUM_DECODE_COINBASE_TX));
+    uint16_t prim_idx = g->SYSTEM_MODULE.primary_pool_index;
+    uint16_t sec_idx = g->SYSTEM_MODULE.secondary_pool_index;
 
-    char *f_url = nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_URL);
-    cJSON_AddStringToObject(root, "fallbackStratumURL", f_url ? f_url : "");
-    free(f_url);
-    cJSON_AddNumberToObject(root, "fallbackStratumPort", nvs_config_get_u16(NVS_CONFIG_FALLBACK_STRATUM_PORT));
-    char *f_user = nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_USER);
-    cJSON_AddStringToObject(root, "fallbackStratumUser", f_user ? f_user : "");
-    free(f_user);
-    cJSON_AddNumberToObject(root, "fallbackStratumSuggestedDifficulty", nvs_config_get_u16(NVS_CONFIG_FALLBACK_STRATUM_DIFFICULTY));
-    cJSON_AddBoolToObject(root, "fallbackStratumExtranonceSubscribe", nvs_config_get_bool(NVS_CONFIG_FALLBACK_STRATUM_EXTRANONCE_SUBSCRIBE));
-    cJSON_AddNumberToObject(root, "fallbackStratumTLS", nvs_config_get_u16(NVS_CONFIG_FALLBACK_STRATUM_TLS));
-    char *f_cert = nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_CERT);
-    cJSON_AddStringToObject(root, "fallbackStratumCert", f_cert ? f_cert : "");
-    free(f_cert);
-    cJSON_AddBoolToObject(root, "fallbackStratumDecodeCoinbase", nvs_config_get_bool(NVS_CONFIG_FALLBACK_STRATUM_DECODE_COINBASE_TX));
+    cJSON_AddNumberToObject(root, "primaryPoolIndex", prim_idx);
+    cJSON_AddNumberToObject(root, "secondaryPoolIndex", sec_idx);
+    cJSON_AddNumberToObject(root, "useFallbackStratum", g->SYSTEM_MODULE.use_fallback_stratum ? 1 : 0);
 
-    char *stratum_proto = nvs_config_get_string(NVS_CONFIG_STRATUM_PROTOCOL);
-    cJSON_AddStringToObject(root, "stratumProtocol", stratum_proto ? stratum_proto : STRATUM_V1);
-    free(stratum_proto);
+    cJSON *pools_arr = cJSON_CreateArray();
+    cJSON_AddItemToObject(root, "pools", pools_arr);
+    for (int i = 0; i < MAX_POOLS; i++) {
+        PoolConfig *p = &g->SYSTEM_MODULE.pools[i];
+        if (p->url && strlen(p->url) > 0) {
+            cJSON *p_obj = cJSON_CreateObject();
+            cJSON_AddNumberToObject(p_obj, "id", i);
+            cJSON_AddStringToObject(p_obj, "stratumProtocol", p->protocol == STRATUM_PROTOCOL_V2 ? STRATUM_V2 : STRATUM_V1);
+            cJSON_AddStringToObject(p_obj, "stratumURL", p->url);
+            cJSON_AddNumberToObject(p_obj, "stratumPort", p->port);
+            cJSON_AddStringToObject(p_obj, "stratumUser", p->user ? p->user : "");
+            cJSON_AddStringToObject(p_obj, "stratumPassword", "*****"); // hide password in GET response
+            cJSON_AddNumberToObject(p_obj, "stratumSuggestedDifficulty", p->difficulty);
+            cJSON_AddBoolToObject(p_obj, "stratumExtranonceSubscribe", p->extranonce_subscribe);
+            cJSON_AddNumberToObject(p_obj, "stratumTLS", p->tls);
+            cJSON_AddStringToObject(p_obj, "stratumCert", p->cert ? p->cert : "");
+            cJSON_AddBoolToObject(p_obj, "stratumDecodeCoinbase", p->decode_coinbase_tx);
+            cJSON_AddBoolToObject(p_obj, "stratumShareWarning", p->share_warning);
+            cJSON_AddStringToObject(p_obj, "stratumV2ChannelType", sv2_channel_type_to_string(p->sv2_channel_type));
+            cJSON_AddStringToObject(p_obj, "stratumV2AuthorityPubkey", p->sv2_authority_pubkey ? p->sv2_authority_pubkey : "");
+            cJSON_AddBoolToObject(p_obj, "stratumV2RequireAuth", p->sv2_require_auth);
 
-    char *sv2AuthPubkey = nvs_config_get_string(NVS_CONFIG_SV2_AUTHORITY_PUBKEY);
-    cJSON_AddStringToObject(root, "stratumV2AuthorityPubkey", sv2AuthPubkey ? sv2AuthPubkey : "");
-    free(sv2AuthPubkey);
+            cJSON_AddItemToArray(pools_arr, p_obj);
+        }
+    }
 
-    char *sv2_chan_type = nvs_config_get_string(NVS_CONFIG_SV2_CHANNEL_TYPE);
-    cJSON_AddStringToObject(root, "stratumV2ChannelType", sv2_chan_type ? sv2_chan_type : SV2_CHANNEL_TYPE_EXTENDED);
-    free(sv2_chan_type);
+    // Legacy fields for backwards compatibility
+    PoolConfig *prim_pool = &g->SYSTEM_MODULE.pools[prim_idx];
+    PoolConfig *sec_pool = &g->SYSTEM_MODULE.pools[sec_idx];
 
-    char *fallbackSv2AuthPubkey = nvs_config_get_string(NVS_CONFIG_FALLBACK_SV2_AUTHORITY_PUBKEY);
-    cJSON_AddStringToObject(root, "fallbackStratumV2AuthorityPubkey", fallbackSv2AuthPubkey ? fallbackSv2AuthPubkey : "");
-    free(fallbackSv2AuthPubkey);
+    cJSON_AddStringToObject(root, "stratumURL", prim_pool->url ? prim_pool->url : "");
+    cJSON_AddNumberToObject(root, "stratumPort", prim_pool->port);
+    cJSON_AddStringToObject(root, "stratumUser", prim_pool->user ? prim_pool->user : "");
+    cJSON_AddNumberToObject(root, "stratumSuggestedDifficulty", prim_pool->difficulty);
+    cJSON_AddBoolToObject(root, "stratumExtranonceSubscribe", prim_pool->extranonce_subscribe);
+    cJSON_AddNumberToObject(root, "stratumTLS", prim_pool->tls);
+    cJSON_AddStringToObject(root, "stratumCert", prim_pool->cert ? prim_pool->cert : "");
+    cJSON_AddBoolToObject(root, "stratumDecodeCoinbase", prim_pool->decode_coinbase_tx);
+    cJSON_AddBoolToObject(root, "stratumShareWarning", prim_pool->share_warning);
+    cJSON_AddStringToObject(root, "stratumProtocol", prim_pool->protocol == STRATUM_PROTOCOL_V2 ? STRATUM_V2 : STRATUM_V1);
+    cJSON_AddStringToObject(root, "stratumV2AuthorityPubkey", prim_pool->sv2_authority_pubkey ? prim_pool->sv2_authority_pubkey : "");
+    cJSON_AddStringToObject(root, "stratumV2ChannelType", sv2_channel_type_to_string(prim_pool->sv2_channel_type));
 
-    char *fallback_sv2_chan_type = nvs_config_get_string(NVS_CONFIG_FALLBACK_SV2_CHANNEL_TYPE);
-    cJSON_AddStringToObject(root, "fallbackStratumV2ChannelType", fallback_sv2_chan_type ? fallback_sv2_chan_type : SV2_CHANNEL_TYPE_EXTENDED);
-    free(fallback_sv2_chan_type);
-
-    char *fallback_proto = nvs_config_get_string(NVS_CONFIG_FALLBACK_STRATUM_PROTOCOL);
-    cJSON_AddStringToObject(root, "fallbackStratumProtocol", fallback_proto ? fallback_proto : STRATUM_V1);
-    free(fallback_proto);
+    cJSON_AddStringToObject(root, "fallbackStratumURL", sec_pool->url ? sec_pool->url : "");
+    cJSON_AddNumberToObject(root, "fallbackStratumPort", sec_pool->port);
+    cJSON_AddStringToObject(root, "fallbackStratumUser", sec_pool->user ? sec_pool->user : "");
+    cJSON_AddNumberToObject(root, "fallbackStratumSuggestedDifficulty", sec_pool->difficulty);
+    cJSON_AddBoolToObject(root, "fallbackStratumExtranonceSubscribe", sec_pool->extranonce_subscribe);
+    cJSON_AddNumberToObject(root, "fallbackStratumTLS", sec_pool->tls);
+    cJSON_AddStringToObject(root, "fallbackStratumCert", sec_pool->cert ? sec_pool->cert : "");
+    cJSON_AddBoolToObject(root, "fallbackStratumDecodeCoinbase", sec_pool->decode_coinbase_tx);
+    cJSON_AddBoolToObject(root, "fallbackStratumShareWarning", sec_pool->share_warning);
+    cJSON_AddStringToObject(root, "fallbackStratumProtocol", sec_pool->protocol == STRATUM_PROTOCOL_V2 ? STRATUM_V2 : STRATUM_V1);
+    cJSON_AddStringToObject(root, "fallbackStratumV2AuthorityPubkey", sec_pool->sv2_authority_pubkey ? sec_pool->sv2_authority_pubkey : "");
+    cJSON_AddStringToObject(root, "fallbackStratumV2ChannelType", sv2_channel_type_to_string(sec_pool->sv2_channel_type));
 
     // User Preferences
+    cJSON_AddNumberToObject(root, "useCustomWWW", nvs_config_get_bool(NVS_CONFIG_USE_CUSTOM_WWW) ? 1 : 0);
     cJSON_AddNumberToObject(root, "overclockEnabled", nvs_config_get_bool(NVS_CONFIG_OVERCLOCK_ENABLED) ? 1 : 0);
     char *disp_name = nvs_config_get_string(NVS_CONFIG_DISPLAY);
     cJSON_AddStringToObject(root, "display", disp_name ? disp_name : "");
@@ -243,7 +261,9 @@ static void system_api_add_hashrate_monitor(cJSON *root, GlobalState *g) {
         cJSON *domains = cJSON_CreateArray();
         cJSON_AddItemToObject(asic, "domains", domains);
         for (int j = 0; j < hash_domains; j++) {
-            cJSON_AddItemToArray(domains, cJSON_CreateNumber(g->HASHRATE_MONITOR_MODULE.domain_measurements[i][j].hashrate));
+            asic_domain_measurement_t measurement = {0};
+            ASIC_get_domain_measurement(g, i, j, &measurement);
+            cJSON_AddItemToArray(domains, cJSON_CreateNumber(measurement.hashrate));
         }
     }
 }
@@ -265,7 +285,7 @@ static void system_api_add_rejected_reasons(cJSON *root, GlobalState *g) {
 }
 
 static void system_api_add_block_info(cJSON *root, GlobalState *g) {
-    if (!root || !g || g->block_height <= 0) return;
+    if (!root || !g) return;
 
     cJSON *signals = cJSON_CreateArray();
     if (signals) {
@@ -277,30 +297,74 @@ static void system_api_add_block_info(cJSON *root, GlobalState *g) {
 
     cJSON *outputs = cJSON_CreateArray();
     if (outputs) {
-        for (int i = 0; i < g->coinbase_output_count; i++) {
+        int count = g->coinbase.output_count;
+        if (count > MAX_COINBASE_TX_OUTPUTS) {
+            count = MAX_COINBASE_TX_OUTPUTS;
+        } else if (count < 0) {
+            count = 0;
+        }
+        for (int i = 0; i < count; i++) {
             cJSON *obj = cJSON_CreateObject();
             if (obj) {
-                cJSON_AddNumberToObject(obj, "value", g->coinbase_outputs[i].value_satoshis);
-                cJSON_AddStringToObject(obj, "address", g->coinbase_outputs[i].address);
+                cJSON_AddNumberToObject(obj, "value", g->coinbase.outputs[i].value_satoshis);
+                cJSON_AddStringToObject(obj, "address", g->coinbase.outputs[i].address);
+                cJSON_AddNumberToObject(obj, "isUserOutput", g->coinbase.outputs[i].is_user_output ? 1 : 0);
                 cJSON_AddItemToArray(outputs, obj);
             }
         }
         cJSON_AddItemToObject(root, "coinbaseOutputs", outputs);
+        cJSON_AddNumberToObject(root, "coinbaseOthersCount", g->coinbase.others_count);
+        cJSON_AddNumberToObject(root, "coinbaseOthersValueSatoshis", g->coinbase.others_value_satoshis);
     }
 }
 
-cJSON* system_api_get_full_json(GlobalState *g) {
-    if (!g) return NULL;
+static void system_api_add_partitions(cJSON *root, GlobalState * GLOBAL_STATE) {
+    if (!root || !GLOBAL_STATE) return;
+
+    cJSON *partitions_array = cJSON_CreateArray();
+    cJSON_AddItemToObject(root, "partitions", partitions_array);
+
+    for (int i = 0; i < GLOBAL_STATE->SYSTEM_MODULE.cached_partitions_count; i++) {
+        cached_partition_t *cp = &GLOBAL_STATE->SYSTEM_MODULE.cached_partitions[i];
+        if (cp->part == NULL) continue;
+
+        cJSON *p_obj = cJSON_CreateObject();
+        cJSON_AddStringToObject(p_obj, "label", cp->part->label);
+        cJSON_AddBoolToObject(p_obj, "isCurrent", cp->isCurrent);
+        cJSON_AddBoolToObject(p_obj, "isFactory", cp->part->subtype == ESP_PARTITION_SUBTYPE_APP_FACTORY);
+
+        if (cp->version[0] != '\0') {
+            cJSON_AddStringToObject(p_obj, "version", cp->version);
+            cJSON_AddStringToObject(p_obj, "compileDate", cp->compileDate);
+            cJSON_AddStringToObject(p_obj, "compileTime", cp->compileTime);
+            if (cp->usagePercent >= 0) {
+                cJSON_AddNumberToObject(p_obj, "usagePercent", cp->usagePercent);
+            } else {
+                cJSON_AddNullToObject(p_obj, "usagePercent");
+            }
+        } else {
+            cJSON_AddNullToObject(p_obj, "version");
+            cJSON_AddNullToObject(p_obj, "compileDate");
+            cJSON_AddNullToObject(p_obj, "compileTime");
+            cJSON_AddNullToObject(p_obj, "usagePercent");
+        }
+        cJSON_AddItemToArray(partitions_array, p_obj);
+    }
+}
+
+cJSON* system_api_get_full_json(GlobalState * GLOBAL_STATE) {
+    if (!GLOBAL_STATE) return NULL;
     cJSON *root = cJSON_CreateObject();
     if (root == NULL) return NULL;
 
-    system_api_add_telemetry(root, g);
-    system_api_add_config(root, g);
-    system_api_add_hashrate_monitor(root, g);
+    system_api_add_telemetry(root, GLOBAL_STATE);
+    system_api_add_config(root, GLOBAL_STATE);
+    system_api_add_hashrate_monitor(root, GLOBAL_STATE);
+    system_api_add_partitions(root, GLOBAL_STATE);
 
     // Arrays that involve global state loops (not simple addition)
-    system_api_add_rejected_reasons(root, g);
-    system_api_add_block_info(root, g);
+    system_api_add_rejected_reasons(root, GLOBAL_STATE);
+    system_api_add_block_info(root, GLOBAL_STATE);
 
     return root;
 }

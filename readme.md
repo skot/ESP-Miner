@@ -8,6 +8,9 @@
 # ESP-Miner
 esp-miner is open source ESP32 firmware for the [Bitaxe](https://github.com/bitaxeorg/bitaxe)
 
+## Community
+The ESP-Miner firmware is maintained by OSMU which hosts it's own discussion forum at [Forum](https://osmu.xyz).
+
 If you are looking for premade images to load on your Bitaxe, check out the [latest release](https://github.com/bitaxeorg/ESP-Miner/releases/latest) page. Maybe you want [instructions](https://github.com/bitaxeorg/ESP-Miner/blob/master/flashing.md) for loading factory images.
 
 # Bitaxetool
@@ -38,12 +41,12 @@ bitaxetool --firmware ./esp-miner-factory-401-v2.4.2.bin
 - Flash just the NVS config to a bitaxe:
 
 ```
-bitaxetool --config ./config-401.cvs
+bitaxetool --config ./configs/config-401.csv
 ```
 - Flash both a factory image _and_ a config to your Bitaxe: note the settings in the config file will overwrite the config already baked into the factory image:
 
 ```
-bitaxetool --config ./config-401.cvs --firmware ./esp-miner-factory-401-v2.4.2.bin
+bitaxetool --config ./configs/config-401.csv --firmware ./esp-miner-factory-401-v2.4.2.bin
 ```
 
 ## AxeOS API
@@ -119,7 +122,7 @@ curl -X POST \
      --data-binary "@esp-miner.bin" \
      http://YOUR-BITAXE-IP/api/system/OTA
 
-# Update AxeOS
+# Update with a custom AxeOS Web UI partition (www.bin)
 curl -X POST \
      -H "Content-Type: application/octet-stream" \
      --data-binary "@www.bin" \
@@ -130,6 +133,38 @@ curl -X POST \
 curl -X PATCH http://YOUR-BITAXE-IP/api/system \
      -H "Content-Type: application/json" \
      -d '{"fanspeed": "desired_speed_value"}'
+
+# Configure a Stratum V1 Pool (Slot Index 0)
+curl -X PUT http://YOUR-BITAXE-IP/api/system/pools/0 \
+     -H "Content-Type: application/json" \
+     -d '{
+       "stratumProtocol": "SV1",
+       "stratumURL": "solo.ckpool.org",
+       "stratumPort": 3333,
+       "stratumUser": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa.worker1",
+       "stratumPassword": "x",
+       "stratumSuggestedDifficulty": 0,
+       "stratumExtranonceSubscribe": true,
+       "stratumTLS": 0,
+       "stratumDecodeCoinbase": true
+     }'
+
+# Configure a Stratum V2 Pool (Slot Index 1)
+curl -X PUT http://YOUR-BITAXE-IP/api/system/pools/1 \
+     -H "Content-Type: application/json" \
+     -d '{
+       "stratumProtocol": "SV2",
+       "stratumURL": "v2.srtm.ocean.xyz",
+       "stratumPort": 3334,
+       "stratumUser": "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa.worker1",
+       "stratumPassword": "x",
+       "stratumSuggestedDifficulty": 0,
+       "stratumExtranonceSubscribe": true,
+       "stratumTLS": 0,
+       "stratumDecodeCoinbase": true,
+       "stratumV2ChannelType": "extended",
+       "stratumV2AuthorityPubkey": "your_base58_sv2_authority_public_key"
+     }'
 
 # Stream logs
 websocat ws://YOUR-BITAXE-IP/api/ws
@@ -204,11 +239,44 @@ The firmware hosts a small web server on port 80 for administrative purposes. On
 
 ### Recovery
 
-In the event that the admin web front end is inaccessible, for example because of an unsuccessful firmware update (`www.bin`), a recovery page can be accessed at `http://<IP>/recovery`.
+In the event that the admin web front end is inaccessible, for example because of an unsuccessful custom Web UI update, a recovery page can be accessed at `http://<IP>/recovery`.
 
 ### Unlock Settings
 
 In order to unlock the Input fields for ASIC Frequency and ASIC Core Voltage you need to append `?oc` to the end of the settings tab URL in your browser. Be aware that without additional cooling overclocking can overheat and/or damage your Bitaxe.
+
+## Unified Firmware & Rollbacks
+
+Starting with the unified firmware releases, ESP-Miner uses a unified architecture where the AxeOS frontend is compiled, gzipped, and embedded directly into the firmware application binary (`esp-miner.bin`). 
+
+A separate Web UI image (`www.bin`) is no longer required for standard usage since the web interface is served directly from the firmware. If you want to use a custom or modified AxeOS frontend, you can still enable the **custom web UI** option in the settings. This allows you to upload and serve a separate `www.bin` from the SPIFFS partition, which takes priority over the built-in assets.
+
+### Disabling Custom Web UI via Recovery Page or API
+
+If a device is stuck serving an older custom `www.bin` partition and the Web UI settings option is not accessible, you can disable custom WWW and revert to the embedded AxeOS interface by visiting the recovery page in your browser:
+
+```
+http://<IP>/recovery
+```
+
+Alternatively, you can disable `useCustomWWW` directly via the REST API:
+
+```bash
+# Disable custom Web UI (revert to embedded AxeOS)
+curl -X PATCH http://YOUR-BITAXE-IP/api/system \
+     -H "Content-Type: application/json" \
+     -d '{"useCustomWWW": 0}'
+
+# Restart the device to apply changes
+curl -X POST http://YOUR-BITAXE-IP/api/system/restart
+```
+
+### Rollback to Pre-Unified Firmware
+
+If you roll back the firmware from a unified version to an older, pre-unified version (which expects a separate web partition):
+
+- **www partition persistence**: The `www` (SPIFFS) partition on the flash chip will remain untouched during the rollback, keeping whatever latest non-unified Web UI version was last active on the device.
+- **Potential UI Version Mismatch**: Since older firmware relies entirely on the separate `www` partition to serve the web interface, the device will load whatever files exist in that partition. If you experience layout errors or missing features after rolling back, you will need to manually flash or upload a compatible `www.bin` version that matches the older firmware version.
 
 ## Development using esp-miner/devcontainer
 
@@ -252,7 +320,7 @@ Once the build is done exit out of the docker session and flash the new firmware
 
 ### Cloning
 
-This project uses git submodules (e.g. libsecp256k1). Clone with `--recursive`:
+This project uses git submodules (e.g. libsecp256k1 and yyjson). Clone with `--recursive`:
 ```
 git clone --recursive https://github.com/bitaxeorg/ESP-Miner.git
 ```
@@ -278,12 +346,12 @@ Note: if using VSCode, you may have to configure the settings.json file to match
 With the bitaxe connected to your computer via USB, run:
 
 ```
-bitaxetool --config ./config-xxx.cvs --firmware ./esp-miner-merged.bin
+bitaxetool --config ./configs/config-xxx.csv --firmware ./esp-miner-merged.bin
 ```
 
-where xxx is the config file for your hardware version. You can see the list of available config files in the root of the repository.
+where xxx is the config file for your hardware version. You can see the list of available config files in the `configs` directory.
 
-A custom board version is also possible with `config-custom.cvs`. A custom board needs to be based on an existing `devicemodel` and `asicmodel`.
+A custom board version is also possible with `configs/config-custom.csv`. A custom board needs to be based on an existing `devicemodel` and `asicmodel`.
 
 **Notes:** 
   - If you are developing within a dev container, you will need to run the bitaxetool command from outside the container. Otherwise, you will get an error about the device not being found.

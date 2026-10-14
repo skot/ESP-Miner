@@ -8,7 +8,8 @@ import { AppTopBarComponent } from './app.topbar.component';
 
 @Component({
     selector: 'app-layout',
-    templateUrl: './app.layout.component.html'
+    templateUrl: './app.layout.component.html',
+    standalone: false
 })
 export class AppLayoutComponent implements OnDestroy {
     private destroy$ = new Subject<void>();
@@ -48,11 +49,13 @@ export class AppLayoutComponent implements OnDestroy {
             }
         });
 
-        this.router.events.pipe(filter(event => event instanceof NavigationEnd))
-            .subscribe(() => {
-                this.hideMenu();
-                this.hideProfileMenu();
-            });
+        this.router.events.pipe(
+            filter(event => event instanceof NavigationEnd),
+            takeUntil(this.destroy$)
+        ).subscribe(() => {
+            this.hideMenu();
+            this.hideProfileMenu();
+        });
     }
 
     hideMenu() {
@@ -102,8 +105,6 @@ export class AppLayoutComponent implements OnDestroy {
             'layout-static-inactive': this.layoutService.state.staticMenuDesktopInactive && this.layoutService.config().menuMode === 'static',
             'layout-overlay-active': this.layoutService.state.overlayMenuActive,
             'layout-mobile-active': this.layoutService.state.staticMenuMobileActive,
-            'p-input-filled': this.layoutService.config().inputStyle === 'filled',
-            'p-ripple-disabled': !this.layoutService.config().ripple,
             'sensitive-data-hidden': this.sensitiveDataHidden,
         }
     }

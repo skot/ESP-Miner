@@ -1,7 +1,7 @@
 import { ChangeDetectorRef, Component, Host, HostBinding, Input, OnDestroy, OnInit } from '@angular/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { animate, state, style, transition, trigger } from '@angular/animations';
-import { Subscription } from 'rxjs';
+import { Subscription, Subject, takeUntil } from 'rxjs';
 import { filter } from 'rxjs/operators';
 import { MenuService } from './app.menu.service';
 import { LayoutService } from './service/app.layout.service';
@@ -9,33 +9,7 @@ import { LayoutService } from './service/app.layout.service';
 @Component({
     // eslint-disable-next-line @angular-eslint/component-selector
     selector: '[app-menuitem]',
-    template: `
-		<ng-container>
-			<a *ngIf="(!item.routerLink || item.items) && item.visible !== false && !item.separator" [attr.href]="item.url" (click)="itemClick($event)"
-			   [ngClass]="item.class" [attr.target]="item.target" tabindex="0" pRipple>
-				<i [ngClass]="item.icon" class="layout-menuitem-icon"></i>
-				<span class="layout-menuitem-text">{{item.label}}</span>
-				<i class="pi pi-fw pi-angle-down layout-submenu-toggler" *ngIf="item.items"></i>
-			</a>
-			<a *ngIf="(item.routerLink && !item.items) && item.visible !== false && !item.separator" (click)="itemClick($event)" [ngClass]="item.class"
-			   [routerLink]="item.routerLink" routerLinkActive="active-route" [routerLinkActiveOptions]="item.routerLinkActiveOptions||{ paths: 'exact', queryParams: 'ignored', matrixParams: 'ignored', fragment: 'ignored' }"
-               [fragment]="item.fragment" [queryParamsHandling]="item.queryParamsHandling" [preserveFragment]="item.preserveFragment"
-               [skipLocationChange]="item.skipLocationChange" [replaceUrl]="item.replaceUrl" [state]="item.state" [queryParams]="item.queryParams"
-               [attr.target]="item.target" tabindex="0" pRipple>
-				<i [ngClass]="item.icon" class="layout-menuitem-icon"></i>
-				<span class="layout-menuitem-text">{{item.label}}</span>
-				<i class="pi pi-fw pi-angle-down layout-submenu-toggler" *ngIf="item.items"></i>
-			</a>
-
-            <span *ngIf="item.separator" class="menu-separator block h-1rem"></span>
-
-			<ul *ngIf="item.items && item.visible !== false" [@children]="submenuAnimation">
-				<ng-template ngFor let-child let-i="index" [ngForOf]="item.items">
-					<li app-menuitem [item]="child" [index]="i" [parentKey]="key" [class]="child.badgeClass"></li>
-				</ng-template>
-			</ul>
-		</ng-container>
-    `,
+    templateUrl: './app.menuitem.component.html',
     animations: [
         trigger('children', [
             state('collapsed', style({
@@ -46,7 +20,8 @@ import { LayoutService } from './service/app.layout.service';
             })),
             transition('collapsed <=> expanded', animate('400ms cubic-bezier(0.86, 0, 0.07, 1)'))
         ])
-    ]
+    ],
+    standalone: false
 })
 export class AppMenuitemComponent implements OnInit, OnDestroy {
 
@@ -66,6 +41,8 @@ export class AppMenuitemComponent implements OnInit, OnDestroy {
 
     key: string = "";
 
+    private destroy$ = new Subject<void>();
+
     constructor(public layoutService: LayoutService, private cd: ChangeDetectorRef, public router: Router, private menuService: MenuService) {
         this.menuSourceSubscription = this.menuService.menuSource$.subscribe(value => {
             Promise.resolve(null).then(() => {
@@ -84,12 +61,14 @@ export class AppMenuitemComponent implements OnInit, OnDestroy {
             this.active = false;
         });
 
-        this.router.events.pipe(filter(event => event instanceof NavigationEnd))
-            .subscribe(params => {
-                if (this.item.routerLink) {
-                    this.updateActiveStateFromRoute();
-                }
-            });
+        this.router.events.pipe(
+            filter(event => event instanceof NavigationEnd),
+            takeUntil(this.destroy$)
+        ).subscribe(params => {
+            if (this.item.routerLink) {
+                this.updateActiveStateFromRoute();
+            }
+        });
     }
 
     ngOnInit() {
@@ -138,6 +117,9 @@ export class AppMenuitemComponent implements OnInit, OnDestroy {
     }
 
     ngOnDestroy() {
+        this.destroy$.next();
+        this.destroy$.complete();
+
         if (this.menuSourceSubscription) {
             this.menuSourceSubscription.unsubscribe();
         }

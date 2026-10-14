@@ -1,11 +1,10 @@
 import { provideRouter } from '@angular/router';
-import { InputTextModule } from 'primeng/inputtext';
+import { ANSIPipe } from 'src/app/pipes/ansi.pipe';
 import { CommonModule } from '@angular/common';
 import { SystemApiService } from 'src/app/services/system.service';
 import { provideHttpClient } from '@angular/common/http';
-import { TooltipModule } from 'primeng/tooltip';
+import { TooltipDirective } from '../../directives/tooltip.directive';
 import { ReactiveFormsModule } from '@angular/forms';
-import { ButtonModule } from 'primeng/button';
 import { provideToastr } from 'ngx-toastr';
 import { LogsComponent } from './logs.component';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
@@ -19,10 +18,9 @@ describe('LogsComponent', () => {
       declarations: [LogsComponent],
       imports: [
         CommonModule,
-        ButtonModule,
         ReactiveFormsModule,
-        TooltipModule,
-        InputTextModule
+        TooltipDirective,
+        ANSIPipe
       ],
       providers: [
         provideRouter([]),

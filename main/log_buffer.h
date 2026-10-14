@@ -17,6 +17,7 @@ typedef struct {
 void log_buffer_early_init(void);
 void log_buffer_init(void);
 uint64_t log_buffer_get_total_written(void);
+uint64_t log_buffer_get_stdout_dropped_bytes(void);
 
 /**
  * @param abs_pos Pointer to a 64-bit absolute track position. 

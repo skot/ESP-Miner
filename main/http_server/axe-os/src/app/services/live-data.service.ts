@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable, Subject, EMPTY, timer, merge, fromEvent } from 'rxjs';
-import { catchError, retry, share, tap, switchMap, startWith, scan, shareReplay, map, timeout, bufferTime, filter, distinctUntilChanged } from 'rxjs/operators';
+import { catchError, retry, share, tap, switchMap, startWith, scan, shareReplay, map, timeout, bufferTime, filter, distinctUntilChanged, exhaustMap } from 'rxjs/operators';
 import { webSocket, WebSocketSubject } from 'rxjs/webSocket';
 import { SystemInfo as ISystemInfo } from 'src/app/generated/models';
 import { SystemApiService } from './system.service';
+import { environment } from 'src/environments/environment';
 
 @Injectable({
   providedIn: 'root'
@@ -11,10 +12,14 @@ import { SystemApiService } from './system.service';
 export class LiveDataService {
   private socket$: WebSocketSubject<any> | null = null;
   private updates$ = new Subject<Partial<ISystemInfo>>();
-  
+
+  // Connection diagnostics, read only by the close log below.
+  private openedAt = 0;
+  private lastMessageAt = 0;
+
   // Shared info stream for the whole app
   public readonly info$: Observable<ISystemInfo>;
-  
+
   // Connection status for the UI
   private connectedSubject = new BehaviorSubject<boolean>(false);
   public connected$ = this.connectedSubject.asObservable();
@@ -33,12 +38,19 @@ export class LiveDataService {
     // Periodic polling fallback (adjust frequency based on visibility)
     const fallbackPolling$ = visibility$.pipe(
       switchMap(state => {
-        const interval = state === 'visible' ? 5000 : 60000; // 5s when visible, 60s when hidden
-        return timer(interval, interval).pipe(
-          switchMap(() => {
+        const interval = state === 'visible' ? 3000 : 60000; // 3s when visible, 60s when hidden
+        return timer(0, interval).pipe(
+          exhaustMap(() => {
             // Only poll if not connected OR if backgrounded (to keep data fresh)
             if (this.connectedSubject.value && state === 'visible') return EMPTY;
-            return this.systemService.getInfo();
+            return this.systemService.getInfo().pipe(
+              tap(() => {
+                if (!this.connectedSubject.value) {
+                  this.connectedSubject.next(true);
+                }
+              }),
+              catchError(() => EMPTY)
+            );
           })
         );
       }),
@@ -48,8 +60,8 @@ export class LiveDataService {
     const updates$ = merge(
       this.connect().pipe(switchMap(() => EMPTY), catchError(() => EMPTY)),
       this.updates$.pipe(
-        // Buffer updates to handle bursts when tab is resumed
-        bufferTime(500),
+        // Buffer updates to handle bursts when tab is resumed (1000ms = 1Hz UI refresh)
+        bufferTime(1000),
         filter(msgs => msgs.length > 0),
         map(msgs => msgs.reduce((acc, curr) => ({ ...acc, ...curr }), {} as Partial<ISystemInfo>))
       ),
@@ -72,7 +84,7 @@ export class LiveDataService {
   }
 
   private connect(): Observable<any> {
-    if (this.socket$ || !window.location.host) {
+    if (environment.mock || this.socket$ || !window.location.host) {
       return EMPTY;
     }
 
@@ -84,13 +96,19 @@ export class LiveDataService {
       url,
       openObserver: {
         next: () => {
+          this.openedAt = Date.now();
+          this.lastMessageAt = 0;
           console.log('Live WebSocket connected');
           this.connectedSubject.next(true);
         }
       },
       closeObserver: {
-        next: () => {
-          console.log('Live WebSocket disconnected');
+        next: (event: CloseEvent) => {
+          console.log(
+            `Live WebSocket disconnected (code=${event?.code} wasClean=${event?.wasClean}` +
+            ` afterMs=${this.openedAt ? Date.now() - this.openedAt : -1}` +
+            ` lastMsgAgoMs=${this.lastMessageAt ? Date.now() - this.lastMessageAt : -1})`
+          );
           this.connectedSubject.next(false);
           this.socket$ = null;
         }
@@ -98,14 +116,15 @@ export class LiveDataService {
     });
 
     return this.socket$.pipe(
-      timeout(5000),
+      timeout(10000),
       tap(msg => {
+        this.lastMessageAt = Date.now();
         if (msg.event === 'update' && msg.data) {
           this.updates$.next(msg.data);
         }
       }),
       retry({ delay: 5000 }),
-      share()
+      share({ resetOnRefCountZero: false })
     );
   }
 }
