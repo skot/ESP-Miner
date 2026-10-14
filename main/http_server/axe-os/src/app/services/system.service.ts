@@ -10,12 +10,15 @@ import {
   SystemAsic as ISystemASIC,
   SystemScoreboardEntry as ISystemScoreboardEntry,
   Settings,
-  GenericResponse
+  GenericResponse,
+  FirmwareChecksum
 } from '../generated/models';
 import { Api } from '../generated/api';
 import * as functions from '../generated/functions';
+import { ISystemUpdateResponse } from 'src/models/ISystemUpdateResponse';
 
 import { environment } from '../../environments/environment';
+import { useAnimation } from '@angular/animations';
 
 const API_TIMEOUT = 15000;
 
@@ -30,11 +33,11 @@ export class SystemApiService {
   ) { }
 
   public downloadLogs(uri: string = ''): Observable<Blob> {
-    if (environment.production && this.api && !uri) {
+    if (!environment.mock && this.api && !uri) {
       return from(this.api.invoke(functions.downloadSystemLogs, {}) as Promise<Blob>);
     }
 
-    if (environment.production && uri) {
+    if (!environment.mock && uri) {
       return this.httpClient.get(`${uri}/api/system/logs`, { responseType: 'blob' });
     }
 
@@ -42,11 +45,11 @@ export class SystemApiService {
   }
 
   public getInfo(uri: string = ''): Observable<ISystemInfo> {
-    if (environment.production && this.api && !uri) {
+    if (!environment.mock && this.api && !uri) {
       return from(this.api.invoke(functions.getSystemInfo, {})).pipe(timeout(API_TIMEOUT));
     }
 
-    if (environment.production && uri) {
+    if (!environment.mock && uri) {
       return this.httpClient.get<ISystemInfo>(`${uri}/api/system/info`).pipe(timeout(API_TIMEOUT));
     }
 
@@ -72,6 +75,8 @@ export class SystemApiService {
         freeHeap: 200504,
         freeHeapInternal: 200504,
         freeHeapSpiram: 200504,
+        minFreeHeap: 180000,
+        maxAllocHeap: 90000,
         coreVoltage: 1200,
         coreVoltageActual: 1200,
         hostname: "Bitaxe",
@@ -83,15 +88,59 @@ export class SystemApiService {
         wifiStatus: "Connected!",
         wifiRSSI: -32,
         apEnabled: 0,
+        useNTP: true,
         sharesAccepted: 1,
         sharesRejected: 10,
+        sharesPending: 0,
         sharesRejectedReasons: [
           { message: "Above target", count: 8 },
           { message: "Duplicate share", count: 2 }
         ],
         uptimeSeconds: 38,
+        totalUptimeSeconds: 123456,
+        totalHashes: 456789012345,
+        totalLog2Work: 38.729,
         smallCoreCount: 672,
         ASICModel: "BM1370" as any,
+        primaryPoolIndex: 0,
+        secondaryPoolIndex: 1,
+        pools: [
+          {
+            id: 0,
+            stratumProtocol: "SV1" as const,
+            stratumURL: "public-pool.io",
+            stratumPort: 21496,
+            stratumUser: "bc1q99n3pu025yyu0jlywpmwzalyhm36tg5u37w20d.bitaxe-U1",
+            stratumPassword: "x",
+            stratumSuggestedDifficulty: 1000,
+            stratumExtranonceSubscribe: false,
+            stratumTLS: 0,
+            stratumCert: "",
+            stratumDecodeCoinbase: true,
+            stratumShareWarning: true,
+            stratumV2ChannelType: "extended" as const,
+            stratumV2AuthorityPubkey: "",
+            stratumV2RequireAuth: false
+          },
+          {
+            id: 1,
+            stratumProtocol: "SV1" as const,
+            stratumURL: "test.public-pool.io",
+            stratumPort: 21497,
+            stratumUser: "bc1q99n3pu025yyu0jlywpmwzalyhm36tg5u37w20d.bitaxe-U1",
+            stratumPassword: "x",
+            stratumSuggestedDifficulty: 1000,
+            stratumExtranonceSubscribe: false,
+            stratumTLS: 0,
+            stratumCert: "",
+            stratumDecodeCoinbase: true,
+            stratumShareWarning: true,
+            stratumV2ChannelType: "extended" as const,
+            stratumV2AuthorityPubkey: "",
+            stratumV2RequireAuth: false
+          }
+        ],
+        stratumProtocol: "SV1" as const,
         stratumURL: "public-pool.io",
         stratumPort: 21496,
         stratumUser: "bc1q99n3pu025yyu0jlywpmwzalyhm36tg5u37w20d.bitaxe-U1",
@@ -99,7 +148,11 @@ export class SystemApiService {
         stratumExtranonceSubscribe: !!0,
         stratumTLS: !!0,
         stratumCert: "",
+        stratumV2AuthorityPubkey: "",
+        stratumV2ChannelType: "extended" as const,
         stratumDecodeCoinbase: true,
+        stratumShareWarning: true,
+        fallbackStratumProtocol: "SV1" as const,
         fallbackStratumURL: "test.public-pool.io",
         fallbackStratumPort: 21497,
         fallbackStratumUser: "bc1q99n3pu025yyu0jlywpmwzalyhm36tg5u37w20d.bitaxe-U1",
@@ -108,9 +161,14 @@ export class SystemApiService {
         fallbackStratumTLS: !!0,
         fallbackStratumCert: "",
         fallbackStratumDecodeCoinbase: true,
+        fallbackStratumShareWarning: true,
+        fallbackStratumV2AuthorityPubkey: "",
+        fallbackStratumV2ChannelType: "extended" as const,
         poolDifficulty: 1000,
         responseTime: 10,
+        responseShareBatch: 1,
         isUsingFallbackStratum: 0,
+        useFallbackStratum: 0,
         poolConnectionInfo: "IPv4 (TLS)",
         frequency: 485,
         actualFrequency: 485,
@@ -126,6 +184,7 @@ export class SystemApiService {
         autofanspeed: 1,
         isPSRAMAvailable: 1,
         overclockEnabled: 1,
+        useCustomWWW: 0 as const,
         runningPartition: "factory",
         minFanSpeed: 25,
         fanspeed: 50,
@@ -138,6 +197,13 @@ export class SystemApiService {
         boardtemp1: 30,
         boardtemp2: 40,
         overheat_mode: 0,
+        statsLimit: 720,
+
+        partitions: [
+          { label: 'factory', version: 'v2.11.0', compileDate: 'Jul 10 2026', compileTime: '12:00:00', isCurrent: false, isFactory: true, usagePercent: 58 },
+          { label: 'ota_0', version: 'v2.12.0', compileDate: 'Jul 19 2026', compileTime: '15:30:00', isCurrent: true, isFactory: false, usagePercent: 58 },
+          { label: 'ota_1', version: 'v2.10.0', compileDate: 'Jun 20 2026', compileTime: '08:45:00', isCurrent: false, isFactory: false, usagePercent: 58 }
+        ],
 
         blockHeight: 811111,
         scriptsig: "..%..h..,H...ckpool.eu/solo.ckpool.org/",
@@ -153,31 +219,40 @@ export class SystemApiService {
         },
         blockFound: 1,
         showNewBlock: true,
-        coinbaseOutputs: [{value: 50, address: "payoutaddress"}],
+        coinbaseOutputs: [{value: 50, address: "payoutaddress", isUserOutput: 1}],
         coinbaseValueTotalSatoshis: 50,
         coinbaseValueUserSatoshis: 50,
+        coinbaseOthersCount: 0,
+        coinbaseOthersValueSatoshis: 0,
+        coinbasePayoutStatus: 'verified' as const,
         miningPaused: false,
+        workReceived: 42,
       }
     ).pipe(delay(1000));
   }
 
-  public getStatistics(y1: string, y2: string, uri: string = ''): Observable<ISystemStatistics> {
+  public getStatistics(y1: string[], y2: string[], uri: string = ''): Observable<ISystemStatistics> {
     let columnList = [chartLabelKey(eChartLabel.hashrate), chartLabelKey(eChartLabel.power)];
 
-    if ((y1 != chartLabelKey(eChartLabel.hashrate)) && (y1 != chartLabelKey(eChartLabel.power))) {
-      columnList.push(y1);
+    for (const y of y1) {
+      if ((y != chartLabelKey(eChartLabel.hashrate)) && (y != chartLabelKey(eChartLabel.power)) && !columnList.includes(y)) {
+        columnList.push(y);
+      }
     }
-    if ((y2 != chartLabelKey(eChartLabel.hashrate)) && (y2 != chartLabelKey(eChartLabel.power))) {
-      columnList.push(y2);
+    for (const y of y2) {
+      if ((y != chartLabelKey(eChartLabel.hashrate)) && (y != chartLabelKey(eChartLabel.power)) && !columnList.includes(y)) {
+        columnList.push(y);
+      }
     }
 
-    if (environment.production && this.api) {
+    if (!environment.mock && this.api) {
       return from(this.api.invoke(functions.getSystemStatistics, { columns: columnList })).pipe(timeout(API_TIMEOUT));
     }
 
     const hashrateData = [0,413.4903744405481,410.7764830376959,440.100549473198,430.5816012914026,452.5464981767163,414.9564271189586,498.7294609150379,411.1671601439723,491.327834852684];
     const powerData = [14.45068359375,14.86083984375,15.03173828125,15.1171875,15.1171875,15.1513671875,15.185546875,15.27099609375,15.30517578125,15.33935546875];
     const asicTempData = [-1,58.5,59.625,60.125,60.75,61.5,61.875,62.125,62.5,63];
+    const asicTemp2Data = [-1,57.5,58.625,59.125,59.75,60.5,60.875,61.125,61.5,62];
     const vrTempData = [45,45,45,44,45,44,44,45,45,45];
     const asicVoltageData = [1221,1223,1219,1223,1217,1222,1221,1219,1221,1221];
     const voltageData = [5196.875,5204.6875,5196.875,5196.875,5196.875,5196.875,5196.875,5196.875,5196.875,5204.6875];
@@ -203,6 +278,7 @@ export class SystemApiService {
           case eChartLabel.hashrate_1h:  statisticsList[i][j] = hashrateData[i];     break;
           case eChartLabel.power:        statisticsList[i][j] = powerData[i];        break;
           case eChartLabel.asicTemp:     statisticsList[i][j] = asicTempData[i];     break;
+          case eChartLabel.asicTemp2:    statisticsList[i][j] = asicTemp2Data[i];    break;
           case eChartLabel.vrTemp:       statisticsList[i][j] = vrTempData[i];       break;
           case eChartLabel.asicVoltage:  statisticsList[i][j] = asicVoltageData[i];  break;
           case eChartLabel.voltage:      statisticsList[i][j] = voltageData[i];      break;
@@ -232,7 +308,7 @@ export class SystemApiService {
   }
 
   public getScoreboard(uri: string = ''): Observable<ISystemScoreboardEntry[]> {
-    if (environment.production) {
+    if (!environment.mock) {
       return this.httpClient.get<ISystemScoreboardEntry[]>(`${uri}/api/system/scoreboard`).pipe(timeout(5000));
     }
 
@@ -261,11 +337,11 @@ export class SystemApiService {
   }
 
   public restart(uri: string = ''): Observable<GenericResponse> {
-    if (environment.production && this.api && !uri) {
+    if (!environment.mock && this.api && !uri) {
       return from(this.api.invoke(functions.restartSystem, {}) as Promise<GenericResponse>);
     }
 
-    if (environment.production && uri) {
+    if (!environment.mock && uri) {
       return this.httpClient.post<GenericResponse>(`${uri}/api/system/restart`, {});
     }
 
@@ -273,11 +349,11 @@ export class SystemApiService {
   }
 
   public dismissBlockFound(uri: string = ''): Observable<GenericResponse> {
-    if (environment.production && this.api && !uri) {
+    if (!environment.mock && this.api && !uri) {
       return from(this.api.invoke(functions.dismissBlockFound, {}) as Promise<GenericResponse>);
     }
 
-    if (environment.production && uri) {
+    if (!environment.mock && uri) {
       return this.httpClient.post<GenericResponse>(`${uri}/api/system/blockFound/dismiss`, {});
     }
 
@@ -285,11 +361,11 @@ export class SystemApiService {
   }
 
   public pauseMining(uri: string = ''): Observable<GenericResponse> {
-    if (environment.production && this.api && !uri) {
+    if (!environment.mock && this.api && !uri) {
       return from(this.api.invoke(functions.pauseMining, {}) as Promise<GenericResponse>);
     }
 
-    if (environment.production && uri) {
+    if (!environment.mock && uri) {
       return this.httpClient.post<GenericResponse>(`${uri}/api/system/pause`, {});
     }
 
@@ -297,11 +373,11 @@ export class SystemApiService {
   }
 
   public resumeMining(uri: string = ''): Observable<GenericResponse> {
-    if (environment.production && this.api && !uri) {
+    if (!environment.mock && this.api && !uri) {
       return from(this.api.invoke(functions.resumeMining, {}) as Promise<GenericResponse>);
     }
 
-    if (environment.production && uri) {
+    if (!environment.mock && uri) {
       return this.httpClient.post<GenericResponse>(`${uri}/api/system/resume`, {});
     }
 
@@ -309,27 +385,45 @@ export class SystemApiService {
   }
 
   public identify(uri: string = ''): Observable<GenericResponse> {
-    if (environment.production && this.api && !uri) {
+    if (!environment.mock && this.api && !uri) {
       return from(this.api.invoke(functions.identifySystem, {}) as Promise<GenericResponse>);
     }
 
-    if (environment.production && uri) {
+    if (!environment.mock && uri) {
       return this.httpClient.post<GenericResponse>(`${uri}/api/system/identify`, {});
     }
 
     return of({ message: 'Device identified (mock)' });
   }
 
-  public updateSystem(uri: string = '', update: any): Observable<void> {
-    if (environment.production && this.api && !uri) {
-      return from(this.api.invoke(functions.updateSystemSettings, { body: update as Settings }) as Promise<void>);
+  public updateSystem(uri: string = '', update: any): Observable<any | ISystemUpdateResponse> {
+    if (!environment.mock && this.api && !uri) {
+      return from(this.api.invoke(functions.updateSystemSettings, { body: update as Settings }));
     }
 
-    if (environment.production && uri) {
-      return this.httpClient.patch<void>(`${uri}/api/system`, update);
+    if (!environment.mock && uri) {
+      return this.httpClient.patch(`${uri}/api/system`, update);
     }
 
+    if (update.hostname) {
+      return of({
+        status: 'success',
+        redirect: {
+          url: `http://${update.hostname}.local`,
+          delay: 2000,
+          message: 'Hostname updated. Redirecting to new address...'
+        }
+      } as ISystemUpdateResponse);
+    }
     return of(undefined);
+  }
+
+  public deletePool(uri: string = '', id: number): Observable<any> {
+    if (environment.production) {
+      const targetUri = uri ? `${uri}/api/system/pools/${id}` : `/api/system/pools/${id}`;
+      return this.httpClient.delete<any>(targetUri);
+    }
+    return of({ message: 'Pool deleted successfully (mock)' }).pipe(delay(500));
   }
 
   private otaUpdate(file: File | Blob, url: string): Observable<HttpEvent<string>> {
@@ -370,12 +464,41 @@ export class SystemApiService {
     return this.otaUpdate(file, '/api/system/OTAWWW');
   }
 
-  public getAsicSettings(uri: string = ''): Observable<ISystemASIC> {
+  public switchBootPartition(partition: string, uri: string = ''): Observable<GenericResponse> {
     if (environment.production && this.api && !uri) {
-      return from(this.api.invoke(functions.getAsicSettings, {})).pipe(timeout(API_TIMEOUT));
+      return from(this.api.invoke(functions.setBootPartition as any, { body: { partition } }) as Promise<GenericResponse>);
     }
 
     if (environment.production && uri) {
+      return this.httpClient.post<GenericResponse>(`${uri}/api/system/boot`, { partition });
+    }
+
+    return of({ message: `Successfully switched to ${partition} (mock)` }).pipe(delay(1000));
+  }
+
+  public getFirmwareChecksum(uri: string = ''): Observable<FirmwareChecksum> {
+    if (!environment.mock && this.api && !uri) {
+      return from(this.api.invoke(functions.getFirmwareChecksum, {})).pipe(timeout(API_TIMEOUT));
+    }
+
+    if (!environment.mock && uri) {
+      return this.httpClient.get<FirmwareChecksum>(`${uri}/api/system/firmware/checksum`).pipe(timeout(API_TIMEOUT));
+    }
+
+    return of({
+      partition: 'ota_0',
+      version: 'v2.13.0',
+      size: 1638400,
+      sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
+    }).pipe(delay(1000));
+  }
+
+  public getAsicSettings(uri: string = ''): Observable<ISystemASIC> {
+    if (!environment.mock && this.api && !uri) {
+      return from(this.api.invoke(functions.getAsicSettings, {})).pipe(timeout(API_TIMEOUT));
+    }
+
+    if (!environment.mock && uri) {
       return this.httpClient.get<ISystemASIC>(`${uri}/api/system/asic`).pipe(timeout(API_TIMEOUT));
     }
 

@@ -1,19 +1,24 @@
+#include <stdlib.h>
+
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_psram.h"
+#include "esp_heap_caps.h"
+#include "cJSON.h"
 
 #include "asic_result_task.h"
 #include "create_jobs_task.h"
 #include "hashrate_monitor_task.h"
 #include "fan_controller_task.h"
 #include "statistics_task.h"
+#include "global_state.h"
 #include "system.h"
 #include "http_server.h"
-#include "serial.h"
 #include "stratum_task.h"
 #include "i2c_bitaxe.h"
 #include "adc.h"
 #include "nvs_config.h"
+#include "miner_job.h"
 #include "self_test.h"
 #include "asic.h"
 #include "bap/bap.h"
@@ -23,46 +28,72 @@
 #include "asic_init.h"
 #include "task_monitor.h"
 #include "filesystem.h"
-#include "input.h"
 #include "log_buffer.h"
+#include "setup_ble.h"
+#include "esp_ota_ops.h"
+#include "esp_netif_sntp.h"
 
 static GlobalState GLOBAL_STATE;
 
 static const char * TAG = "bitaxe";
 
+#define DEFAULT_GPIO_I2C_SDA CONFIG_GPIO_I2C_SDA
+#define DEFAULT_GPIO_I2C_SCL CONFIG_GPIO_I2C_SCL
+
+static void heap_alloc_failed_hook(size_t requested_size, uint32_t caps, const char *function_name)
+{
+    if (caps & MALLOC_CAP_SPIRAM) {
+        ESP_EARLY_LOGE(TAG, "%s failed to allocate %zu bytes from PSRAM", function_name, requested_size);
+        abort();
+    }
+}
+
+static void *cjson_malloc_psram(size_t size)
+{
+    if (esp_psram_is_initialized()) {
+        return heap_caps_malloc(size, MALLOC_CAP_SPIRAM);
+    }
+    return malloc(size);
+}
+
+static void cjson_free_psram(void *ptr)
+{
+    free(ptr);
+}
+
 void app_main(void)
 {
+    ESP_ERROR_CHECK(heap_caps_register_failed_alloc_callback(heap_alloc_failed_hook));
+
+    cJSON_Hooks hooks = {
+        .malloc_fn = cjson_malloc_psram,
+        .free_fn = cjson_free_psram
+    };
+    cJSON_InitHooks(&hooks);
     if (esp_psram_is_initialized()) {
         GLOBAL_STATE.psram_is_available = true;
         log_buffer_init();
+    } else {
+        ESP_LOGE(TAG, "No PSRAM available on ESP32 device!");
     }
 
     ESP_LOGI(TAG, "Welcome to the bitaxe - FOSS || GTFO!");
 
-    if (xTaskCreate(cpu_monitor_task, "cpu_monitor", 4096, (void *)&GLOBAL_STATE, 1, NULL) != pdPASS) {
+    if (xTaskCreateWithCaps(cpu_monitor_task, "cpu_monitor", 4096, (void *)&GLOBAL_STATE, 1, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
         ESP_LOGE(TAG, "Error creating cpu monitor task");
     }
 #ifdef CONFIG_ENABLE_TASK_MONITOR
-    if (xTaskCreate(task_monitor_task, "task_monitor", 8192, NULL, 1, NULL) != pdPASS) {
+    if (xTaskCreateWithCaps(task_monitor_task, "task_monitor", 8192, NULL, 1, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
         ESP_LOGE(TAG, "Error creating task monitor task");
     }
 #endif
   
-    if (!esp_psram_is_initialized()) {
-        ESP_LOGE(TAG, "No PSRAM available on ESP32 device!");
-    }
-
-    // Init I2C
-    ESP_ERROR_CHECK(i2c_bitaxe_init());
-    ESP_LOGI(TAG, "I2C initialized successfully");
-
     // Initialize RST pin to low early to minimize ASIC power consumption
     ESP_ERROR_CHECK(asic_hold_reset_low());
     ESP_LOGI(TAG, "RST pin initialized to low");
 
-    // wait for I2C to init
+    // Allow the ASIC reset line to settle before continuing startup.
     vTaskDelay(100 / portTICK_PERIOD_MS);
-
     // Init ADC
     ADC_init();
 
@@ -70,6 +101,19 @@ void app_main(void)
     if (nvs_config_init() != ESP_OK) {
         ESP_LOGE(TAG, "Failed to init NVS");
         return;
+    }
+
+    // Check firmware version migration (resets useCustomWWW on update/downgrade)
+    SYSTEM_check_firmware_migration();
+
+    // Confirm app validity for OTA rollback
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    esp_ota_img_states_t ota_state;
+    if (esp_ota_get_state_partition(running, &ota_state) == ESP_OK) {
+        if (ota_state == ESP_OTA_IMG_PENDING_VERIFY) {
+            ESP_LOGI(TAG, "First boot after OTA update, confirming app validity");
+            esp_ota_mark_app_valid_cancel_rollback();
+        }
     }
 
     // Ensure SSID is initialized before any screen/self-test uses it.
@@ -87,6 +131,17 @@ void app_main(void)
         ESP_LOGE(TAG, "Failed to init device config");
         return;
     }
+
+    // Init I2C
+    if (GLOBAL_STATE.DEVICE_CONFIG.pins.i2c != NULL) {
+        ESP_ERROR_CHECK(i2c_bitaxe_init(GLOBAL_STATE.DEVICE_CONFIG.pins.i2c->sda, GLOBAL_STATE.DEVICE_CONFIG.pins.i2c->scl));
+        ESP_LOGI(TAG, "I2C initialized successfully");
+    } else {
+        ESP_LOGI(TAG, "I2C pins not configured for board; skipping I2C initialization");
+    }
+
+    // wait for I2C to init
+    vTaskDelay(100 / portTICK_PERIOD_MS);
 
     if (self_test_init(&GLOBAL_STATE) != ESP_OK) {
         ESP_LOGE(TAG, "Failed to init self test");
@@ -109,21 +164,25 @@ void app_main(void)
             ESP_LOGE(TAG, "Error creating power management task");
         }
         if (!GLOBAL_STATE.SELF_TEST_MODULE.is_active) {
-            if (xTaskCreate(FAN_CONTROLLER_task, "fan_controller", 8192, (void *) &GLOBAL_STATE, 5, NULL) != pdPASS) {
+            if (xTaskCreate(FAN_CONTROLLER_task, "fan_controller", 8192, (void *) &GLOBAL_STATE, 8, NULL) != pdPASS) {
                 ESP_LOGE(TAG, "Error creating fan controller task");
             }
         }
     } else {
-        ESP_LOGE(TAG, "Critical peripheral initialization failure (%s). Entering degraded mode.", esp_err_to_name(GLOBAL_STATE.SELF_TEST_MODULE.system_init_ret));
+        ESP_LOGE(TAG, "Critical peripheral initialization failure (%s). Entering degraded mode.",
+                 esp_err_to_name(system_init_ret));
     }
     
+    // Read version info (from SPIFFS if custom WWW is active)
+    SYSTEM_init_versions(&GLOBAL_STATE);
+
     if (!GLOBAL_STATE.SELF_TEST_MODULE.is_active) {
         // start the API for AxeOS
-        start_rest_server((void *) &GLOBAL_STATE);
+        start_rest_server(&GLOBAL_STATE);
     }
 
-    // After mounting SPIFFS
-    SYSTEM_init_versions(&GLOBAL_STATE);
+    // Pre-cache partition descriptions and space usage percentage
+    SYSTEM_init_partitions(&GLOBAL_STATE);
 
     // Initialize BAP interface
     esp_err_t bap_ret = BAP_init(&GLOBAL_STATE);
@@ -132,42 +191,79 @@ void app_main(void)
         // Continue anyway, as BAP is not critical for core functionality
     }
 
+    // While the device is still in setup mode (config AP up but no WiFi
+    // connection), expose the BLE provisioning service so the miner can be
+    // configured over Bluetooth. A short grace period avoids spinning up BLE on
+    // a normal boot that connects within a few seconds. setup_ble_start() is
+    // idempotent and only takes effect once the AP is actually enabled.
+    int setup_ble_grace_ms = 0;
     while (!GLOBAL_STATE.SYSTEM_MODULE.is_connected) {
+        if (GLOBAL_STATE.SYSTEM_MODULE.ap_enabled && setup_ble_grace_ms >= 5000) {
+            setup_ble_start(&GLOBAL_STATE);
+        }
+        setup_ble_grace_ms += 100;
         vTaskDelay(100 / portTICK_PERIOD_MS);
     }
 
-    queue_init(&GLOBAL_STATE.stratum_queue);
+    // Connected to WiFi: tear down the setup BLE service to free the radio.
+    setup_ble_stop();
+
+    if (nvs_config_get_bool(NVS_CONFIG_USE_NTP)) {
+        ESP_LOGI(TAG, "Starting SNTP");
+        // default to pool.ntp.org to find the nearest NTP server if none are provided by DHCP
+        esp_sntp_config_t config = ESP_NETIF_SNTP_DEFAULT_CONFIG("pool.ntp.org");
+        config.start = true;
+        config.smooth_sync = true;
+        config.server_from_dhcp = true;
+        config.renew_servers_after_new_IP = true; // replace default with DHCP-provided server(s)
+        config.ip_event_to_renew = IP_EVENT_STA_GOT_IP;
+        esp_netif_sntp_init(&config);
+
+        int retry = 15;
+        while (esp_netif_sntp_sync_wait(2000 / portTICK_PERIOD_MS) == ESP_ERR_TIMEOUT && --retry >= 0) {
+            ESP_LOGI(TAG, "Waiting for NTP... (%d attempts remaining)", retry);
+        }
+        if (retry == -1) {
+            ESP_LOGW(TAG, "Failed to get NTP in time! Certificate validation may fail!");
+        }
+    }
+
+    miner_job_pool_init();
 
     if (system_init_ret == ESP_OK) {
         if (asic_initialize(&GLOBAL_STATE, ASIC_INIT_COLD_BOOT, 0) == 0) {
-            return;
-        }
+            if (!GLOBAL_STATE.SELF_TEST_MODULE.is_active) {
+                return;
+            }
 
-        if (xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 20, NULL) != pdPASS) {
-            ESP_LOGE(TAG, "Error creating stratum miner task");
-        }
-        if (xTaskCreate(ASIC_result_task, "asic result", 8192, (void *) &GLOBAL_STATE, 15, NULL) != pdPASS) {
-            ESP_LOGE(TAG, "Error creating asic result task");
-        }
+            self_test_show_message(&GLOBAL_STATE, GLOBAL_STATE.SYSTEM_MODULE.asic_status);
+            system_init_ret = ESP_FAIL;
+        } else {
+            if (xTaskCreate(create_jobs_task, "stratum miner", 8192, (void *) &GLOBAL_STATE, 20, &GLOBAL_STATE.create_jobs_task_handle) != pdPASS) {
+                ESP_LOGE(TAG, "Error creating stratum miner task");
+            }
+            if (xTaskCreate(ASIC_result_task, "asic result", 8192, (void *) &GLOBAL_STATE, 15, NULL) != pdPASS) {
+                ESP_LOGE(TAG, "Error creating asic result task");
+            }
 
-        if (!GLOBAL_STATE.SELF_TEST_MODULE.is_active) {
-            if (xTaskCreate(stratum_task, "stratum admin", 8192, (void *) &GLOBAL_STATE, 5, NULL) != pdPASS) {
-                ESP_LOGE(TAG, "Error creating stratum admin task");
+            if (xTaskCreateWithCaps(hashrate_monitor_task, "hashrate monitor", 8192, (void *) &GLOBAL_STATE, 7, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
+                ESP_LOGE(TAG, "Error creating hashrate monitor task");
+            }
+            if (xTaskCreateWithCaps(statistics_task, "statistics", 8192, (void *) &GLOBAL_STATE, 3, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
+                ESP_LOGE(TAG, "Error creating statistics task");
             }
         }
+    }
 
-        if (xTaskCreateWithCaps(hashrate_monitor_task, "hashrate monitor", 8192, (void *) &GLOBAL_STATE, 5, NULL, MALLOC_CAP_SPIRAM) !=
-            pdPASS) {
-            ESP_LOGE(TAG, "Error creating hashrate monitor task");
-        }
-        if (xTaskCreateWithCaps(statistics_task, "statistics", 8192, (void *) &GLOBAL_STATE, 3, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
-            ESP_LOGE(TAG, "Error creating statistics task");
+    if (!GLOBAL_STATE.SELF_TEST_MODULE.is_active) {
+        if (xTaskCreateWithCaps(stratum_task, "stratum", 16384, (void *) &GLOBAL_STATE, 16, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
+            ESP_LOGE(TAG, "Error creating stratum task");
         }
     }
 
     if (GLOBAL_STATE.SELF_TEST_MODULE.is_active) {
         GLOBAL_STATE.SELF_TEST_MODULE.system_init_ret = system_init_ret;
-        if (xTaskCreate(self_test_task, "self_test", 8192, (void *) &GLOBAL_STATE, 10, NULL) != pdPASS) {
+        if (xTaskCreateWithCaps(self_test_task, "self_test", 8192, (void *) &GLOBAL_STATE, 10, NULL, MALLOC_CAP_SPIRAM) != pdPASS) {
             ESP_LOGE(TAG, "Error creating self test task");
         }
     }

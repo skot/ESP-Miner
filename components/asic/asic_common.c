@@ -1,6 +1,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include <math.h>
+#include <stdio.h>
 
 #include "asic_common.h"
 #include "serial.h"
@@ -11,6 +12,32 @@
 #define PREAMBLE 0xAA55
 
 static const char * TAG = "common";
+static char asic_chain_error[96];
+
+static void format_asic_indices(char *buffer, size_t buffer_size, int first_index, int end_index)
+{
+    size_t offset = 0;
+
+    for (int index = first_index; index < end_index; index++) {
+        int written = snprintf(buffer + offset, buffer_size - offset, "%s%d", index == first_index ? "" : ",", index);
+        if (written < 0 || (size_t) written >= buffer_size - offset) {
+            snprintf(buffer, buffer_size, "%d-%d", first_index, end_index - 1);
+            return;
+        }
+
+        offset += written;
+    }
+}
+
+void clear_asic_chain_error(void)
+{
+    asic_chain_error[0] = '\0';
+}
+
+const char *get_asic_chain_error(void)
+{
+    return asic_chain_error[0] == '\0' ? NULL : asic_chain_error;
+}
 
 unsigned char _reverse_bits(unsigned char num)
 {
@@ -52,9 +79,11 @@ int _next_power_of_two(int num)
     return power;
 }
 
-int count_asic_chips(uint16_t asic_count, uint16_t chip_id, int chip_id_response_length)
+int count_asic_chips_with_id_alias(uint16_t asic_count, uint16_t chip_id, uint16_t chip_id_alias, int chip_id_response_length)
 {
     uint8_t buffer[11] = {0};
+
+    clear_asic_chain_error();
 
     int chip_counter = 0;
     while (true) {
@@ -80,8 +109,12 @@ int count_asic_chips(uint16_t asic_count, uint16_t chip_id, int chip_id_response
         }
 
         uint16_t received_chip_id = (buffer[2] << 8) | buffer[3];
-        if (received_chip_id != chip_id) {
-            ESP_LOGW(TAG, "CHIP_ID response mismatch: expected 0x%04x, got 0x%04x", chip_id, received_chip_id);
+        if (received_chip_id != chip_id && received_chip_id != chip_id_alias) {
+            if (chip_id == chip_id_alias) {
+                ESP_LOGW(TAG, "CHIP_ID response mismatch: expected 0x%04x, got 0x%04x", chip_id, received_chip_id);
+            } else {
+                ESP_LOGW(TAG, "CHIP_ID response mismatch: expected 0x%04x or 0x%04x, got 0x%04x", chip_id, chip_id_alias, received_chip_id);
+            }
             ESP_LOG_BUFFER_HEX(TAG, buffer, received);
             continue;
         }
@@ -98,10 +131,27 @@ int count_asic_chips(uint16_t asic_count, uint16_t chip_id, int chip_id_response
     }    
     
     if (chip_counter != asic_count) {
-        ESP_LOGW(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
+        ESP_LOGE(TAG, "%i chip(s) detected on the chain, expected %i", chip_counter, asic_count);
+
+        char asic_indices[64];
+        if (chip_counter < asic_count) {
+            format_asic_indices(asic_indices, sizeof(asic_indices), chip_counter, asic_count);
+            snprintf(asic_chain_error, sizeof(asic_chain_error), "ASIC %s not found", asic_indices);
+        } else {
+            format_asic_indices(asic_indices, sizeof(asic_indices), asic_count, chip_counter);
+            snprintf(asic_chain_error, sizeof(asic_chain_error), "Unexpected ASIC %s detected", asic_indices);
+        }
+        ESP_LOGE(TAG, "%s", asic_chain_error);
+
+        return 0;
     }
 
     return chip_counter;
+}
+
+int count_asic_chips(uint16_t asic_count, uint16_t chip_id, int chip_id_response_length)
+{
+    return count_asic_chips_with_id_alias(asic_count, chip_id, chip_id, chip_id_response_length);
 }
 
 esp_err_t receive_work(uint8_t * buffer, int buffer_size, uint64_t *out_timestamp_us)
@@ -146,33 +196,48 @@ esp_err_t receive_work(uint8_t * buffer, int buffer_size, uint64_t *out_timestam
     return ESP_OK;
 }
 
-void get_difficulty_mask(double difficulty, uint8_t *job_difficulty_mask)
+void get_difficulty_mask(uint8_t difficulty_power, uint8_t *job_difficulty_mask)
 {
-    // The mask must be a power of 2 so there are no holes
-    // Correct:   {0b00000000, 0b00000000, 0b11111111, 0b11111111}
-    // Incorrect: {0b00000000, 0b00000000, 0b11100111, 0b11111111}
-
-    // Round up to ensure we don't make difficulty harder than requested, then convert to int
-    uint32_t diff_int = (uint32_t)ceil(difficulty);
-
-    // Calculate largest power of 2 <= diff_int (inline of former _largest_power_of_two)
-    int power = 0;
-    while (diff_int > 1) {
-        diff_int = diff_int >> 1;
-        power++;
-    }
-    uint32_t mask = (1 << power) - 1;
+    // Register 0x14 (TICKET_MASK) filters candidate nonces by requiring `difficulty_power` leading zero bits.
+    // The mask is a contiguous bitmask (1 << power) - 1, representing difficulty 2^power.
+    uint32_t mask = (difficulty_power >= 32) ? 0xFFFFFFFFU : ((1U << difficulty_power) - 1);
 
     job_difficulty_mask[0] = 0x00;
     job_difficulty_mask[1] = 0x14; // TICKET_MASK
 
-    // convert difficulty into char array
-    // Ex: 256 = {0b00000000, 0b00000000, 0b00000000, 0b11111111}, {0x00, 0x00, 0x00, 0xff}
-    // Ex: 512 = {0b00000000, 0b00000000, 0b00000001, 0b11111111}, {0x00, 0x00, 0x01, 0xff}
     job_difficulty_mask[2] = _reverse_bits((mask >> 24) & 0xFF);
     job_difficulty_mask[3] = _reverse_bits((mask >> 16) & 0xFF);
     job_difficulty_mask[4] = _reverse_bits((mask >>  8) & 0xFF);
     job_difficulty_mask[5] = _reverse_bits( mask        & 0xFF);
+}
+
+uint8_t calculate_effective_asic_difficulty(double expected_ghs, double interval_s, double pool_difficulty)
+{
+    if (interval_s <= 0.0) {
+        interval_s = DEFAULT_SHARE_INTERVAL_S;
+    }
+
+    uint8_t power = MIN_ASIC_DIFFICULTY_POWER;
+    if (expected_ghs > 0.0) {
+        double raw_diff = expected_ghs * 1e9 * interval_s / NONCE_SPACE;
+        if (raw_diff > (double)(1U << MIN_ASIC_DIFFICULTY_POWER)) {
+            int p = MIN_ASIC_DIFFICULTY_POWER;
+            while ((p < 31) && ((double)(1U << (p + 1)) <= raw_diff + 1e-6)) {
+                p++;
+            }
+            double lower = (double)(1U << p);
+            double upper = (double)(1U << (p + 1));
+            power = ((raw_diff - lower) > (upper - raw_diff)) ? (uint8_t)(p + 1) : (uint8_t)p;
+        }
+    }
+
+    if (pool_difficulty > 0.0) {
+        while (power > MIN_ASIC_DIFFICULTY_POWER && ((double)(1U << power) > pool_difficulty + 1e-6)) {
+            power--;
+        }
+    }
+
+    return power;
 }
 
 double calculate_bm_timeout_ms(float frequency_mhz, size_t asic_count, size_t small_cores, size_t cores, size_t version_size, float timeout_percent, double default_time_ms)

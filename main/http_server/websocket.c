@@ -1,14 +1,13 @@
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include <stdint.h>
 #include <unistd.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "freertos/semphr.h"
 #include "esp_log.h"
 #include "esp_http_server.h"
 #include "websocket.h"
+#include "websocket_log.h"
+#include "websocket_api.h"
 #include "http_server.h"
 #include "log_buffer.h"
 
@@ -16,19 +15,36 @@
 
 static const char * TAG = "websocket";
 
-static int clients[MAX_WEBSOCKET_CLIENTS];
-static int active_clients = 0;
+typedef struct {
+    int fd;
+    uint32_t type;
+} ws_client_t;
+
+static ws_client_t clients[MAX_WEBSOCKET_CLIENTS];
+static int type_counts[WS_TYPE_MAX] = {0};
 static SemaphoreHandle_t clients_mutex = NULL;
-static TaskHandle_t s_websocket_task_handle = NULL;
+static httpd_handle_t server_handle = NULL;
+static TaskHandle_t s_websocket_log_task_handle = NULL;
+
+void websocket_set_log_task_handle(TaskHandle_t task_handle)
+{
+    s_websocket_log_task_handle = task_handle;
+}
+
+int websocket_get_active_client_count(WebSocketClientType type)
+{
+    if (type >= 0 && type < WS_TYPE_MAX) return type_counts[type];
+    return 0;
+}
 
 void websocket_log_notify(void)
 {
-    if (s_websocket_task_handle != NULL && active_clients > 0) {
-        xTaskNotifyGive(s_websocket_task_handle);
+    if (s_websocket_log_task_handle != NULL && type_counts[WS_TYPE_LOGS] > 0) {
+        xTaskNotifyGive(s_websocket_log_task_handle);
     }
 }
 
-static esp_err_t add_client(int fd)
+esp_err_t websocket_add_client(int fd, WebSocketClientType type)
 {
     if (xSemaphoreTake(clients_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
         ESP_LOGE(TAG, "Failed to acquire mutex for adding client");
@@ -37,12 +53,19 @@ static esp_err_t add_client(int fd)
 
     esp_err_t ret = ESP_FAIL;
     for (int i = 0; i < MAX_WEBSOCKET_CLIENTS; i++) {
-        if (clients[i] == -1) {
-            clients[i] = fd;
-            active_clients++;
-            ESP_LOGI(TAG, "Added WebSocket client, fd: %d, slot: %d", fd, i);
+        if (clients[i].fd == -1) {
+            clients[i].fd = fd;
+            clients[i].type = type;
+            if (type >= 0 && type < WS_TYPE_MAX) type_counts[type]++;
+
+            ESP_LOGI(TAG, "Added WebSocket %s client, fd: %d, slot: %d, type_count: %d",
+                     type == WS_TYPE_LOGS ? "log" : "api", fd, i,
+                     (type >= 0 && type < WS_TYPE_MAX) ? type_counts[type] : -1);
+
             ret = ESP_OK;
-            if (s_websocket_task_handle) xTaskNotifyGive(s_websocket_task_handle);
+            if (type == WS_TYPE_LOGS && s_websocket_log_task_handle) {
+                xTaskNotifyGive(s_websocket_log_task_handle);
+            }
             break;
         }
     }
@@ -54,7 +77,7 @@ static esp_err_t add_client(int fd)
     return ret;
 }
 
-static void remove_client(int fd)
+void websocket_remove_client(int fd)
 {
     if (xSemaphoreTake(clients_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
         ESP_LOGE(TAG, "Failed to acquire mutex for removing client");
@@ -62,10 +85,16 @@ static void remove_client(int fd)
     }
 
     for (int i = 0; i < MAX_WEBSOCKET_CLIENTS; i++) {
-        if (clients[i] == fd) {
-            clients[i] = -1;
-            active_clients--;
-            ESP_LOGI(TAG, "Removed WebSocket client, fd: %d, slot: %d", fd, i);
+        if (clients[i].fd == fd) {
+            WebSocketClientType type = (WebSocketClientType)clients[i].type;
+            clients[i].fd = -1;
+            clients[i].type = 0;
+            if (type >= 0 && type < WS_TYPE_MAX) type_counts[type]--;
+
+            ESP_LOGI(TAG, "Removed WebSocket %s client, fd: %d, slot: %d, type_count: %d",
+                     type == WS_TYPE_LOGS ? "log" : "api", fd, i,
+                     (type >= 0 && type < WS_TYPE_MAX) ? type_counts[type] : -1);
+
             break;
         }
     }
@@ -73,131 +102,135 @@ static void remove_client(int fd)
     xSemaphoreGive(clients_mutex);
 }
 
+void websocket_send_to_client(int fd, httpd_ws_frame_t *pkt)
+{
+    if (server_handle == NULL || fd == -1)
+        return;
+
+    esp_err_t err = httpd_ws_send_frame_async(server_handle, fd, pkt);
+
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG,
+                 "Send failed: fd=%d err=%s (%d) - removing client",
+                 fd,
+                 esp_err_to_name(err),
+                 err);
+
+        websocket_remove_client(fd);
+
+        esp_err_t close_err = httpd_sess_trigger_close(server_handle, fd);
+        if (close_err != ESP_OK) {
+            ESP_LOGW(TAG,
+                "Failed to trigger HTTP session close for fd=%d: %s (%d)",
+                fd,
+                esp_err_to_name(close_err),
+                close_err);
+        }
+    }
+}
+
+void websocket_broadcast(WebSocketClientType type, httpd_ws_frame_t *pkt)
+{
+    if (server_handle == NULL) return;
+
+    int fds[MAX_WEBSOCKET_CLIENTS];
+    int n = 0;
+
+    if (xSemaphoreTake(clients_mutex, pdMS_TO_TICKS(100)) != pdTRUE) {
+        ESP_LOGE(TAG, "Failed to acquire mutex for broadcast");
+        return;
+    }
+
+    for (int i = 0; i < MAX_WEBSOCKET_CLIENTS; i++) {
+        if (clients[i].fd != -1 && clients[i].type == type) {
+            fds[n++] = clients[i].fd;
+        }
+    }
+
+    xSemaphoreGive(clients_mutex);
+
+    for (int i = 0; i < n; i++) {
+        websocket_send_to_client(fds[i], pkt);
+    }
+}
+
 void websocket_close_fn(httpd_handle_t hd, int fd)
 {
-    ESP_LOGI(TAG, "WebSocket client disconnected, fd: %d", fd);
-    remove_client(fd);
+    websocket_remove_client(fd);
     close(fd);
+}
+
+void websocket_init(httpd_handle_t server)
+{
+    server_handle = server;
+    for (int i = 0; i < MAX_WEBSOCKET_CLIENTS; i++) {
+        clients[i].fd = -1;
+        clients[i].type = 0;
+    }
+
+    if (clients_mutex == NULL) {
+        clients_mutex = xSemaphoreCreateMutex();
+    }
+}
+
+esp_err_t websocket_pre_handshake(httpd_req_t *req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+        return ESP_FAIL;
+    }
+
+    int active_clients = 0;
+    for (int i = 0; i < WS_TYPE_MAX; i++) {
+        active_clients += type_counts[i];
+    }
+    if (active_clients >= MAX_WEBSOCKET_CLIENTS) {
+        ESP_LOGE(TAG, "Max WebSocket clients reached, rejecting new connection");
+        httpd_resp_send_custom_err(req, "429 Too Many Requests", "Max WebSocket clients reached");
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+esp_err_t websocket_post_handshake(httpd_req_t *req)
+{
+    WebSocketClientType type = (WebSocketClientType)(uintptr_t)req->user_ctx;
+    int fd = httpd_req_to_sockfd(req);
+    if (websocket_add_client(fd, type) != ESP_OK) {
+        ESP_LOGE(TAG, "Unexpected failure adding client, fd: %d", fd);
+        return ESP_FAIL;
+    }
+
+    if (type == WS_TYPE_API) {
+        websocket_api_on_connect(fd);
+    }
+
+    return ESP_OK;
 }
 
 esp_err_t websocket_handler(httpd_req_t *req)
 {
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    if (req->method == HTTP_GET) {
-        if (active_clients >= MAX_WEBSOCKET_CLIENTS) {
-            ESP_LOGE(TAG, "Max WebSocket clients reached, rejecting new connection");
-            esp_err_t ret = httpd_resp_send_custom_err(req, "429 Too Many Requests", "Max WebSocket clients reached");
-            if (ret != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to send error response: %s", esp_err_to_name(ret));
-            }
-            int fd = httpd_req_to_sockfd(req);
-            if (fd >= 0) {
-                ESP_LOGI(TAG, "Closing fd: %d for rejected connection", fd);
-                httpd_sess_trigger_close(req->handle, fd);
-            }
-            return ret;
-        }
-
-        int fd = httpd_req_to_sockfd(req);
-        esp_err_t ret = add_client(fd);
-        if (ret != ESP_OK) {
-            ESP_LOGE(TAG, "Unexpected failure adding client, fd: %d", fd);
-            ret = httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Unexpected failure adding client");
-            if (ret != ESP_OK) {
-                ESP_LOGE(TAG, "Failed to send error response: %s", esp_err_to_name(ret));
-            }
-            ESP_LOGI(TAG, "Closing fd: %d for failed client addition", fd);
-            httpd_sess_trigger_close(req->handle, fd);
-            return ret;
-        }
-        ESP_LOGI(TAG, "WebSocket handshake successful, fd: %d", fd);
-        return ESP_OK;
-    }
-
+    // Handle WebSocket frame
     httpd_ws_frame_t ws_pkt;
     memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
 
+    // Get frame header to allow ESP-IDF to handle control frames (Ping/Pong/Close)
     esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, 0);
-    if (ret != ESP_OK || ws_pkt.len == 0) {
-        ESP_LOGE(TAG, "Failed to get WebSocket frame size: %s", esp_err_to_name(ret));
-        remove_client(httpd_req_to_sockfd(req));
-        return ret;
-    }
-
-    uint8_t *buf = (uint8_t *)calloc(ws_pkt.len, sizeof(uint8_t));
-    if (buf == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate memory for WebSocket frame buffer");
-        remove_client(httpd_req_to_sockfd(req));
-        return ESP_FAIL;
-    }
-
-    ws_pkt.payload = buf;
-    ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
     if (ret != ESP_OK) {
-        ESP_LOGE(TAG, "WebSocket frame receive failed: %s", esp_err_to_name(ret));
-        free(buf);
-        remove_client(httpd_req_to_sockfd(req));
         return ret;
     }
 
-    if (ws_pkt.type == HTTPD_WS_TYPE_CLOSE) {
-        ESP_LOGI(TAG, "WebSocket close frame received, fd: %d", httpd_req_to_sockfd(req));
-        free(buf);
-        remove_client(httpd_req_to_sockfd(req));
-        return ESP_OK;
+    // If there's a payload, drain it
+    if (ws_pkt.len > 0) {
+        uint8_t *buf = (uint8_t *)calloc(1, ws_pkt.len + 1);
+        if (buf) {
+            ws_pkt.payload = buf;
+            ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
+            free(buf);
+            return ret;
+        }
     }
 
-    // TODO: Handle incoming packets here
-    free(buf);
     return ESP_OK;
-}
-
-void websocket_task(void *pvParameters)
-{
-    ESP_LOGI(TAG, "websocket_task starting");
-    httpd_handle_t https_handle = (httpd_handle_t)pvParameters;
-    s_websocket_task_handle = xTaskGetCurrentTaskHandle();
-
-    memset(clients, -1, sizeof(clients));
-    clients_mutex = xSemaphoreCreateMutex();
-
-    uint64_t last_read_abs = log_buffer_get_total_written();
-    char *scratch_buf = (char *)malloc(WS_LOG_SCRATCH_SIZE);
-
-    while (true) {
-        ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(500));
-
-        if (active_clients == 0) {
-            last_read_abs = log_buffer_get_total_written();
-            continue;
-        }
-
-        while (true) {
-            size_t read_len = log_buffer_read_absolute(&last_read_abs, scratch_buf, WS_LOG_SCRATCH_SIZE);
-            if (read_len == 0) {
-                break;
-            }
-
-            for (int i = 0; i < MAX_WEBSOCKET_CLIENTS; i++) {
-                int client_fd = clients[i];
-                if (client_fd != -1) {
-                    httpd_ws_frame_t ws_pkt;
-                    memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-                    ws_pkt.payload = (uint8_t *)scratch_buf;
-                    ws_pkt.len = read_len;
-                    ws_pkt.type = HTTPD_WS_TYPE_TEXT;
-
-                    if (httpd_ws_send_frame_async(https_handle, client_fd, &ws_pkt) != ESP_OK) {
-                        ESP_LOGW(TAG, "Failed to send WebSocket frame to fd: %d", client_fd);
-                        remove_client(client_fd);
-                    }
-                }
-            }
-        }
-    }
-
-    if (scratch_buf) free(scratch_buf);
 }
