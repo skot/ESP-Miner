@@ -16,6 +16,7 @@
 #define SYSTEM_notify_found_nonce result_task_spy_notify_found_nonce
 #define scoreboard_add result_task_spy_scoreboard_add
 #define hashrate_monitor_register_read result_task_spy_register_read
+#define mining_nonce_hash result_task_fake_mining_nonce_hash
 
 void result_task_spy_delay(TickType_t ticks);
 

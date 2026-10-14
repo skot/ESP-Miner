@@ -148,12 +148,9 @@ static void uart_receive_task(void *pvParameters) {
                         
                         //ESP_LOGI(TAG, "Received complete message: %s", message);
                         BAP_parse_message(message);
-                        
-                        if (c == '\r') {
-                            ESP_LOGD(TAG, "Got CR, waiting for possible LF");
-                        } else {
-                            in_message = false;
-                        }
+
+                        // End on either terminator; a trailing LF would re-parse the buffer.
+                        in_message = false;
                     } else if (message_len >= BAP_MAX_MESSAGE_LEN) {
                         ESP_LOGE(TAG, "Message too long, discarding");
                         in_message = false;
@@ -213,7 +210,7 @@ esp_err_t BAP_start_uart_receive_task(void) {
         "uart_receive_ta",
         8192,
         NULL,
-        5,
+        4,
         &uart_receive_task_handle,
         MALLOC_CAP_SPIRAM
     );
@@ -261,7 +258,7 @@ esp_err_t BAP_uart_init(void) {
         "uart_send_task",
         8192,
         NULL,
-        5,
+        4,
         &uart_send_task_handle,
         MALLOC_CAP_SPIRAM
     );

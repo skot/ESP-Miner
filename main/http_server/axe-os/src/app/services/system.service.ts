@@ -10,7 +10,8 @@ import {
   SystemAsic as ISystemASIC,
   SystemScoreboardEntry as ISystemScoreboardEntry,
   Settings,
-  GenericResponse
+  GenericResponse,
+  FirmwareChecksum
 } from '../generated/models';
 import { Api } from '../generated/api';
 import * as functions from '../generated/functions';
@@ -116,6 +117,7 @@ export class SystemApiService {
             stratumTLS: 0,
             stratumCert: "",
             stratumDecodeCoinbase: true,
+            stratumShareWarning: true,
             stratumV2ChannelType: "extended" as const,
             stratumV2AuthorityPubkey: "",
             stratumV2RequireAuth: false
@@ -132,6 +134,7 @@ export class SystemApiService {
             stratumTLS: 0,
             stratumCert: "",
             stratumDecodeCoinbase: true,
+            stratumShareWarning: true,
             stratumV2ChannelType: "extended" as const,
             stratumV2AuthorityPubkey: "",
             stratumV2RequireAuth: false
@@ -148,6 +151,7 @@ export class SystemApiService {
         stratumV2AuthorityPubkey: "",
         stratumV2ChannelType: "extended" as const,
         stratumDecodeCoinbase: true,
+        stratumShareWarning: true,
         fallbackStratumProtocol: "SV1" as const,
         fallbackStratumURL: "test.public-pool.io",
         fallbackStratumPort: 21497,
@@ -157,6 +161,7 @@ export class SystemApiService {
         fallbackStratumTLS: !!0,
         fallbackStratumCert: "",
         fallbackStratumDecodeCoinbase: true,
+        fallbackStratumShareWarning: true,
         fallbackStratumV2AuthorityPubkey: "",
         fallbackStratumV2ChannelType: "extended" as const,
         poolDifficulty: 1000,
@@ -214,9 +219,12 @@ export class SystemApiService {
         },
         blockFound: 1,
         showNewBlock: true,
-        coinbaseOutputs: [{value: 50, address: "payoutaddress"}],
+        coinbaseOutputs: [{value: 50, address: "payoutaddress", isUserOutput: 1}],
         coinbaseValueTotalSatoshis: 50,
         coinbaseValueUserSatoshis: 50,
+        coinbaseOthersCount: 0,
+        coinbaseOthersValueSatoshis: 0,
+        coinbasePayoutStatus: 'verified' as const,
         miningPaused: false,
         workReceived: 42,
       }
@@ -466,6 +474,23 @@ export class SystemApiService {
     }
 
     return of({ message: `Successfully switched to ${partition} (mock)` }).pipe(delay(1000));
+  }
+
+  public getFirmwareChecksum(uri: string = ''): Observable<FirmwareChecksum> {
+    if (!environment.mock && this.api && !uri) {
+      return from(this.api.invoke(functions.getFirmwareChecksum, {})).pipe(timeout(API_TIMEOUT));
+    }
+
+    if (!environment.mock && uri) {
+      return this.httpClient.get<FirmwareChecksum>(`${uri}/api/system/firmware/checksum`).pipe(timeout(API_TIMEOUT));
+    }
+
+    return of({
+      partition: 'ota_0',
+      version: 'v2.13.0',
+      size: 1638400,
+      sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
+    }).pipe(delay(1000));
   }
 
   public getAsicSettings(uri: string = ''): Observable<ISystemASIC> {
