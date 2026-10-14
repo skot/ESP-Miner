@@ -1,7 +1,8 @@
-import { Component, OnInit, ViewChild, Input, OnDestroy, ElementRef, HostListener, effect } from '@angular/core';
-import { map, Observable, shareReplay, Subscription, switchMap, tap, first, Subject, takeUntil, BehaviorSubject, filter, combineLatest } from 'rxjs';
+import { Component, OnInit, ViewChild, Input, OnDestroy, ElementRef, HostListener, effect, NgZone, ChangeDetectionStrategy, ChangeDetectorRef } from '@angular/core';
+import { map, Observable, shareReplay, Subscription, switchMap, tap, first, Subject, takeUntil, BehaviorSubject, filter, combineLatest, finalize, catchError, of, startWith } from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { getHttpErrorMessage } from 'src/app/utils/error-handler';
+import { isFrequencyLow } from 'src/app/utils/common-functions';
 import { FormBuilder, FormGroup } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
 import { DateAgoPipe } from 'src/app/pipes/date-ago.pipe';
@@ -25,7 +26,6 @@ import { GridStack, GridItemHTMLElement } from 'gridstack';
 import { DashboardEditService, WidgetDef } from 'src/app/services/dashboard-edit.service';
 
 type PoolLabel = 'Primary' | 'Fallback';
-type ProtocolLabel = 'SV2 Standard Channel' | 'SV2 Extended Channel';
 type MessageType =
   | 'SYSTEM_INFO_ERROR'
   | 'MINING_PAUSED'
@@ -73,6 +73,7 @@ const WIDGET_DEFAULTS: WidgetDef[] = [
     selector: 'app-home',
     templateUrl: './home.component.html',
     styleUrls: ['./home.component.scss'],
+    changeDetection: ChangeDetectionStrategy.OnPush,
     standalone: false
 })
 export class HomeComponent implements OnInit, OnDestroy {
@@ -105,6 +106,8 @@ export class HomeComponent implements OnInit, OnDestroy {
   public activePoolLabel!: PoolLabel;
   public activePoolProtocol!: string;
   public responseTime!: number;
+  private isChangingPool: boolean = false;
+  private targetPoolLabel: PoolLabel | null = null;
 
   public flashShareAccepted: boolean = false;
   public flashShareRejected: boolean = false;
@@ -173,16 +176,16 @@ export class HomeComponent implements OnInit, OnDestroy {
   private lastChartUpdate: number = 0;
   private lastBucket: number = -1;
 
-  // Performance optimization cache properties
-  private primaryColorRgb: { r: number, g: number, b: number } = { r: 0, g: 0, b: 0 };
   private isHardwareConfigInitialized = false;
   public asicsAmount: number = 0;
   public asicDomainsAmount: number = 0;
+  public domainUnit: string = 'GH/s';
+  public domainPower: number = 3;
   public efficiency: number = 0;
   public efficiencyAverage: number = 0;
   public expectedEfficiency: number = 0;
-  public activePoolUserAddressPart: string = '';
-  public activePoolUserSuffixPart: string = '';
+  public activePoolShareWarning: boolean = true;
+  public orderedCoinbaseOutputs: ISystemInfo['coinbaseOutputs'] = [];
   public sortedRejectionReasons: Array<{ message: string; count: number; percentage: number }> = [];
   public networkDifficultyPercentage: string = '0';
   public payoutPercentage: number = -1;
@@ -193,7 +196,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   private lastHasFan2Rpm = false;
 
   private destroy$ = new Subject<void>();
-  private infoSubscription?: Subscription;
   private statsSubscription?: Subscription;
   private latestInfo?: ISystemInfo;
   private liveDataStarted = false;
@@ -221,7 +223,9 @@ export class HomeComponent implements OnInit, OnDestroy {
     private shareRejectReasonsService: ShareRejectionExplanationService,
     private storageService: LocalStorageService,
     private dashboardEditService: DashboardEditService,
-    public layoutService: LayoutService
+    public layoutService: LayoutService,
+    private ngZone: NgZone,
+    private cd: ChangeDetectorRef
   ) {
     this.initializeChart();
 
@@ -290,12 +294,16 @@ export class HomeComponent implements OnInit, OnDestroy {
 
     this.form = this.fb.group(parsedConfig);
 
-    this.form.valueChanges.subscribe(() => {
+    this.form.valueChanges.pipe(
+      takeUntil(this.destroy$)
+    ).subscribe(() => {
       this.storageService.setItem(HOME_CHART_DATA_SOURCES, JSON.stringify(this.form.getRawValue()));
       this.loadPreviousData();
     });
 
-    this.staleCheckInterval = setInterval(() => this.checkStaleData(), 1000);
+    this.ngZone.runOutsideAngular(() => {
+      this.staleCheckInterval = setInterval(() => this.checkStaleData(), 1000);
+    });
 
     this.loadPreviousData();
   }
@@ -311,9 +319,6 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
 
     if (document.visibilityState === 'visible') {
-      // Immediately refresh the chart to display the accumulated data points and avoid a stale visual state
-      this.updateChart(undefined, true);
-
       // Reset lastMessageTime to prevent stale data warning immediately after wake up
       if (this.lastMessageTime > 0) {
         this.lastMessageTime = Date.now();
@@ -330,6 +335,8 @@ export class HomeComponent implements OnInit, OnDestroy {
 
       if (awayTime > threshold || !lastPoint || (Date.now() - lastPoint > threshold)) {
         this.loadPreviousData(false);
+      } else {
+        this.updateChart(undefined, true);
       }
       this.lastHiddenTime = 0;
     }
@@ -346,6 +353,9 @@ export class HomeComponent implements OnInit, OnDestroy {
 
   ngOnDestroy() {
     clearTimeout(this.resizeTimer);
+    clearTimeout(this.shareAcceptedTimeout);
+    clearTimeout(this.shareRejectedTimeout);
+    clearTimeout(this.workReceivedTimeout);
     clearInterval(this.staleCheckInterval);
     this.dashboardEditService.isActive$.next(false);
     this.dashboardEditService.editMode$.next(false);
@@ -373,7 +383,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     });
 
     this.grid = GridStack.init({
-      column: 12,
+      column: 24,
       cellHeight: DEFAULT_CELL_HEIGHT,
       margin: 8,
       float: false,
@@ -491,7 +501,9 @@ export class HomeComponent implements OnInit, OnDestroy {
         const durationSeconds = Math.floor(elapsedMs / 1000);
         const current = this.systemInfoError$.value;
         if (current.duration !== durationSeconds) {
-          this.systemInfoError$.next({ duration: durationSeconds, startTime: this.lastMessageTime });
+          this.ngZone.run(() => {
+            this.systemInfoError$.next({ duration: durationSeconds, startTime: this.lastMessageTime });
+          });
         }
       }
     }
@@ -517,10 +529,26 @@ export class HomeComponent implements OnInit, OnDestroy {
     const unit = this.form?.get(formControlName)?.value;
     const labels = ChartUnitGroups.find(g => g.value === unit)?.labels || [];
 
-    return labels.filter(label => this.isSensorSupported(label, this.latestInfo)).map((labelKey, index) => {
-      const label = chartLabelValue(labelKey) || labelKey;
-      const borderColor = index === 0 
-        ? baseColor 
+    const entries = labels
+      .filter(label => this.isSensorSupported(label, this.latestInfo))
+      .map((labelKey, index) => {
+        const label = chartLabelValue(labelKey) || labelKey;
+        return {
+          labelKey,
+          label,
+          index,
+          hidden: this.chartHiddenSensors[label] ?? DEFAULT_HIDDEN_SENSORS.has(labelKey)
+        };
+      });
+
+    // Fill one series, not every series in the group: overlapping translucent
+    // fills stack into a solid block. Pick the first *visible* one, so hiding a
+    // series from the legend moves the fill on rather than removing it.
+    const fillIndex = fill ? entries.findIndex(entry => !entry.hidden) : -1;
+
+    return entries.map(({ labelKey, label, index, hidden }) => {
+      const borderColor = index === 0
+        ? baseColor
         : `color-mix(in srgb, ${baseColor} ${100 - index * 15}%, ${mixColor} ${index * 15}%)`;
       const backgroundColor = `color-mix(in srgb, ${borderColor}, transparent 81%)`;
 
@@ -528,7 +556,7 @@ export class HomeComponent implements OnInit, OnDestroy {
         type: 'line',
         label,
         data: this.chartDatasets[labelKey] || (this.chartDatasets[labelKey] = []),
-        fill,
+        fill: index === fillIndex,
         backgroundColor,
         borderColor,
         tension: 0,
@@ -536,8 +564,21 @@ export class HomeComponent implements OnInit, OnDestroy {
         pointHoverRadius: 5,
         borderWidth: 1,
         yAxisID,
-        hidden: this.chartHiddenSensors[label] ?? DEFAULT_HIDDEN_SENSORS.has(labelKey)
+        hidden
       };
+    });
+  }
+
+  /**
+   * Move the fill to the first visible series on the filled axis. The legend
+   * toggles `hidden` in place without rebuilding the datasets, so the choice
+   * made at build time has to be revisited here.
+   */
+  private refreshChartFill(): void {
+    const onFilledAxis = (this.chartData?.datasets ?? []).filter((dataset: any) => dataset.yAxisID === 'y');
+    const target = onFilledAxis.find((dataset: any) => !dataset.hidden);
+    onFilledAxis.forEach((dataset: any) => {
+      dataset.fill = dataset === target;
     });
   }
 
@@ -546,10 +587,12 @@ export class HomeComponent implements OnInit, OnDestroy {
     const primaryColor = documentStyle.getPropertyValue('--color-primary').trim() || '#F80421';
     const textColor = documentStyle.getPropertyValue('--color-text-main').trim() || '#ffffff';
     const textColorSecondary = documentStyle.getPropertyValue('--color-text-secondary').trim() || '#808080';
+    const axis2Color = documentStyle.getPropertyValue('--chart-axis2-color').trim() || textColorSecondary;
 
     const datasets = [
       ...this.createChartDatasets('chartY1Unit', primaryColor, textColor, true, 'y'),
-      ...this.createChartDatasets('chartY2Unit', textColorSecondary, 'black', false, 'y2')
+      // 'black' as the mix colour darkened the series into the dark background.
+      ...this.createChartDatasets('chartY2Unit', axis2Color, textColor, false, 'y2')
     ];
 
     if (this.chartData) {
@@ -566,7 +609,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     const textColorSecondary = documentStyle.getPropertyValue('--color-text-secondary').trim();
     const surfaceBorder = documentStyle.getPropertyValue('--color-border-content').trim();
     const primaryColor = documentStyle.getPropertyValue('--color-primary').trim();
-    this.primaryColorRgb = this.hexToRgb(primaryColor);
+    const axis2Color = documentStyle.getPropertyValue('--chart-axis2-color').trim() || textColorSecondary;
 
     this.rebuildChartDatasets();
 
@@ -576,7 +619,8 @@ export class HomeComponent implements OnInit, OnDestroy {
       this.chartOptions.scales.x.grid.color = surfaceBorder;
       this.chartOptions.scales.y.ticks.color = primaryColor;
       this.chartOptions.scales.y.grid.color = surfaceBorder;
-      this.chartOptions.scales.y2.ticks.color = textColorSecondary;
+      // Match each axis to the colour of the series it scales.
+      this.chartOptions.scales.y2.ticks.color = axis2Color;
       this.chartOptions.scales.y2.grid.color = surfaceBorder;
     }
 
@@ -608,7 +652,6 @@ export class HomeComponent implements OnInit, OnDestroy {
     const textColorSecondary = documentStyle.getPropertyValue('--color-text-secondary').trim();
     const surfaceBorder = documentStyle.getPropertyValue('--color-border-content').trim();
     const primaryColor = documentStyle.getPropertyValue('--color-primary').trim();
-    this.primaryColorRgb = this.hexToRgb(primaryColor);
 
     this.chartData = {
       labels: this.dataLabel,
@@ -655,6 +698,8 @@ export class HomeComponent implements OnInit, OnDestroy {
                 this.chartHiddenSensors[label] = !!legendItem.hidden;
                 this.storageService.setItem(HOME_CHART_HIDDEN_SENSORS, JSON.stringify(this.chartHiddenSensors));
               }
+              this.refreshChartFill();
+              ci.update();
             }
           }
         },
@@ -931,6 +976,8 @@ export class HomeComponent implements OnInit, OnDestroy {
           this.asicDomainsAmount = info.hashrateMonitor.asics[0]?.domains?.length ?? 0;
         }
 
+        this.updateDomainUnit(info);
+
         this.updateChartDataSources(info);
 
         this.efficiency = this.calculateEfficiency(info, 'hashRate');
@@ -939,22 +986,31 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.networkDifficultyPercentage = this.getNetworkDifficultyPercentage(info);
         this.payoutPercentage = this.getPayoutPercentage(info);
 
-        const isFallbackPool = !!info.isUsingFallbackStratum;
-        this.activePoolLabel = isFallbackPool ? 'Fallback' : 'Primary';
-        this.activePoolURL = isFallbackPool ? info.fallbackStratumURL : info.stratumURL;
-        this.activePoolUser = isFallbackPool ? info.fallbackStratumUser : info.stratumUser;
-        this.activePoolPort = isFallbackPool ? info.fallbackStratumPort : info.stratumPort;
-        const activeProtocol = isFallbackPool ? info.fallbackStratumProtocol : info.stratumProtocol;
+        const preferredPool: PoolLabel = info.useFallbackStratum === 1 ? 'Fallback' : 'Primary';
+        const activePool: PoolLabel = info.isUsingFallbackStratum === 1 ? 'Fallback' : 'Primary';
+
+        // Keep a manual selection until its preference is acknowledged by the device.
+        if (this.targetPoolLabel === preferredPool) {
+          this.targetPoolLabel = null;
+        }
+
+        // Automatic failover changes the active pool without changing the preference.
+        this.activePoolLabel = this.targetPoolLabel ?? activePool;
+        const isCurrentlyFallback = activePool === 'Fallback';
+        this.activePoolURL = isCurrentlyFallback ? info.fallbackStratumURL : info.stratumURL;
+        this.activePoolUser = isCurrentlyFallback ? info.fallbackStratumUser : info.stratumUser;
+        this.activePoolPort = isCurrentlyFallback ? info.fallbackStratumPort : info.stratumPort;
+        this.activePoolShareWarning = !!(isCurrentlyFallback ? info.fallbackStratumShareWarning : info.stratumShareWarning);
+        const activeProtocol = isCurrentlyFallback ? info.fallbackStratumProtocol : info.stratumProtocol;
         if (activeProtocol === 'SV2') {
-          const channelType = isFallbackPool ? info.fallbackStratumV2ChannelType : info.stratumV2ChannelType;
+          const channelType = isCurrentlyFallback ? info.fallbackStratumV2ChannelType : info.stratumV2ChannelType;
           this.activePoolProtocol = channelType === 'standard' ? 'SV2 Standard Channel' : 'SV2 Extended Channel';
         } else {
           this.activePoolProtocol = 'SV1';
         }
         this.responseTime = info.responseTime;
 
-        this.activePoolUserAddressPart = this.getAddressPart(this.activePoolUser);
-        this.activePoolUserSuffixPart = this.getSuffixPart(this.activePoolUser);
+        this.orderedCoinbaseOutputs = this.getOrderedCoinbaseOutputs(info);
 
         const totalShares = info.sharesAccepted + info.sharesRejected;
         this.sortedRejectionReasons = [...(info.sharesRejectedReasons ?? [])]
@@ -998,7 +1054,12 @@ export class HomeComponent implements OnInit, OnDestroy {
         if (this.lastSharesAcceptedCount !== -1 && currentSharesAccepted > this.lastSharesAcceptedCount) {
           this.flashShareAccepted = true;
           clearTimeout(this.shareAcceptedTimeout);
-          this.shareAcceptedTimeout = setTimeout(() => this.flashShareAccepted = false, 500);
+          this.ngZone.runOutsideAngular(() => {
+            this.shareAcceptedTimeout = setTimeout(() => {
+              this.flashShareAccepted = false;
+              this.cd.markForCheck();
+            }, 500);
+          });
         }
         this.lastSharesAcceptedCount = currentSharesAccepted;
 
@@ -1006,7 +1067,12 @@ export class HomeComponent implements OnInit, OnDestroy {
         if (this.lastSharesRejectedCount !== -1 && currentSharesRejected > this.lastSharesRejectedCount) {
           this.flashShareRejected = true;
           clearTimeout(this.shareRejectedTimeout);
-          this.shareRejectedTimeout = setTimeout(() => this.flashShareRejected = false, 500);
+          this.ngZone.runOutsideAngular(() => {
+            this.shareRejectedTimeout = setTimeout(() => {
+              this.flashShareRejected = false;
+              this.cd.markForCheck();
+            }, 500);
+          });
         }
         this.lastSharesRejectedCount = currentSharesRejected;
 
@@ -1014,9 +1080,15 @@ export class HomeComponent implements OnInit, OnDestroy {
         if (this.lastWorkReceived !== -1 && currentWorkReceived > this.lastWorkReceived) {
           this.flashWorkReceived = true;
           clearTimeout(this.workReceivedTimeout);
-          this.workReceivedTimeout = setTimeout(() => this.flashWorkReceived = false, 500);
+          this.ngZone.runOutsideAngular(() => {
+            this.workReceivedTimeout = setTimeout(() => {
+              this.flashWorkReceived = false;
+              this.cd.markForCheck();
+            }, 500);
+          });
         }
         this.lastWorkReceived = currentWorkReceived;
+        this.cd.markForCheck();
       }),
       map(info => {
         const formatted = { ...info };
@@ -1034,11 +1106,17 @@ export class HomeComponent implements OnInit, OnDestroy {
       shareReplay({ refCount: true, bufferSize: 1 })
     );
 
-    this.infoSubscription = combineLatest([this.info$, this.systemInfoError$])
+    const asicSettings$ = this.systemService.getAsicSettings().pipe(
+      catchError(() => of(undefined)),
+      startWith(undefined)
+    );
+
+    combineLatest([this.info$, this.systemInfoError$, asicSettings$])
       .pipe(takeUntil(this.destroy$))
-      .subscribe(([info, systemInfoError]) => {
-        this.handleSystemMessages(info, systemInfoError);
+      .subscribe(([info, systemInfoError, asicSettings]) => {
+        this.handleSystemMessages(info, systemInfoError, asicSettings?.frequencyOptions);
         this.setTitle(info, systemInfoError);
+        this.cd.markForCheck();
       });
 
     this.info$.pipe(first(), takeUntil(this.destroy$)).subscribe(() => {
@@ -1068,23 +1146,28 @@ export class HomeComponent implements OnInit, OnDestroy {
   }
 
   onPoolChange(event: { originalEvent?: Event; value: PoolLabel }) {
-    const useFallbackStratum = Number(event.value === 'Fallback');
+    if (this.isChangingPool) return;
+    const targetIsFallback = event.value === 'Fallback';
+    const useFallbackStratum = Number(targetIsFallback);
+    this.isChangingPool = true;
+    this.targetPoolLabel = event.value;
+    this.activePoolLabel = event.value;
 
     this.systemService.updateSystem('', { useFallbackStratum })
       .pipe(
         this.loadingService.lockUIUntilComplete(),
-        switchMap(() =>
-          this.systemService.restart().pipe(
-            this.loadingService.lockUIUntilComplete()
-          )
-        )
+        finalize(() => {
+          this.isChangingPool = false;
+        })
       )
       .subscribe({
         next: () => {
-          this.toastr.success('Pool changed and device restarted');
+          this.toastr.success(`Switched to ${event.value} pool`);
         },
         error: (err: HttpErrorResponse) => {
-          this.toastr.error(`Error during pool change or device restart: ${getHttpErrorMessage(err, this.uri)}`);
+          this.isChangingPool = false;
+          this.targetPoolLabel = null;
+          this.toastr.error(`Error during pool change: ${getHttpErrorMessage(err, this.uri)}`);
         }
       });
   }
@@ -1124,21 +1207,6 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.titleService.setTitle(parts.filter(Boolean).join(' • '));
   }
 
-
-
-  private hexToRgb(hex: string): { r: number, g: number, b: number } {
-    if (hex[0] === '#') hex = hex.slice(1);
-    if (hex.length === 3) {
-      hex = hex.split('').map((h: string) => h + h).join('');
-    }
-
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
-
-    return { r, g, b };
-  }
-
   getRejectionExplanation(reason: string): string | null {
     return this.shareRejectReasonsService.getExplanation(reason);
   }
@@ -1154,14 +1222,30 @@ export class HomeComponent implements OnInit, OnDestroy {
     return index;
   }
 
+  // Pools that pay miners directly from the coinbase can push the user's own output far down
+  // the list, so lift it to the top. Outputs beyond the firmware's capacity are not in this
+  // array at all; they are summarised by coinbaseOthersCount / coinbaseOthersValueSatoshis.
+  getOrderedCoinbaseOutputs(info: ISystemInfo): ISystemInfo['coinbaseOutputs'] {
+    const outputs = info.coinbaseOutputs ?? [];
+    if (outputs.length <= 1) return outputs;
+
+    const isUserOutput = (o: any) => o.isUserOutput === 1;
+
+    const userOutputs = outputs.filter(isUserOutput);
+    if (!userOutputs.length) return outputs;
+
+    return [...userOutputs, ...outputs.filter(o => !isUserOutput(o))];
+  }
+
+
   getPayoutPercentage(info: ISystemInfo) {
-    if (info.coinbaseValueTotalSatoshis) {
+    if ((info.coinbasePayoutStatus === 'verified' || info.coinbasePayoutStatus === 'not_found') && info.coinbaseValueTotalSatoshis) {
       return (info.coinbaseValueUserSatoshis ?? 0) / info.coinbaseValueTotalSatoshis * 100;
     }
     return -1;
   }
 
-  public handleSystemMessages(info: ISystemInfo, systemInfoError: ISystemInfoError) {
+  public handleSystemMessages(info: ISystemInfo, systemInfoError: ISystemInfoError, frequencyOptions?: number[]) {
     const updateMessage = (
       condition: boolean,
       type: MessageType,
@@ -1191,12 +1275,13 @@ export class HomeComponent implements OnInit, OnDestroy {
     updateMessage(!!info.overheat_mode, 'DEVICE_OVERHEAT', 'error', 'Device has overheated - See settings');
     updateMessage(!!info.power_fault, 'POWER_FAULT', 'error', `${info.power_fault} Check your Power Supply.`);
     updateMessage(!!info.hardware_fault, 'HARDWARE_FAULT', 'error', `${info.hardware_fault}`);
-    updateMessage(!info.frequency || info.frequency < 400, 'FREQUENCY_LOW', 'warn', 'Device frequency is set low - See settings');
-    updateMessage(!!info.isUsingFallbackStratum, 'FALLBACK_STRATUM', 'warn', 'Using fallback pool - Share stats reset. Check Pool Settings and / or reboot Device.');
+    updateMessage(isFrequencyLow(info.frequency, frequencyOptions), 'FREQUENCY_LOW', 'warn', 'Device frequency is set low - See settings');
+    updateMessage(info.isUsingFallbackStratum === 1 && info.useFallbackStratum === 0, 'FALLBACK_STRATUM', 'warn', 'Primary pool unreachable - operating on fallback pool.');
     if (info.coinbaseOutputs && info.coinbaseOutputs.length > 0) {
       let percentage = this.getPayoutPercentage(info);
-      updateMessage(percentage > 0 && percentage < 95, 'NOT_SOLO_MINING', 'warn', `Your share of the mining reward is only ${percentage.toFixed(1)}%`);
-      updateMessage(percentage === 0, 'NO_MINING_REWARD', 'warn', `You don't have a share in the mining reward`);
+      const warn = this.activePoolShareWarning;
+      updateMessage(warn && percentage > 0 && percentage < 95, 'NOT_SOLO_MINING', 'warn', `Your share of the mining reward is only ${percentage.toFixed(1)}%`);
+      updateMessage(warn && info.coinbasePayoutStatus === 'not_found', 'NO_MINING_REWARD', 'warn', `You don't have a share in the mining reward`);
     }
   }
 
@@ -1226,6 +1311,17 @@ export class HomeComponent implements OnInit, OnDestroy {
     const lightness = 0.5 + amount;
 
     return lightness.toFixed(3);
+  }
+
+  private updateDomainUnit(info: ISystemInfo) {
+    const totalDomains = this.asicsAmount * this.asicDomainsAmount;
+    if (totalDomains <= 0) return;
+
+    const totalHashrate = info.expectedHashrate || info.hashRate || 0;
+    if (totalHashrate <= 0) return;
+
+    this.domainPower = HashSuffixPipe.getPower(totalHashrate / totalDomains);
+    this.domainUnit = HashSuffixPipe.getSuffix(this.domainPower);
   }
 
   private updateChartUnitGroups() {
@@ -1320,59 +1416,60 @@ export class HomeComponent implements OnInit, OnDestroy {
     const statsFrequencyMs = (statsFrequency || 30) * 1000;
     const windowDurationMs = limit * statsFrequencyMs;
 
-    while (this.dataLabel.length > limit) {
-      const currentSpan = this.dataLabel[this.dataLabel.length - 1] - this.dataLabel[0];
-
-      if (currentSpan >= windowDurationMs) {
-        // Option A: Chart is at max capacity in time. Prune oldest to slide the window.
-        this.dataLabel.shift();
-        this.hashrateData.shift();
-        this.powerData.shift();
+    const currentSpan = this.dataLabel[this.dataLabel.length - 1] - this.dataLabel[0];
+    if (currentSpan >= windowDurationMs) {
+      const excess = this.dataLabel.length - limit;
+      if (excess > 0) {
+        this.dataLabel.splice(0, excess);
+        this.hashrateData.splice(0, excess);
+        this.powerData.splice(0, excess);
         Object.keys(this.chartDatasets).forEach(k => {
-          this.chartDatasets[k].shift();
-        });
-      } else {
-        // Option B: Chart is crowded. Binary search for the densest region.
-        // We initialize search range from index 1 to length - 2 to protect the oldest point (index 0) 
-        // and newest point (index length - 1) from being deleted, preserving chart boundaries.
-        let low = 1;
-        let high = this.dataLabel.length - 2;
-        while (high - low > 1) {
-          const midTime = (this.dataLabel[low] + this.dataLabel[high]) / 2;
-          
-          let split = low;
-          for (let i = low; i <= high; i++) {
-            if (this.dataLabel[i] >= midTime) {
-              split = i;
-              break;
-            }
-          }
-
-          // Ensure we make progress even if multiple points have the same timestamp
-          if (split === low) split++;
-          if (split > high) split = high;
-
-          const leftCount = split - low;
-          const rightCount = high - split + 1;
-
-          if (leftCount > rightCount) {
-             high = split - 1;
-          } else {
-             low = split;
-          }
-        }
-        
-        // Remove point at index 'low'.
-        this.dataLabel.splice(low, 1);
-        this.hashrateData.splice(low, 1);
-        this.powerData.splice(low, 1);
-        Object.keys(this.chartDatasets).forEach(k => {
-          this.chartDatasets[k].splice(low, 1);
+          this.chartDatasets[k].splice(0, excess);
         });
       }
     }
 
-    if (this.chartData) {
+    while (this.dataLabel.length > limit) {
+      // Option B: Chart is crowded. Binary search for the densest region.
+      // We initialize search range from index 1 to length - 2 to protect the oldest point (index 0) 
+      // and newest point (index length - 1) from being deleted, preserving chart boundaries.
+      let low = 1;
+      let high = this.dataLabel.length - 2;
+      while (high - low > 1) {
+        const midTime = (this.dataLabel[low] + this.dataLabel[high]) / 2;
+        
+        let split = low;
+        for (let i = low; i <= high; i++) {
+          if (this.dataLabel[i] >= midTime) {
+            split = i;
+            break;
+          }
+        }
+
+        // Ensure we make progress even if multiple points have the same timestamp
+        if (split === low) split++;
+        if (split > high) split = high;
+
+        const leftCount = split - low;
+        const rightCount = high - split + 1;
+
+        if (leftCount > rightCount) {
+           high = split - 1;
+        } else {
+           low = split;
+        }
+      }
+      
+      // Remove point at index 'low'.
+      this.dataLabel.splice(low, 1);
+      this.hashrateData.splice(low, 1);
+      this.powerData.splice(low, 1);
+      Object.keys(this.chartDatasets).forEach(k => {
+        this.chartDatasets[k].splice(low, 1);
+      });
+    }
+
+    if (this.chartData && document.visibilityState !== 'hidden') {
       this.chartData = { ...this.chartData };
     }
   }
@@ -1477,15 +1574,5 @@ export class HomeComponent implements OnInit, OnDestroy {
         const settings = HomeComponent.getSettingsForLabel(datasetLabel);
         return value.toLocaleString(undefined, { useGrouping: false, maximumFractionDigits: args?.tickmark ? undefined : settings.precision }) + settings.suffix;
     }
-  }
-
-  getAddressPart(user: string): string {
-    const dotIndex = user.lastIndexOf('.');
-    return dotIndex !== -1 ? user.substring(0, dotIndex) : user;
-  }
-
-  getSuffixPart(user: string): string {
-    const dotIndex = user.lastIndexOf('.');
-    return dotIndex !== -1 ? '.' + user.substring(dotIndex + 1) : '';
   }
 }

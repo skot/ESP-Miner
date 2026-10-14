@@ -75,7 +75,7 @@ static void handle_pool_url(GlobalState *GLOBAL_STATE, char *temp, size_t ts, ch
 
 static void handle_pool_diff(GlobalState *GLOBAL_STATE, char *temp, size_t ts, char **dst, size_t *remaining)
 {
-    append_formatted(dst, remaining, temp, ts, "%.0f", GLOBAL_STATE->pool_difficulty);
+    append_formatted(dst, remaining, temp, ts, "%.0f", GLOBAL_STATE->SYSTEM_MODULE.pool_difficulty);
 }
 
 static void handle_rssi(GlobalState *GLOBAL_STATE, char *temp, size_t ts, char **dst, size_t *remaining)
@@ -207,7 +207,7 @@ static const var_entry_t variables[] = {
     { "uptime",            VAR_TYPE_CUSTOM,       0,                                                                NULL,   handle_uptime },
 
     { "network_diff",      VAR_TYPE_STRING_ARRAY, offsetof(GlobalState, network_diff_string),                      NULL,   NULL },
-    { "scriptsig",         VAR_TYPE_STRING_ARRAY, offsetof(GlobalState, scriptsig),                                 NULL,   NULL },
+    { "scriptsig",         VAR_TYPE_STRING_ARRAY, offsetof(GlobalState, coinbase.scriptsig),                        NULL,   NULL },
     { "block_height",      VAR_TYPE_INT32,        offsetof(GlobalState, block_height),                              "%d",   NULL },
 
     { "hostname",          VAR_TYPE_CUSTOM,       0,                                                                NULL,   handle_hostname },

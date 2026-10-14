@@ -1,8 +1,10 @@
+#include <inttypes.h>
 #include <string.h>
 #include "esp_log.h"
 #include "esp_err.h"
 #include "esp_check.h"
 #include "lvgl.h"
+#include "lvgl__lvgl/src/misc/cache/instance/lv_image_cache.h"
 #include "esp_lvgl_port.h"
 #include "global_state.h"
 #include "screen.h"
@@ -26,14 +28,31 @@ typedef enum {
     SCR_OSMU_LOGO,
     SCR_BLOCK_FOUND,
     SCR_CAROUSEL,
+    SCR_STATS,
     MAX_SCREENS,
 } screen_t;
 
 #define SCREEN_UPDATE_MS 500
+#define BUTTON_WAKE_MS 5000
+#define BITAXE_LOGO_INVERTED_SIZE (77 * 30 * 2)
+#define OSMU_LOGO_INVERTED_SIZE (125 * 27 * 2)
 
 extern const lv_img_dsc_t bitaxe_logo;
+extern const lv_img_dsc_t bitaxe_logo_large;
 extern const lv_img_dsc_t osmu_logo;
 extern const lv_img_dsc_t identify_text;
+extern const lv_img_dsc_t bitaxe_background;
+extern const lv_font_t ui_font_DigitalNumbers16;
+extern const lv_font_t ui_font_DigitalNumbers28;
+extern const lv_font_t ui_font_OpenSansBold13;
+extern const lv_font_t ui_font_OpenSansBold14;
+extern const lv_font_t ui_font_AngelWish40;
+
+static lv_img_dsc_t bitaxe_logo_inverted;
+static lv_img_dsc_t osmu_logo_inverted;
+static uint8_t bitaxe_logo_inverted_map[BITAXE_LOGO_INVERTED_SIZE];
+static uint8_t osmu_logo_inverted_map[OSMU_LOGO_INVERTED_SIZE];
+static bool inverted_logos_ready;
 
 static lv_obj_t * screens[MAX_SCREENS];
 static screen_t current_screen;
@@ -61,6 +80,18 @@ static lv_obj_t *firmware_update_scr_status_label;
 
 static lv_obj_t *connection_wifi_status_label;
 
+static lv_obj_t *stats_hashrate_label;
+static lv_obj_t *stats_efficiency_label;
+static lv_obj_t *stats_difficulty_label;
+static lv_obj_t *stats_temp_label;
+static lv_obj_t *stats_fan_rpm_label;
+static lv_obj_t *stats_vin_label;
+static lv_obj_t *stats_vcore_label;
+static lv_obj_t *stats_current_label;
+static lv_obj_t *stats_power_label;
+static lv_obj_t *stats_uptime_label;
+static lv_obj_t *stats_ip_label;
+static lv_obj_t *stats_logo_label;
 static lv_obj_t *notification_label;
 static lv_obj_t *identify_image;
 
@@ -87,8 +118,117 @@ static uint64_t current_work_received;
 
 static bool self_test_finished;
 
+static bool is_large_display(void) {
+    return lv_display_get_vertical_resolution(NULL) > 128;
+}
+
+static void apply_screen_padding(lv_obj_t * obj) {
+    if (is_large_display()) {
+        lv_obj_set_style_pad_all(obj, 8, LV_PART_MAIN);
+    }
+}
+
+static bool use_stats_background(void) {
+    return is_large_display();
+}
+
+static lv_obj_t * create_positioned_label(
+    lv_obj_t * parent,
+    int32_t x,
+    int32_t y,
+    int32_t w,
+    int32_t h,
+    const lv_font_t * font,
+    const char * text,
+    lv_text_align_t align
+) {
+    lv_obj_t * label = lv_label_create(parent);
+    lv_label_set_text(label, text);
+    lv_obj_set_pos(label, x, y);
+    lv_obj_set_width(label, w);
+    lv_obj_set_height(label, h);
+    lv_label_set_long_mode(label, LV_LABEL_LONG_CLIP);
+    lv_obj_set_style_pad_all(label, 0, LV_PART_MAIN);
+    lv_obj_set_style_bg_opa(label, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_text_color(label, lv_color_white(), LV_PART_MAIN);
+    lv_obj_set_style_text_align(label, align, LV_PART_MAIN);
+    lv_obj_set_style_text_font(label, font, LV_PART_MAIN);
+    lv_obj_set_style_text_line_space(label, 0, LV_PART_MAIN);
+    return label;
+}
+
+static void format_compact_uptime(char * buf, size_t buf_size, int64_t start_time_us)
+{
+    uint32_t uptime_seconds = (esp_timer_get_time() - start_time_us) / 1000000;
+    uint32_t days = uptime_seconds / (24 * 3600);
+    uptime_seconds %= (24 * 3600);
+    uint32_t hours = uptime_seconds / 3600;
+    uptime_seconds %= 3600;
+    uint32_t minutes = uptime_seconds / 60;
+    uptime_seconds %= 60;
+
+    if (days > 0) {
+        snprintf(buf, buf_size, "%" PRIu32 "d %" PRIu32 "h %" PRIu32 "m", days, hours, minutes);
+    } else if (hours > 0) {
+        snprintf(buf, buf_size, "%" PRIu32 "h %" PRIu32 "m", hours, minutes);
+    } else {
+        snprintf(buf, buf_size, "%" PRIu32 "m %" PRIu32 "s", minutes, uptime_seconds);
+    }
+}
+
+static void make_inverted_logo(const lv_img_dsc_t * src, lv_img_dsc_t * dst, uint8_t * dst_map, size_t dst_map_size) {
+    size_t data_size = src->data_size;
+    if (data_size > dst_map_size) {
+        data_size = dst_map_size;
+    }
+
+    *dst = *src;
+    dst->data = dst_map;
+    dst->data_size = data_size;
+
+    for (size_t i = 0; i + 1 < data_size; i += 2) {
+        uint16_t pixel = src->data[i] | (src->data[i + 1] << 8);
+        uint16_t inverted_pixel = pixel == 0xffff ? 0x0000 : 0xffff;
+        dst_map[i] = inverted_pixel & 0xff;
+        dst_map[i + 1] = inverted_pixel >> 8;
+    }
+}
+
+static void init_inverted_logos(void) {
+    if (inverted_logos_ready) {
+        return;
+    }
+
+    make_inverted_logo(&bitaxe_logo, &bitaxe_logo_inverted, bitaxe_logo_inverted_map, sizeof(bitaxe_logo_inverted_map));
+    make_inverted_logo(&osmu_logo, &osmu_logo_inverted, osmu_logo_inverted_map, sizeof(osmu_logo_inverted_map));
+    lv_image_cache_drop(&bitaxe_logo);
+    lv_image_cache_drop(&osmu_logo);
+    lv_image_cache_drop(&bitaxe_logo_inverted);
+    lv_image_cache_drop(&osmu_logo_inverted);
+    inverted_logos_ready = true;
+}
+
+static const lv_img_dsc_t * get_bitaxe_logo_src(void) {
+    if (is_large_display()) {
+        init_inverted_logos();
+        return &bitaxe_logo_inverted;
+    }
+
+    return &bitaxe_logo;
+}
+
+static const lv_img_dsc_t * get_osmu_logo_src(void) {
+    if (is_large_display()) {
+        init_inverted_logos();
+        return &osmu_logo_inverted;
+    }
+
+    return &osmu_logo;
+}
+
 static lv_obj_t * create_flex_screen(int expected_lines) {
     lv_obj_t * scr = lv_obj_create(NULL);
+    apply_screen_padding(scr);
 
     // Clear default padding and borders to maximize vertical space
     lv_obj_set_style_pad_all(scr, 0, LV_PART_MAIN);
@@ -148,11 +288,14 @@ static lv_obj_t * create_scr_asic_status() {
 
 static lv_obj_t * create_screen_with_qr(const char * ap_ssid, int expected_lines, lv_obj_t ** out_text_cont) {
     lv_obj_t * scr = lv_obj_create(NULL);
+    apply_screen_padding(scr);
     lv_obj_set_flex_flow(scr, LV_FLEX_FLOW_ROW);
     lv_obj_set_flex_align(scr, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_CENTER);
-    lv_obj_set_style_pad_column(scr, 2, LV_PART_MAIN);
+    lv_obj_set_style_pad_column(scr, is_large_display() ? 8 : 2, LV_PART_MAIN);
 
     lv_obj_t * text_cont = lv_obj_create(scr);
+    lv_obj_set_style_bg_opa(text_cont, LV_OPA_TRANSP, LV_PART_MAIN);
+    lv_obj_set_style_border_opa(text_cont, LV_OPA_TRANSP, LV_PART_MAIN);
     lv_obj_set_flex_flow(text_cont, LV_FLEX_FLOW_COLUMN);
     lv_obj_set_flex_align(text_cont, LV_FLEX_ALIGN_CENTER, LV_FLEX_ALIGN_START, LV_FLEX_ALIGN_START);
     lv_obj_set_flex_grow(text_cont, 1);
@@ -162,7 +305,7 @@ static lv_obj_t * create_screen_with_qr(const char * ap_ssid, int expected_lines
     if (screen_lines > expected_lines) lv_obj_set_style_pad_row(text_cont, 1, LV_PART_MAIN);
 
     lv_obj_t * qr = lv_qrcode_create(scr);
-    lv_qrcode_set_size(qr, 32);
+    lv_qrcode_set_size(qr, is_large_display() ? 72 : 32);
     lv_qrcode_set_dark_color(qr, lv_color_black());
     lv_qrcode_set_light_color(qr, lv_color_white());
 
@@ -234,27 +377,35 @@ static lv_obj_t * create_scr_connection(const char * ssid, const char * ap_ssid)
 
 static lv_obj_t * create_scr_bitaxe_logo(const char * name, const char * board_version) {
     lv_obj_t * scr = lv_obj_create(NULL);
+    apply_screen_padding(scr);
 
-    lv_obj_t *img = lv_img_create(scr);
-    lv_img_set_src(img, &bitaxe_logo);
-    lv_obj_align(img, LV_ALIGN_CENTER, 0, 1);
+    if (is_large_display()) {
+        lv_obj_t *img = lv_img_create(scr);
+        lv_img_set_src(img, &bitaxe_logo_large);
+        lv_obj_align(img, LV_ALIGN_CENTER, -42, -8);
+    } else {
+        lv_obj_t *img = lv_img_create(scr);
+        lv_img_set_src(img, get_bitaxe_logo_src());
+        lv_obj_align(img, LV_ALIGN_CENTER, 0, 1);
+    }
 
     lv_obj_t *label1 = lv_label_create(scr);
     lv_label_set_text(label1, name);
-    lv_obj_align(label1, LV_ALIGN_RIGHT_MID, -6, -12);
+    lv_obj_align(label1, LV_ALIGN_RIGHT_MID, -8, is_large_display() ? -18 : -12);
 
     lv_obj_t *label2 = lv_label_create(scr);
     lv_label_set_text(label2, board_version);
-    lv_obj_align(label2, LV_ALIGN_RIGHT_MID, -6, -4);
+    lv_obj_align(label2, LV_ALIGN_RIGHT_MID, -8, is_large_display() ? 2 : -4);
 
     return scr;
 }
 
 static lv_obj_t * create_scr_osmu_logo() {
     lv_obj_t * scr = lv_obj_create(NULL);
+    apply_screen_padding(scr);
 
     lv_obj_t *img = lv_img_create(scr);
-    lv_img_set_src(img, &osmu_logo);
+    lv_img_set_src(img, get_osmu_logo_src());
     lv_obj_align(img, LV_ALIGN_CENTER, 0, 0);
 
     return scr;
@@ -281,6 +432,36 @@ static lv_obj_t * create_scr_block_found() {
     lv_obj_set_style_text_align(label3, LV_TEXT_ALIGN_CENTER, 0);
 
     return scr;
+}
+
+static lv_obj_t * create_scr_stats() {
+    if (use_stats_background()) {
+        lv_obj_t * scr = lv_obj_create(NULL);
+        lv_obj_set_style_pad_all(scr, 0, LV_PART_MAIN);
+        lv_obj_set_style_border_opa(scr, LV_OPA_TRANSP, LV_PART_MAIN);
+        lv_obj_remove_flag(scr, LV_OBJ_FLAG_SCROLLABLE);
+
+        lv_obj_t * bg = lv_img_create(scr);
+        lv_img_set_src(bg, &bitaxe_background);
+        lv_obj_align(bg, LV_ALIGN_CENTER, 0, 0);
+        lv_obj_move_background(bg);
+
+        stats_logo_label = create_positioned_label(scr, 15, 31, 105, 42, &ui_font_AngelWish40, "Bitaxe", LV_TEXT_ALIGN_LEFT);
+        stats_ip_label = create_positioned_label(scr, 94, 1, 100, 13, &ui_font_OpenSansBold13, "--", LV_TEXT_ALIGN_CENTER);
+        stats_hashrate_label = create_positioned_label(scr, 15, 126, 98, 36, &ui_font_DigitalNumbers28, "--", LV_TEXT_ALIGN_RIGHT);
+        stats_difficulty_label = create_positioned_label(scr, 34, 99, 84, 15, &ui_font_OpenSansBold14, "--", LV_TEXT_ALIGN_LEFT);
+        stats_fan_rpm_label = create_positioned_label(scr, 152, 70, 56, 13, &ui_font_OpenSansBold13, "--", LV_TEXT_ALIGN_CENTER);
+        stats_temp_label = create_positioned_label(scr, 136, 101, 45, 15, &ui_font_OpenSansBold14, "--", LV_TEXT_ALIGN_RIGHT);
+        stats_vin_label = create_positioned_label(scr, 234, 43, 70, 15, &ui_font_OpenSansBold14, "--", LV_TEXT_ALIGN_LEFT);
+        stats_vcore_label = create_positioned_label(scr, 234, 65, 70, 15, &ui_font_OpenSansBold14, "--", LV_TEXT_ALIGN_LEFT);
+        stats_current_label = create_positioned_label(scr, 234, 87, 70, 15, &ui_font_OpenSansBold14, "--", LV_TEXT_ALIGN_LEFT);
+        stats_power_label = create_positioned_label(scr, 234, 109, 70, 15, &ui_font_OpenSansBold14, "--", LV_TEXT_ALIGN_LEFT);
+        stats_efficiency_label = create_positioned_label(scr, 217, 136, 60, 20, &ui_font_DigitalNumbers16, "--", LV_TEXT_ALIGN_RIGHT);
+        stats_uptime_label = create_positioned_label(scr, 20, 78, 110, 13, &ui_font_OpenSansBold13, "--", LV_TEXT_ALIGN_RIGHT);
+
+        return scr;
+    }
+    return NULL;
 }
 
 extern uint32_t (*const lv_text_encoded_next)(const char * txt, uint32_t * i_start);
@@ -431,6 +612,7 @@ static void scr_create_overlay()
 
     notification_label = lv_label_create(lv_layer_top());
     lv_label_set_text(notification_label, "");
+    lv_obj_set_style_text_color(notification_label, lv_color_white(), LV_PART_MAIN);
     lv_obj_align(notification_label, LV_ALIGN_TOP_RIGHT, 0, 0);
 }
 
@@ -455,7 +637,11 @@ static bool screen_show(screen_t screen)
         is_valid = lv_obj_is_valid(scr);
         if (is_valid && lvgl_port_lock(0)) {
             bool auto_del = (current_screen == SCR_BITAXE_LOGO || current_screen == SCR_OSMU_LOGO || current_screen == SCR_CAROUSEL);
-            lv_screen_load_anim(scr, LV_SCR_LOAD_ANIM_MOVE_LEFT, LV_DEF_REFR_PERIOD * 128 / 8, 0, auto_del);
+            if (use_stats_background() && screen == SCR_STATS) {
+                lv_screen_load(scr);
+            } else {
+                lv_screen_load_anim(scr, LV_SCR_LOAD_ANIM_MOVE_LEFT, LV_DEF_REFR_PERIOD * 128 / 8, 0, auto_del);
+            }
             current_screen = screen;
             lvgl_port_unlock();
         }
@@ -466,8 +652,84 @@ static bool screen_show(screen_t screen)
     return is_valid;
 }
 
+static void update_stats_background_labels(SystemModule * module, PowerManagementModule * power_management)
+{
+    if (!use_stats_background()) {
+        return;
+    }
+
+    lv_label_set_text_fmt(stats_hashrate_label, "%.0f", module->current_hashrate);
+
+    if (module->ip_addr_str[0] != '\0') {
+        lv_label_set_text(stats_ip_label, module->ip_addr_str);
+    } else {
+        lv_label_set_text(stats_ip_label, "--");
+    }
+
+    if (module->best_session_diff_string[0] != '\0') {
+        lv_label_set_text(stats_difficulty_label, module->best_session_diff_string);
+    } else {
+        lv_label_set_text(stats_difficulty_label, "--");
+    }
+
+    char uptime[24];
+    format_compact_uptime(uptime, sizeof(uptime), module->start_time_us);
+    lv_label_set_text(stats_uptime_label, uptime);
+
+    if (power_management->fan_rpm > 0) {
+        lv_label_set_text_fmt(stats_fan_rpm_label, "%u", power_management->fan_rpm);
+    } else {
+        lv_label_set_text(stats_fan_rpm_label, "--");
+    }
+
+    float temp = power_management->chip_temp2_avg > power_management->chip_temp_avg
+        ? power_management->chip_temp2_avg
+        : power_management->chip_temp_avg;
+    if (temp > 0) {
+        lv_label_set_text_fmt(stats_temp_label, "%.0f", temp);
+    } else {
+        lv_label_set_text(stats_temp_label, "--");
+    }
+
+    if (power_management->voltage > 0) {
+        lv_label_set_text_fmt(stats_vin_label, "%.1fV", power_management->voltage / 1000.0f);
+    } else {
+        lv_label_set_text(stats_vin_label, "--");
+    }
+
+    if (power_management->core_voltage > 0) {
+        lv_label_set_text_fmt(stats_vcore_label, "%.2fV", power_management->core_voltage / 1000.0f);
+    } else {
+        lv_label_set_text(stats_vcore_label, "--");
+    }
+
+    if (power_management->current > 0) {
+        lv_label_set_text_fmt(stats_current_label, "%.1fA", power_management->current / 1000.0f);
+    } else {
+        lv_label_set_text(stats_current_label, "--");
+    }
+
+    if (power_management->power > 0) {
+        lv_label_set_text_fmt(stats_power_label, "%.1fW", power_management->power);
+    } else {
+        lv_label_set_text(stats_power_label, "--");
+    }
+
+    if (power_management->power > 0 && module->current_hashrate > 0) {
+        float efficiency = power_management->power / (module->current_hashrate / 1000.0f);
+        lv_label_set_text_fmt(stats_efficiency_label, "%.1f", efficiency);
+    } else {
+        lv_label_set_text(stats_efficiency_label, "--");
+    }
+}
+
 void screen_next()
 {
+    if (use_stats_background()) {
+        screen_show(SCR_STATS);
+        return;
+    }
+
     if (current_screen < SCR_CAROUSEL) {
         screen_t next = current_screen + 1;
         while (next < SCR_CAROUSEL) {
@@ -593,6 +855,14 @@ static void screen_update_cb(lv_timer_t * timer)
     // Carousel
     current_screen_time_ms += SCREEN_UPDATE_MS;
 
+    PowerManagementModule * power_management = &GLOBAL_STATE->POWER_MANAGEMENT_MODULE;
+
+    if (use_stats_background()) {
+        update_stats_background_labels(module, power_management);
+        screen_show(SCR_STATS);
+        return;
+    }
+
     // Always update content in case variables changed
     if (current_screen == SCR_CAROUSEL) {
         update_carousel_screen_content(current_carousel_index, carousel_labels);
@@ -640,6 +910,9 @@ void screen_button_press()
     } else if (GLOBAL_STATE->SYSTEM_MODULE.show_new_block) {
         GLOBAL_STATE->SYSTEM_MODULE.show_new_block = false;
         screen_next();
+    } else if (use_stats_background()) {
+        screen_show(SCR_STATS);
+        lv_display_trigger_activity(NULL);
     } else {
         screen_next();
     }
@@ -650,7 +923,7 @@ esp_err_t screen_start(GlobalState * global_state)
 {
     GLOBAL_STATE = global_state;
     if (lvgl_port_lock(0)) {
-        screen_lines = lv_display_get_vertical_resolution(NULL) / 8;
+        screen_lines = lv_display_get_vertical_resolution(NULL) / (is_large_display() ? 16 : 8);
 
         SystemModule * SYSTEM_MODULE = &GLOBAL_STATE->SYSTEM_MODULE;
 
@@ -666,6 +939,11 @@ esp_err_t screen_start(GlobalState * global_state)
             screens[SCR_OSMU_LOGO] = create_scr_osmu_logo();
             screens[SCR_BLOCK_FOUND] = create_scr_block_found();
             screens[SCR_CAROUSEL] = NULL;  // Created dynamically
+            if (use_stats_background()) {
+                screens[SCR_STATS] = create_scr_stats();
+            } else {
+                screens[SCR_STATS] = NULL;
+            }
 
             scr_create_overlay();
 
