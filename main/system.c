@@ -602,6 +602,7 @@ void SYSTEM_decode_and_apply_coinbase(GlobalState * GLOBAL_STATE, const miner_jo
         result->output_count = MAX_COINBASE_TX_OUTPUTS;
     }
 
+
     ESP_LOGI(TAG, "Coinbase outputs: %d, total value: %llu%s",
              result->output_count, result->total_value_satoshis,
              result->decode_coinbase_tx ? " sats" : "");
