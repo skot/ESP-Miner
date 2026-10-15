@@ -104,9 +104,6 @@ void POWER_MANAGEMENT_init_frequency(GlobalState * GLOBAL_STATE)
     char expected_hashrate_str[16] = {0};
     suffixString(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.expected_hashrate * 1e6, expected_hashrate_str, sizeof(expected_hashrate_str), 0);
     ESP_LOGI(TAG, "ASIC Frequency: %g MHz, Expected hashrate: %sH/s", frequency, expected_hashrate_str);
-
-    uint8_t difficulty_power = calculate_effective_asic_difficulty(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.expected_hashrate);
-    ASIC_set_difficulty(GLOBAL_STATE, difficulty_power);
 }
 
 void POWER_MANAGEMENT_task(void * pvParameters)
