@@ -37,7 +37,6 @@
 #include "hashrate_monitor_task.h"
 #include "coinbase_decoder.h"
 #include "sv2_protocol.h"
-#include "asic_common.h"
 
 #define NVS_COUNTER_UPDATE_INTERVAL_MS 60 * 60 * 1000  // Update NVS once per hour
 #define NOINIT_SENTINEL_VALUE 0x4C4F4732       // "LOG2" in hex

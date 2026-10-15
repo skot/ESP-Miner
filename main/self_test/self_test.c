@@ -619,7 +619,7 @@ void self_test_task(void * pvParameters)
     self_test_domain_averages_prime(GLOBAL_STATE, &domain_averages);
 
     uint8_t self_test_diff_power = calculate_effective_asic_difficulty(expected_hashrate);
-    self_test_diff_power = (self_test_diff_power > 3) ? (self_test_diff_power - 3) : 0;
+    self_test_diff_power = (self_test_diff_power > 3) ? (self_test_diff_power - 3) : 0; // Targets 8 shares/sec
     ASIC_set_difficulty(GLOBAL_STATE, self_test_diff_power);
 
     self_test_start_nonce_measurement(GLOBAL_STATE);
