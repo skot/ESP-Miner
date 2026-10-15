@@ -7,10 +7,10 @@
 #include "thermal.h"
 #include "power.h"
 #include "asic.h"
+#include "asic_common.h"
 #include "utils.h"
 #include "asic_init.h"
 #include "asic_reset.h"
-#include "difficulty_controller.h"
 #include "driver/uart.h"
 
 #define POLL_RATE 100
@@ -104,6 +104,9 @@ void POWER_MANAGEMENT_init_frequency(GlobalState * GLOBAL_STATE)
     char expected_hashrate_str[16] = {0};
     suffixString(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.expected_hashrate * 1e6, expected_hashrate_str, sizeof(expected_hashrate_str), 0);
     ESP_LOGI(TAG, "ASIC Frequency: %g MHz, Expected hashrate: %sH/s", frequency, expected_hashrate_str);
+
+    uint8_t difficulty_power = calculate_effective_asic_difficulty(GLOBAL_STATE->POWER_MANAGEMENT_MODULE.expected_hashrate);
+    ASIC_set_difficulty(GLOBAL_STATE, difficulty_power);
 }
 
 void POWER_MANAGEMENT_task(void * pvParameters)
@@ -256,7 +259,8 @@ void POWER_MANAGEMENT_task(void * pvParameters)
 
             ASIC_set_frequency(GLOBAL_STATE);
             ASIC_set_nonce_space(GLOBAL_STATE);
-            difficulty_controller_update(GLOBAL_STATE);
+            uint8_t difficulty_power = calculate_effective_asic_difficulty(power_management->expected_hashrate);
+            ASIC_set_difficulty(GLOBAL_STATE, difficulty_power);
             
             last_asic_frequency = asic_frequency;
         }

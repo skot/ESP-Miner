@@ -34,10 +34,10 @@
 #include "utils.h"
 #include "self_test.h"
 #include "filesystem.h"
-#include "embedded_web_ui.h"
 #include "hashrate_monitor_task.h"
 #include "coinbase_decoder.h"
 #include "sv2_protocol.h"
+#include "asic_common.h"
 
 #define NVS_COUNTER_UPDATE_INTERVAL_MS 60 * 60 * 1000  // Update NVS once per hour
 #define NOINIT_SENTINEL_VALUE 0x4C4F4732       // "LOG2" in hex
@@ -209,6 +209,7 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     module->lastClockSync = 0;
     module->block_found = 0;
     module->show_new_block = false;
+    module->current_difficulty_power = 0;
 
     if (noinit_state.sentinel != NOINIT_SENTINEL_VALUE) {
         noinit_state.sentinel = NOINIT_SENTINEL_VALUE;
