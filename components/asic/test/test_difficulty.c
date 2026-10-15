@@ -1,5 +1,7 @@
 #include "unity.h"
 #include "asic_common.h"
+#include "bm13xx_test_harness.h"
+#include "bm1397_test_harness.h"
 
 TEST_CASE("Check calculate_effective_asic_difficulty", "[asic][difficulty]")
 {
@@ -62,4 +64,64 @@ TEST_CASE("Check get_difficulty_mask bit patterns", "[asic][difficulty]")
     TEST_ASSERT_EQUAL_HEX8(0x00, mask[3]);
     TEST_ASSERT_EQUAL_HEX8(0xF8, mask[4]); // 0b11111000 (reverse of 0x1F = 0b00011111)
     TEST_ASSERT_EQUAL_HEX8(0xFF, mask[5]);
+}
+
+TEST_CASE("Check BM13xx and BM1397 set_difficulty serial packet generation", "[asic][difficulty]")
+{
+    // Wire command packet for difficulty 256 (power 8):
+    // Header 0x55 0xAA, TYPE_CMD | GROUP_ALL | CMD_WRITE (0x51), length 0x09,
+    // register 0x14, 4-byte mask 0x00 0x00 0x00 0xFF, CRC5 0x08.
+    static const uint8_t expected_packet_power8[11] = {
+        0x55, 0xAA, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xFF, 0x08
+    };
+    // Wire command packet for difficulty 16 (power 4):
+    // Header 0x55 0xAA, TYPE_CMD | GROUP_ALL | CMD_WRITE (0x51), length 0x09,
+    // register 0x14, 4-byte mask 0x00 0x00 0x00 0xF0, CRC5 0x1E.
+    static const uint8_t expected_packet_power4[11] = {
+        0x55, 0xAA, 0x51, 0x09, 0x00, 0x14, 0x00, 0x00, 0x00, 0xF0, 0x1E
+    };
+
+    for (size_t i = 0; i < BM13XX_HARNESS_DRIVER_COUNT; ++i) {
+        bm13xx_harness_begin();
+        bm13xx_harness_clear_packets();
+
+        bm13xx_harness_drivers[i].set_difficulty(8);
+
+        TEST_ASSERT_EQUAL_UINT(1, bm13xx_harness_packet_count());
+        const bm13xx_harness_packet_t *packet = bm13xx_harness_packet(0);
+        TEST_ASSERT_EQUAL_UINT(11, packet->length);
+        TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_packet_power8, packet->bytes, 11);
+
+        bm13xx_harness_clear_packets();
+        bm13xx_harness_drivers[i].set_difficulty(4);
+
+        TEST_ASSERT_EQUAL_UINT(1, bm13xx_harness_packet_count());
+        packet = bm13xx_harness_packet(0);
+        TEST_ASSERT_EQUAL_UINT(11, packet->length);
+        TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_packet_power4, packet->bytes, 11);
+
+        bm13xx_harness_end();
+    }
+
+    {
+        bm1397_harness_begin();
+        bm1397_harness_clear_packets();
+
+        bm1397_harness_driver.set_difficulty(8);
+
+        TEST_ASSERT_EQUAL_UINT(1, bm1397_harness_packet_count());
+        const bm1397_harness_packet_t *packet = bm1397_harness_packet(0);
+        TEST_ASSERT_EQUAL_UINT(11, packet->length);
+        TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_packet_power8, packet->bytes, 11);
+
+        bm1397_harness_clear_packets();
+        bm1397_harness_driver.set_difficulty(4);
+
+        TEST_ASSERT_EQUAL_UINT(1, bm1397_harness_packet_count());
+        packet = bm1397_harness_packet(0);
+        TEST_ASSERT_EQUAL_UINT(11, packet->length);
+        TEST_ASSERT_EQUAL_UINT8_ARRAY(expected_packet_power4, packet->bytes, 11);
+
+        bm1397_harness_end();
+    }
 }
