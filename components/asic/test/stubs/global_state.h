@@ -29,7 +29,7 @@ typedef struct GlobalState {
             } asic;
         } family;
     } DEVICE_CONFIG;
-    AsicTaskModule ASIC_TASK_MODULE;
+    asic_job_store_t job_store;
     struct {
         float frequency_value;
         float actual_frequency;

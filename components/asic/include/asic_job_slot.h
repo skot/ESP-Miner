@@ -20,11 +20,6 @@ typedef struct asic_job_store
     pthread_mutex_t lock;
 } asic_job_store_t;
 
-typedef struct AsicTaskModule
-{
-    asic_job_store_t store;
-} AsicTaskModule;
-
 void asic_job_store_init(asic_job_store_t *store, asic_job_slot_entry_t *entries, uint16_t capacity);
 void asic_job_store_destroy(asic_job_store_t *store);
 uint16_t asic_job_store_claim(asic_job_store_t *store, const asic_job_t *job);

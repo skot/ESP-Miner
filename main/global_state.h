@@ -152,7 +152,7 @@ typedef struct GlobalState
     SystemModule SYSTEM_MODULE;
     DeviceConfig DEVICE_CONFIG;
     DisplayConfig DISPLAY_CONFIG;
-    AsicTaskModule ASIC_TASK_MODULE;
+    asic_job_store_t job_store;
     PowerManagementModule POWER_MANAGEMENT_MODULE;
     SelfTestModule SELF_TEST_MODULE;
     HashrateMonitorModule HASHRATE_MONITOR_MODULE;

@@ -251,7 +251,7 @@ void BM1397_set_difficulty(uint8_t difficulty_power)
 void BM1397_send_work(GlobalState * GLOBAL_STATE, const asic_job_t * next_job)
 {
     bm1397_job_packet_t job;
-    bm1397_build_job_packet(&GLOBAL_STATE->ASIC_TASK_MODULE.store,
+    bm1397_build_job_packet(&GLOBAL_STATE->job_store,
                            GLOBAL_STATE->DEVICE_CONFIG.family.asic.software_midstates,
                            next_job, &job);
     _send_BM1397((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(job), BM1397_DEBUG_WORK);
@@ -279,7 +279,7 @@ task_result *BM1397_process_work(GlobalState * GLOBAL_STATE)
         return &result;
     }
 
-    if (!bm1397_decode_job_result(&GLOBAL_STATE->ASIC_TASK_MODULE.store,
+    if (!bm1397_decode_job_result(&GLOBAL_STATE->job_store,
                                   address_interval,
                                   asic_result.job.nonce,
                                   asic_result.job.chip_slot,

@@ -295,7 +295,7 @@ int BM1366_set_max_baud(void)
 void BM1366_send_work(GlobalState * GLOBAL_STATE, const asic_job_t * next_job)
 {
     bm13xx_job_packet_t job;
-    bm13xx_build_job_packet(&GLOBAL_STATE->ASIC_TASK_MODULE.store, next_job, &job);
+    bm13xx_build_job_packet(&GLOBAL_STATE->job_store, next_job, &job);
     _send_BM1366((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(job), BM1366_DEBUG_WORK);
 }
 
@@ -321,7 +321,7 @@ task_result * BM1366_process_work(GlobalState * GLOBAL_STATE)
         return &result;
     }
 
-    if (!bm13xx_decode_job_result(&GLOBAL_STATE->ASIC_TASK_MODULE.store,
+    if (!bm13xx_decode_job_result(&GLOBAL_STATE->job_store,
                                   BM1366_SMALL_CORE_BITS,
                                   address_interval,
                                   asic_result.job.nonce,
