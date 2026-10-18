@@ -73,7 +73,7 @@ static const char * TAG = "bm1366";
 
 static task_result result;
 
-static int address_interval;
+static uint16_t address_interval;
 
 /// @brief
 /// @param ftdi
@@ -337,7 +337,7 @@ task_result * BM1366_process_work(GlobalState * GLOBAL_STATE)
 void BM1366_read_registers(GlobalState * GLOBAL_STATE)
 {
     uint16_t asic_count = GLOBAL_STATE->DEVICE_CONFIG.family.asic_count;
-    if (asic_count == 0 || address_interval <= 0) {
+    if (asic_count == 0 || address_interval == 0) {
         return;
     }
 

@@ -124,7 +124,7 @@ static task_result result;
 
 static uint8_t chip_command_address_interval;
 static uint8_t chip_response_address_interval;
-static uint8_t chip_nonce_address_interval;
+static uint16_t chip_nonce_address_interval;
 static uint8_t detected_chip_count;
 static uint8_t detected_voltage_domains;
 static bool frequency_write_failed;

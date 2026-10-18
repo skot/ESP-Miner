@@ -74,7 +74,7 @@ static const char * TAG = "bm1368";
 
 static task_result result;
 
-static int address_interval;
+static uint16_t address_interval;
 
 static void _send_BM1368(uint8_t header, uint8_t * data, uint8_t data_len, bool debug)
 {
@@ -286,7 +286,7 @@ task_result * BM1368_process_work(GlobalState * GLOBAL_STATE)
 void BM1368_read_registers(GlobalState * GLOBAL_STATE)
 {
     uint16_t asic_count = GLOBAL_STATE->DEVICE_CONFIG.family.asic_count;
-    if (asic_count == 0 || address_interval <= 0) {
+    if (asic_count == 0 || address_interval == 0) {
         return;
     }
 
