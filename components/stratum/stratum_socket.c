@@ -211,3 +211,17 @@ esp_err_t stratum_socket_connect_async(esp_transport_handle_t transport,
     return ESP_FAIL;
 }
 
+int stratum_socket_send_all(esp_transport_handle_t transport, const void *buf, int len)
+{
+    const char *p = buf;
+    int sent = 0;
+    while (sent < len) {
+        int ret = esp_transport_write(transport, p + sent, len - sent, TRANSPORT_TIMEOUT_MS);
+        if (ret <= 0) {
+            ESP_LOGW(TAG, "send failed: ret=%d (sent %d/%d)", ret, sent, len);
+            return -1;
+        }
+        sent += ret;
+    }
+    return len;
+}

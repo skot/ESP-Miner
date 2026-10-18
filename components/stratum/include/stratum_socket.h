@@ -38,4 +38,9 @@ esp_err_t stratum_socket_connect_async(esp_transport_handle_t transport,
                                       int timeout_ms,
                                       bool (*should_shutdown_fn)(void));
 
+// Write the whole buffer, looping over partial writes. Shared by the SV1 and
+// SV2 send paths. Returns len on success, -1 on error or if the peer stopped
+// accepting data.
+int stratum_socket_send_all(esp_transport_handle_t transport, const void *buf, int len);
+
 #endif /* STRATUM_SOCKET_H_ */
