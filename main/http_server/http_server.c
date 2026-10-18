@@ -15,7 +15,6 @@
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "esp_vfs.h"
-#include "esp_psram.h"
 
 #include "dns_server.h"
 #include "esp_ota_ops.h"
@@ -508,8 +507,8 @@ static bool file_exists(const char *path) {
     return (stat(path, &buffer) == 0);
 }
 
-/* Send HTTP response with the contents of the requested file */
-static esp_err_t rest_common_get_handler_spiffs(httpd_req_t * req)
+/* Send HTTP response with the contents of the requested file from SPIFFS */
+static esp_err_t serve_spiffs_file(httpd_req_t * req)
 {
     char filepath[FILE_PATH_MAX];
     char gz_file[FILE_PATH_MAX];
@@ -585,7 +584,8 @@ static esp_err_t rest_common_get_handler_spiffs(httpd_req_t * req)
     return ESP_OK;   
 }
 
-static esp_err_t rest_common_get_handler_embedded(httpd_req_t * req)
+/* Send HTTP response with the contents of the requested file from embedded flash */
+static esp_err_t serve_embedded_file(httpd_req_t * req)
 {
     char rel_path[FILE_PATH_MAX];
     if (req->uri[strlen(req->uri) - 1] == '/') {
@@ -613,6 +613,14 @@ static esp_err_t rest_common_get_handler_embedded(httpd_req_t * req)
 
     ESP_LOGI(TAG, "Redirecting to root");
     return ESP_OK;
+}
+
+/* Common GET handler for static Web UI files (dispatches to SPIFFS or embedded) */
+static esp_err_t web_ui_get_handler(httpd_req_t * req)
+{
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
+    bool use_custom = nvs_config_get_bool(NVS_CONFIG_USE_CUSTOM_WWW) && GLOBAL_STATE && GLOBAL_STATE->filesystem_is_available;
+    return use_custom ? serve_spiffs_file(req) : serve_embedded_file(req);
 }
 
 static esp_err_t handle_options_request(httpd_req_t * req)
@@ -1926,18 +1934,63 @@ esp_err_t http_404_error_handler(httpd_req_t * req, httpd_err_code_t err)
 
 esp_err_t start_rest_server(GlobalState * GLOBAL_STATE)
 {
+    const httpd_uri_t routes[] = {
+        // CORS preflight
+        { .uri = "/api/*",                         .method = HTTP_OPTIONS, .handler = handle_options_request },
+
+        // System queries & telemetry
+        { .uri = "/api/system/asic",               .method = HTTP_GET,     .handler = GET_system_asic },
+        { .uri = "/api/system/firmware/checksum",  .method = HTTP_GET,     .handler = GET_system_firmware_checksum },
+        { .uri = "/api/system/info",               .method = HTTP_GET,     .handler = GET_system_info },
+        { .uri = "/api/system/logs",               .method = HTTP_GET,     .handler = GET_system_logs },
+        { .uri = "/api/system/scoreboard",         .method = HTTP_GET,     .handler = GET_scoreboard },
+        { .uri = "/api/system/statistics",         .method = HTTP_GET,     .handler = GET_system_statistics },
+        { .uri = "/api/system/wifi/scan",          .method = HTTP_GET,     .handler = GET_wifi_scan },
+
+        // Settings & pools
+        { .uri = "/api/system",                    .method = HTTP_PATCH,   .handler = PATCH_update_settings },
+        { .uri = "/api/system/pools/*",            .method = HTTP_PUT,     .handler = PUT_system_pool },
+        { .uri = "/api/system/pools/*",            .method = HTTP_DELETE,  .handler = DELETE_system_pool },
+
+        // System actions & OTA updates
+        { .uri = "/api/system/blockFound/dismiss", .method = HTTP_POST,    .handler = POST_dismiss_block_found },
+        { .uri = "/api/system/boot",               .method = HTTP_POST,    .handler = POST_system_boot },
+        { .uri = "/api/system/identify",           .method = HTTP_POST,    .handler = POST_identify },
+        { .uri = "/api/system/OTA",                .method = HTTP_POST,    .handler = POST_OTA_update },
+        { .uri = "/api/system/OTAWWW",             .method = HTTP_POST,    .handler = POST_WWW_update },
+        { .uri = "/api/system/pause",              .method = HTTP_POST,    .handler = POST_mining_pause },
+        { .uri = "/api/system/restart",            .method = HTTP_POST,    .handler = POST_restart },
+        { .uri = "/api/system/resume",             .method = HTTP_POST,    .handler = POST_mining_resume },
+
+        // Theme configuration
+        { .uri = "/api/theme",                     .method = HTTP_GET,     .handler = theme_get_handler },
+        { .uri = "/api/theme",                     .method = HTTP_POST,    .handler = theme_post_handler },
+
+        // WebSockets
+        { .uri = "/api/ws",                        .method = HTTP_GET,     .handler = websocket_handler, .is_websocket = true, .ws_pre_handshake_cb = websocket_pre_handshake, .ws_post_handshake_cb = websocket_post_handshake_logs },
+        { .uri = "/api/ws/live",                   .method = HTTP_GET,     .handler = websocket_handler, .is_websocket = true, .ws_pre_handshake_cb = websocket_pre_handshake, .ws_post_handshake_cb = websocket_post_handshake_api },
+
+        // Standalone recovery page
+        { .uri = "/recovery",                      .method = HTTP_GET,     .handler = rest_recovery_handler },
+
+        // Fallbacks / Catch-alls (must remain last)
+        { .uri = "/api/*",                         .method = HTTP_ANY,     .handler = rest_api_common_handler },
+        { .uri = "/*",                             .method = HTTP_GET,     .handler = web_ui_get_handler },
+    };
+    size_t num_routes = sizeof(routes) / sizeof(routes[0]);
+
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.task_priority = 4;
     config.global_user_ctx = GLOBAL_STATE;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192;
     config.max_open_sockets = 20;
-    config.max_uri_handlers = 26;
+    config.max_uri_handlers = num_routes + 4;
     config.close_fn = websocket_close_fn;
     config.lru_purge_enable = true;
     config.keep_alive_enable = true;
 
-    ESP_LOGI(TAG, "Starting HTTP Server");
+    ESP_LOGI(TAG, "Starting HTTP Server (routes: %zu, max_uri_handlers: %u)", num_routes, config.max_uri_handlers);
     
     httpd_handle_t server = NULL;
 
@@ -1946,190 +1999,9 @@ esp_err_t start_rest_server(GlobalState * GLOBAL_STATE)
     // Initialize the WebSocket registry with the valid server handle
     websocket_init(server);
 
-    httpd_uri_t api_options_uri = {
-        .uri = "/api/*", 
-        .method = HTTP_OPTIONS, 
-        .handler = handle_options_request
-    };
-    httpd_register_uri_handler(server, &api_options_uri);
-
-    httpd_uri_t recovery_explicit_get_uri = {
-        .uri = "/recovery", 
-        .method = HTTP_GET, 
-        .handler = rest_recovery_handler
-    };
-    httpd_register_uri_handler(server, &recovery_explicit_get_uri);
-    
-    // Register theme API endpoints
-    ESP_ERROR_CHECK(register_theme_api_endpoints(server));
-
-    /* URI handler for fetching system info */
-    httpd_uri_t system_info_get_uri = {
-        .uri = "/api/system/info", 
-        .method = HTTP_GET, 
-        .handler = GET_system_info
-    };
-    httpd_register_uri_handler(server, &system_info_get_uri);
-
-    /* URI handler for setting boot partition */
-    httpd_uri_t system_boot_post_uri = {
-        .uri = "/api/system/boot", 
-        .method = HTTP_POST, 
-        .handler = POST_system_boot
-    };
-    httpd_register_uri_handler(server, &system_boot_post_uri);
-
-    /* URI handler for fetching the running firmware checksum */
-    httpd_uri_t system_firmware_checksum_get_uri = {
-        .uri = "/api/system/firmware/checksum",
-        .method = HTTP_GET,
-        .handler = GET_system_firmware_checksum
-    };
-    httpd_register_uri_handler(server, &system_firmware_checksum_get_uri);
-
-    /* URI handler for fetching system asic values */
-    httpd_uri_t system_asic_get_uri = {
-        .uri = "/api/system/asic", 
-        .method = HTTP_GET, 
-        .handler = GET_system_asic
-    };
-    httpd_register_uri_handler(server, &system_asic_get_uri);
-
-    /* URI handler for fetching system statistic values */
-    httpd_uri_t system_statistics_get_uri = {
-        .uri = "/api/system/statistics", 
-        .method = HTTP_GET, 
-        .handler = GET_system_statistics
-    };
-    httpd_register_uri_handler(server, &system_statistics_get_uri);
-
-    httpd_uri_t scoreboard_get_uri = {
-        .uri = "/api/system/scoreboard",
-        .method = HTTP_GET,
-        .handler = GET_scoreboard
-    };
-    httpd_register_uri_handler(server, &scoreboard_get_uri);
-
-    /* URI handler for WiFi scan */
-    httpd_uri_t wifi_scan_get_uri = {
-        .uri = "/api/system/wifi/scan",
-        .method = HTTP_GET,
-        .handler = GET_wifi_scan
-    };
-    httpd_register_uri_handler(server, &wifi_scan_get_uri);
-
-    /* URI handler for fetching system logs */
-    httpd_uri_t system_logs_get_uri = {
-        .uri = "/api/system/logs",
-        .method = HTTP_GET,
-        .handler = GET_system_logs
-    };
-    httpd_register_uri_handler(server, &system_logs_get_uri);
-
-    httpd_uri_t system_identify_uri = {
-        .uri = "/api/system/identify", .method = HTTP_POST, 
-        .handler = POST_identify
-    };
-    httpd_register_uri_handler(server, &system_identify_uri);
-
-    httpd_uri_t system_restart_uri = {
-        .uri = "/api/system/restart", .method = HTTP_POST, 
-        .handler = POST_restart
-    };
-    httpd_register_uri_handler(server, &system_restart_uri);
-
-    httpd_uri_t system_mining_pause_uri = {
-        .uri = "/api/system/pause",
-        .method = HTTP_POST,
-        .handler = POST_mining_pause
-    };
-    httpd_register_uri_handler(server, &system_mining_pause_uri);
-
-    httpd_uri_t system_mining_resume_uri = {
-        .uri = "/api/system/resume",
-        .method = HTTP_POST,
-        .handler = POST_mining_resume
-    };
-    httpd_register_uri_handler(server, &system_mining_resume_uri);
-
-    httpd_uri_t system_dismiss_block_found_uri = {
-        .uri = "/api/system/blockFound/dismiss",
-        .method = HTTP_POST, 
-        .handler = POST_dismiss_block_found
-    };
-    httpd_register_uri_handler(server, &system_dismiss_block_found_uri);
-
-    httpd_uri_t update_system_settings_uri = {
-        .uri = "/api/system", 
-        .method = HTTP_PATCH, 
-        .handler = PATCH_update_settings
-    };
-    httpd_register_uri_handler(server, &update_system_settings_uri);
-
-    httpd_uri_t system_pool_put_uri = {
-        .uri = "/api/system/pools/*",
-        .method = HTTP_PUT,
-        .handler = PUT_system_pool
-    };
-    httpd_register_uri_handler(server, &system_pool_put_uri);
-
-    httpd_uri_t system_pool_delete_uri = {
-        .uri = "/api/system/pools/*",
-        .method = HTTP_DELETE,
-        .handler = DELETE_system_pool
-    };
-    httpd_register_uri_handler(server, &system_pool_delete_uri);
-
-    httpd_uri_t update_post_ota_firmware = {
-        .uri = "/api/system/OTA",
-        .method = HTTP_POST,
-        .handler = POST_OTA_update
-    };
-    httpd_register_uri_handler(server, &update_post_ota_firmware);
-
-    httpd_uri_t update_post_ota_www = {
-        .uri = "/api/system/OTAWWW", 
-        .method = HTTP_POST, 
-        .handler = POST_WWW_update,
-    };
-    httpd_register_uri_handler(server, &update_post_ota_www);
-
-    httpd_uri_t ws = {
-        .uri = "/api/ws", 
-        .method = HTTP_GET, 
-        .handler = websocket_handler, 
-        .user_ctx = (void *)&WS_CTX_LOGS,
-        .is_websocket = true,
-        .ws_pre_handshake_cb = websocket_pre_handshake,
-        .ws_post_handshake_cb = websocket_post_handshake
-    };
-    httpd_register_uri_handler(server, &ws);
-
-    httpd_uri_t ws_live = {
-        .uri = "/api/ws/live", 
-        .method = HTTP_GET, 
-        .handler = websocket_handler, 
-        .user_ctx = (void *)&WS_CTX_API,
-        .is_websocket = true,
-        .ws_pre_handshake_cb = websocket_pre_handshake,
-        .ws_post_handshake_cb = websocket_post_handshake
-    };
-    httpd_register_uri_handler(server, &ws_live);
-
-    httpd_uri_t api_common_uri = {
-        .uri = "/api/*",
-        .method = HTTP_ANY,
-        .handler = rest_api_common_handler
-    };
-    httpd_register_uri_handler(server, &api_common_uri);
-    /* URI handler for getting web server files */
-    bool use_custom = nvs_config_get_bool(NVS_CONFIG_USE_CUSTOM_WWW) && GLOBAL_STATE->filesystem_is_available;
-    httpd_uri_t common_get_uri = {
-        .uri = "/*", 
-        .method = HTTP_GET, 
-        .handler = use_custom ? rest_common_get_handler_spiffs : rest_common_get_handler_embedded
-    };
-    httpd_register_uri_handler(server, &common_get_uri);
+    for (size_t i = 0; i < num_routes; i++) {
+        ESP_ERROR_CHECK(httpd_register_uri_handler(server, &routes[i]));
+    }
 
     httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
 

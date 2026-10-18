@@ -26,9 +26,6 @@ static SemaphoreHandle_t clients_mutex = NULL;
 static httpd_handle_t server_handle = NULL;
 static TaskHandle_t s_websocket_log_task_handle = NULL;
 
-const WebSocketEndpointCtx WS_CTX_LOGS = { .type = WS_TYPE_LOGS };
-const WebSocketEndpointCtx WS_CTX_API  = { .type = WS_TYPE_API  };
-
 void websocket_set_log_task_handle(TaskHandle_t task_handle)
 {
     s_websocket_log_task_handle = task_handle;
@@ -196,10 +193,8 @@ esp_err_t websocket_pre_handshake(httpd_req_t *req)
     return ESP_OK;
 }
 
-esp_err_t websocket_post_handshake(httpd_req_t *req)
+static esp_err_t websocket_post_handshake_common(httpd_req_t *req, WebSocketClientType type)
 {
-    const WebSocketEndpointCtx *ws_ctx = (const WebSocketEndpointCtx *)(req ? req->user_ctx : NULL);
-    WebSocketClientType type = ws_ctx ? ws_ctx->type : WS_TYPE_LOGS;
     int fd = httpd_req_to_sockfd(req);
     if (websocket_add_client(fd, type) != ESP_OK) {
         ESP_LOGE(TAG, "Unexpected failure adding client, fd: %d", fd);
@@ -211,6 +206,16 @@ esp_err_t websocket_post_handshake(httpd_req_t *req)
     }
 
     return ESP_OK;
+}
+
+esp_err_t websocket_post_handshake_logs(httpd_req_t *req)
+{
+    return websocket_post_handshake_common(req, WS_TYPE_LOGS);
+}
+
+esp_err_t websocket_post_handshake_api(httpd_req_t *req)
+{
+    return websocket_post_handshake_common(req, WS_TYPE_API);
 }
 
 esp_err_t websocket_handler(httpd_req_t *req)
