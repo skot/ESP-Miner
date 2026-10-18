@@ -618,7 +618,7 @@ static esp_err_t serve_embedded_file(httpd_req_t * req)
 static esp_err_t web_ui_get_handler(httpd_req_t * req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    bool use_custom = nvs_config_get_bool(NVS_CONFIG_USE_CUSTOM_WWW) && GLOBAL_STATE && GLOBAL_STATE->filesystem_is_available;
+    bool use_custom = nvs_config_get_bool(NVS_CONFIG_USE_CUSTOM_WWW) && GLOBAL_STATE->filesystem_is_available;
     return use_custom ? serve_spiffs_file(req) : serve_embedded_file(req);
 }
 
