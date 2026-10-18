@@ -44,15 +44,15 @@ static void queue_response(bool bm1397, uint8_t wire_job_id, uint32_t nonce)
 static void replace_slot(GlobalState *state, const asic_job_t *replacement)
 {
     // Also proves the decoder released its lock before handing back the result.
-    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_trylock(&state->ASIC_TASK_MODULE.valid_jobs_lock));
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_trylock(&state->ASIC_TASK_MODULE.store.lock));
     if (replacement != NULL) {
-        state->ASIC_TASK_MODULE.active_jobs[2] = *replacement;
-        state->ASIC_TASK_MODULE.active_jobs[2].is_valid = true;
+        state->ASIC_TASK_MODULE.entries[2].job = *replacement;
+        state->ASIC_TASK_MODULE.entries[2].is_valid = true;
     } else {
-        memset(&state->ASIC_TASK_MODULE.active_jobs[2], 0xa5, sizeof(state->ASIC_TASK_MODULE.active_jobs[2]));
-        state->ASIC_TASK_MODULE.active_jobs[2].is_valid = false;
+        memset(&state->ASIC_TASK_MODULE.entries[2].job, 0xa5, sizeof(state->ASIC_TASK_MODULE.entries[2].job));
+        state->ASIC_TASK_MODULE.entries[2].is_valid = false;
     }
-    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(&state->ASIC_TASK_MODULE.valid_jobs_lock));
+    TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(&state->ASIC_TASK_MODULE.store.lock));
 }
 
 static void assert_result_job(const asic_job_t *expected, const task_result *result,
@@ -139,6 +139,17 @@ TEST_CASE("BM1366 and BM1397 reject response job IDs outside the active slots",
         uint8_t (*init)(GlobalState *) = bm1397 ? bm1397_harness_driver.init : bm13xx_harness_drivers[0].init;
         task_result *(*process_work)(GlobalState *) = bm1397 ? bm1397_harness_driver.process_work : bm13xx_harness_drivers[0].process_work;
         TEST_ASSERT_EQUAL_UINT8(2, init(state));
+
+        asic_job_t slot0_job = make_job(JOB_TYPE_V1);
+        asic_job_t slot15_job = make_job(JOB_TYPE_V1);
+        if (bm1397) {
+            bm1397_harness_install_job(0, &slot0_job);
+            bm1397_harness_install_job(15, &slot15_job);
+        } else {
+            bm13xx_harness_install_job(0, &slot0_job);
+            bm13xx_harness_install_job(15, &slot15_job);
+        }
+
         for (size_t i = 0; i < sizeof(invalid_ids); ++i) {
             queue_response(bm1397, invalid_ids[i], 0x62000000 + i);
             TEST_ASSERT_NULL(process_work(state));

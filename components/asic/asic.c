@@ -10,6 +10,7 @@
 
 #include "asic.h"
 #include "asic_common.h"
+#include "bm_job_packet.h"
 #include "global_state.h"
 #include "device_config.h"
 #include "frequency_transition_bmXX.h"
@@ -263,4 +264,33 @@ void ASIC_set_difficulty(GlobalState * GLOBAL_STATE, uint8_t difficulty_power)
             return;
     }
     ESP_LOGE(TAG, "Unknown ASIC id %d — cannot set difficulty", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
+}
+
+void ASIC_clear_work(GlobalState * GLOBAL_STATE)
+{
+    if (!GLOBAL_STATE) {
+        return;
+    }
+
+    switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
+        case BM1397:
+        case BM1366:
+        case BM1368:
+        case BM1370:
+        case BM1373:
+            bm13xx_clear_work(GLOBAL_STATE);
+            return;
+    }
+    ESP_LOGE(TAG, "Unknown ASIC id %d — cannot clear work", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
+}
+
+void ASIC_init_job_slots(GlobalState * GLOBAL_STATE)
+{
+    if (!GLOBAL_STATE) {
+        return;
+    }
+    uint16_t job_slots = (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id == BM1397)
+                             ? BM1397_JOB_SLOT_COUNT
+                             : BM13XX_JOB_SLOT_COUNT;
+    asic_init_job_slots(&GLOBAL_STATE->ASIC_TASK_MODULE, job_slots);
 }

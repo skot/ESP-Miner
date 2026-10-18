@@ -29,6 +29,7 @@ void bm1397_harness_clear_packets(void);
 size_t bm1397_harness_packet_count(void);
 const bm1397_harness_packet_t *bm1397_harness_packet(size_t index);
 asic_job_t *bm1397_harness_active_job(uint8_t slot);
+bool bm1397_harness_slot_valid(uint8_t slot);
 void bm1397_harness_install_job(uint8_t slot, const asic_job_t *job);
 void bm1397_harness_queue_response(
     const uint8_t response[BM1397_HARNESS_RESPONSE_SIZE]);

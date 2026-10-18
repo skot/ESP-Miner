@@ -38,6 +38,7 @@
 #include "hashrate_monitor_task.h"
 #include "coinbase_decoder.h"
 #include "sv2_protocol.h"
+#include "asic.h"
 
 #define NVS_COUNTER_UPDATE_INTERVAL_MS 60 * 60 * 1000  // Update NVS once per hour
 #define NOINIT_SENTINEL_VALUE 0x4C4F4732       // "LOG2" in hex
@@ -271,8 +272,8 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     suffixString(module->best_nonce_diff, module->best_diff_string, DIFF_STRING_SIZE, 0);
     suffixString(module->best_session_nonce_diff, module->best_session_diff_string, DIFF_STRING_SIZE, 0);
 
-    // Initialize mutexes
-    asic_init_job_slots(&GLOBAL_STATE->ASIC_TASK_MODULE);
+    // Initialize mutexes and job slots
+    ASIC_init_job_slots(GLOBAL_STATE);
     pthread_mutex_init(&GLOBAL_STATE->transport_mutex, NULL);
 }
 
@@ -405,7 +406,7 @@ static void clean_jobs_queue(GlobalState * GLOBAL_STATE)
 {
     ESP_LOGI(TAG, "Clean Jobs: invalidating active jobs");
 
-    asic_invalidate_jobs(&GLOBAL_STATE->ASIC_TASK_MODULE);
+    ASIC_clear_work(GLOBAL_STATE);
 
     // Reset hashrate measurements to prevent a spike on reconnection
     hashrate_monitor_reset_measurements(GLOBAL_STATE);

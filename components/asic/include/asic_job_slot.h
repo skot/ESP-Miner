@@ -6,33 +6,36 @@
 #include <pthread.h>
 #include "asic_job.h"
 
-#define ASIC_JOB_SLOT_COUNT 16
+#define ASIC_DEFAULT_JOB_SLOTS 16
+#define ASIC_MAX_JOB_SLOTS 32
+#define ASIC_JOB_SLOT_COUNT ASIC_DEFAULT_JOB_SLOTS
+
+typedef struct asic_job_slot_entry
+{
+    bool is_valid;
+    asic_job_t job;
+} asic_job_slot_entry_t;
+
+typedef struct asic_job_store
+{
+    asic_job_slot_entry_t *entries;
+    uint16_t capacity;
+    uint16_t current_slot;
+    pthread_mutex_t lock;
+} asic_job_store_t;
 
 typedef struct AsicTaskModule
 {
-    asic_job_t active_jobs[ASIC_JOB_SLOT_COUNT];
-    uint8_t current_slot;
-    pthread_mutex_t valid_jobs_lock;
+    asic_job_store_t store;
+    asic_job_slot_entry_t entries[ASIC_MAX_JOB_SLOTS];
 } AsicTaskModule;
 
-static inline uint8_t asic_encode_wire_job_slot(uint8_t job_slot, uint8_t tx_shift)
-{
-    return (uint8_t)(job_slot << tx_shift);
-}
+void asic_job_store_init(asic_job_store_t *store, asic_job_slot_entry_t *entries, uint16_t capacity);
+void asic_job_store_destroy(asic_job_store_t *store);
+uint16_t asic_job_store_claim(asic_job_store_t *store, const asic_job_t *job);
+bool asic_job_store_lookup(asic_job_store_t *store, uint16_t slot, asic_job_t *out_job);
+void asic_job_store_invalidate_all(asic_job_store_t *store);
 
-static inline uint8_t asic_decode_wire_job_slot(uint8_t wire_byte, uint8_t rx_shift)
-{
-    return (uint8_t)((wire_byte >> rx_shift) & 0x0F);
-}
-
-static inline uint8_t asic_decode_wire_sub_id(uint8_t wire_byte, uint8_t sub_id_bits)
-{
-    return (uint8_t)(wire_byte & ((1U << sub_id_bits) - 1));
-}
-
-void asic_init_job_slots(AsicTaskModule *task);
-uint8_t asic_claim_job_slot(AsicTaskModule *task, const asic_job_t *job);
-bool asic_lookup_active_job(AsicTaskModule *task, uint8_t slot, asic_job_t *out_job);
-void asic_invalidate_jobs(AsicTaskModule *task);
+void asic_init_job_slots(AsicTaskModule *task, uint16_t capacity);
 
 #endif /* ASIC_JOB_SLOT_H_ */

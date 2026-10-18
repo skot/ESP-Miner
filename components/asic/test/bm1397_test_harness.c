@@ -4,6 +4,7 @@
 #include <pthread.h>
 #include <stdbool.h>
 #include <string.h>
+#include "bm_job_packet.h"
 #include "bm1397.h"
 #include "frequency_transition_bmXX.h"
 #include "global_state.h"
@@ -14,7 +15,7 @@ const bm1397_harness_driver_t bm1397_harness_driver = {
     BM1397_init, BM1397_send_work, BM1397_process_work,
 };
 
-enum { MAX_PACKETS = 32, JOB_SLOTS = ASIC_JOB_SLOT_COUNT };
+enum { MAX_PACKETS = 32, JOB_SLOTS = BM1397_JOB_SLOT_COUNT };
 static GlobalState fixture_state;
 static bm1397_harness_packet_t packets[MAX_PACKETS];
 static size_t packet_count;
@@ -28,9 +29,9 @@ GlobalState *bm1397_harness_begin(void)
         .DEVICE_CONFIG.family.asic.core_count = 672,
         .DEVICE_CONFIG.family.asic.software_midstates = 4,
         .POWER_MANAGEMENT_MODULE.frequency_value = 200.0f,
-        .ASIC_TASK_MODULE.current_slot = 0,
+        .ASIC_TASK_MODULE.store.current_slot = 0,
     };
-    asic_init_job_slots(&fixture_state.ASIC_TASK_MODULE);
+    asic_init_job_slots(&fixture_state.ASIC_TASK_MODULE, BM1397_JOB_SLOT_COUNT);
     packet_count = 0;
     response_ready = false;
     return &fixture_state;
@@ -39,11 +40,11 @@ GlobalState *bm1397_harness_begin(void)
 void bm1397_harness_end(void)
 {
     TEST_ASSERT_EQUAL_INT(0, pthread_mutex_trylock(
-        &fixture_state.ASIC_TASK_MODULE.valid_jobs_lock));
+        &fixture_state.ASIC_TASK_MODULE.store.lock));
     TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(
-        &fixture_state.ASIC_TASK_MODULE.valid_jobs_lock));
+        &fixture_state.ASIC_TASK_MODULE.store.lock));
     TEST_ASSERT_EQUAL_INT(0, pthread_mutex_destroy(
-        &fixture_state.ASIC_TASK_MODULE.valid_jobs_lock));
+        &fixture_state.ASIC_TASK_MODULE.store.lock));
 }
 
 void bm1397_harness_clear_packets(void)
@@ -65,16 +66,22 @@ const bm1397_harness_packet_t *bm1397_harness_packet(size_t index)
 asic_job_t *bm1397_harness_active_job(uint8_t slot)
 {
     TEST_ASSERT_TRUE(slot < JOB_SLOTS);
-    return &fixture_state.ASIC_TASK_MODULE.active_jobs[slot];
+    return &fixture_state.ASIC_TASK_MODULE.entries[slot].job;
+}
+
+bool bm1397_harness_slot_valid(uint8_t slot)
+{
+    TEST_ASSERT_TRUE(slot < JOB_SLOTS);
+    return fixture_state.ASIC_TASK_MODULE.entries[slot].is_valid;
 }
 
 void bm1397_harness_install_job(uint8_t slot, const asic_job_t *job)
 {
     TEST_ASSERT_TRUE(slot < JOB_SLOTS);
-    TEST_ASSERT_FALSE(fixture_state.ASIC_TASK_MODULE.active_jobs[slot].is_valid);
+    TEST_ASSERT_FALSE(fixture_state.ASIC_TASK_MODULE.entries[slot].is_valid);
     if (job != NULL) {
-        fixture_state.ASIC_TASK_MODULE.active_jobs[slot] = *job;
-        fixture_state.ASIC_TASK_MODULE.active_jobs[slot].is_valid = true;
+        fixture_state.ASIC_TASK_MODULE.entries[slot].job = *job;
+        fixture_state.ASIC_TASK_MODULE.entries[slot].is_valid = true;
     }
 }
 

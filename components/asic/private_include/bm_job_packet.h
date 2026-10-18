@@ -38,19 +38,37 @@ void bm1397_encode_job_packet(const asic_job_t *job, uint8_t chip_slot,
                               uint8_t software_midstates,
                               bm1397_job_packet_t *packet);
 
+#define BM13XX_JOB_SLOT_COUNT 16
+#define BM1397_JOB_SLOT_COUNT 32
+
 #define BM13XX_TX_SLOT_SHIFT 3
 #define BM1397_TX_SLOT_SHIFT 2
 
+static inline uint8_t bm_encode_wire_job_slot(uint8_t job_slot, uint8_t tx_shift)
+{
+    return (uint8_t)(job_slot << tx_shift);
+}
+
+static inline uint8_t bm_decode_wire_job_slot(uint8_t wire_byte, uint8_t rx_shift)
+{
+    return (uint8_t)(wire_byte >> rx_shift);
+}
+
+static inline uint8_t bm_decode_wire_sub_id(uint8_t wire_byte, uint8_t sub_id_bits)
+{
+    return (uint8_t)(wire_byte & ((1U << sub_id_bits) - 1));
+}
+
 /* Driver-level job packet builders: claims a job slot, maps it to chip_slot,
  * and encodes the wire packet. */
-void bm13xx_build_job_packet(AsicTaskModule *task, const asic_job_t *job,
+void bm13xx_build_job_packet(asic_job_store_t *store, const asic_job_t *job,
                              bm13xx_job_packet_t *packet);
-void bm1397_build_job_packet(AsicTaskModule *task, uint8_t software_midstates,
+void bm1397_build_job_packet(asic_job_store_t *store, uint8_t software_midstates,
                              const asic_job_t *job, bm1397_job_packet_t *packet);
 
 /* Job result wire packet decoders: resolves the active job from wire chip_slot,
  * extracts nonce / rolled version / ASIC indices, and records result metadata. */
-bool bm13xx_decode_job_result(AsicTaskModule *task,
+bool bm13xx_decode_job_result(asic_job_store_t *store,
                               uint8_t small_core_bits,
                               uint16_t address_interval,
                               uint32_t wire_nonce,
@@ -58,10 +76,13 @@ bool bm13xx_decode_job_result(AsicTaskModule *task,
                               uint16_t wire_version,
                               task_result *result);
 
-bool bm1397_decode_job_result(AsicTaskModule *task,
+bool bm1397_decode_job_result(asic_job_store_t *store,
                               uint16_t address_interval,
                               uint32_t wire_nonce,
                               uint8_t wire_chip_slot,
                               task_result *result);
+
+typedef struct GlobalState GlobalState;
+void bm13xx_clear_work(GlobalState *GLOBAL_STATE);
 
 #endif

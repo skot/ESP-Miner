@@ -10,6 +10,7 @@
 #include "esp_log.h"
 #include "crc.h"
 #include "esp_timer.h"
+#include "global_state.h"
 
 #define PREAMBLE 0xAA55
 
@@ -270,7 +271,7 @@ double calculate_bm_timeout_ms(float frequency_mhz, size_t asic_count, size_t sm
     return (double)timeout_percent * fullspace_timeout_ms;
 }
 
-bool bm13xx_decode_job_result(AsicTaskModule *task,
+bool bm13xx_decode_job_result(asic_job_store_t *store,
                               uint8_t small_core_bits,
                               uint16_t address_interval,
                               uint32_t wire_nonce,
@@ -282,10 +283,10 @@ bool bm13xx_decode_job_result(AsicTaskModule *task,
         return false;
     }
 
-    uint8_t slot = asic_decode_wire_job_slot(wire_chip_slot, small_core_bits);
-    uint8_t small_core_id = asic_decode_wire_sub_id(wire_chip_slot, small_core_bits);
+    uint8_t slot = bm_decode_wire_job_slot(wire_chip_slot, small_core_bits);
+    uint8_t small_core_id = bm_decode_wire_sub_id(wire_chip_slot, small_core_bits);
 
-    if (!asic_lookup_active_job(task, slot, &result->job)) {
+    if (!asic_job_store_lookup(store, slot, &result->job)) {
         return false;
     }
 
@@ -303,7 +304,7 @@ bool bm13xx_decode_job_result(AsicTaskModule *task,
     return true;
 }
 
-bool bm1397_decode_job_result(AsicTaskModule *task,
+bool bm1397_decode_job_result(asic_job_store_t *store,
                               uint16_t address_interval,
                               uint32_t wire_nonce,
                               uint8_t wire_chip_slot,
@@ -313,10 +314,10 @@ bool bm1397_decode_job_result(AsicTaskModule *task,
         return false;
     }
 
-    uint8_t slot = asic_decode_wire_job_slot(wire_chip_slot, BM1397_MIDSTATE_BITS);
-    uint8_t rx_midstate_index = asic_decode_wire_sub_id(wire_chip_slot, BM1397_MIDSTATE_BITS);
+    uint8_t slot = bm_decode_wire_job_slot(wire_chip_slot, BM1397_MIDSTATE_BITS);
+    uint8_t rx_midstate_index = bm_decode_wire_sub_id(wire_chip_slot, BM1397_MIDSTATE_BITS);
 
-    if (!asic_lookup_active_job(task, slot, &result->job)) {
+    if (!asic_job_store_lookup(store, slot, &result->job)) {
         return false;
     }
 
@@ -336,4 +337,11 @@ bool bm1397_decode_job_result(AsicTaskModule *task,
     result->small_core_id = (uint8_t)(wire_chip_slot & 0x0f);
 
     return true;
+}
+
+void bm13xx_clear_work(GlobalState *GLOBAL_STATE)
+{
+    if (GLOBAL_STATE) {
+        asic_job_store_invalidate_all(&GLOBAL_STATE->ASIC_TASK_MODULE.store);
+    }
 }

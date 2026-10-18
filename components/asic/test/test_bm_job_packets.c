@@ -98,7 +98,7 @@ TEST_CASE("BM13xx work packets preserve complete header fields byte exact",
         TEST_ASSERT_EQUAL_HEX8_ARRAY_MESSAGE(expected_packet, packet->bytes,
                                              sizeof(expected_packet), driver->name);
         const asic_job_t *active = bm13xx_harness_active_job(1);
-        TEST_ASSERT_TRUE_MESSAGE(active->is_valid, driver->name);
+        TEST_ASSERT_TRUE_MESSAGE(bm13xx_harness_slot_valid(1), driver->name);
         TEST_ASSERT_EQUAL_STRING_MESSAGE(job.job_id, active->job_id, driver->name);
         bm13xx_harness_end();
     }
@@ -147,7 +147,7 @@ TEST_CASE("BM1397 work packet and returned midstate preserve version mapping",
     TEST_ASSERT_EQUAL_HEX8_ARRAY(expected_packet, packet->bytes,
                                  sizeof(expected_packet));
     const asic_job_t *active = bm1397_harness_active_job(1);
-    TEST_ASSERT_TRUE(active->is_valid);
+    TEST_ASSERT_TRUE(bm1397_harness_slot_valid(1));
     TEST_ASSERT_EQUAL_STRING(job.job_id, active->job_id);
 
     for (uint8_t index = 0; index < 4; ++index) {
@@ -184,7 +184,7 @@ TEST_CASE("Bitmain occupied work slots transfer ownership to replacements",
         TEST_ASSERT_EQUAL_HEX8_MESSAGE(
             replacement_id, bm13xx_harness_packet(1)->bytes[4], driver->name);
         const asic_job_t *active = bm13xx_harness_active_job(replacement_slot);
-        TEST_ASSERT_TRUE_MESSAGE(active->is_valid, driver->name);
+        TEST_ASSERT_TRUE_MESSAGE(bm13xx_harness_slot_valid(replacement_slot), driver->name);
         TEST_ASSERT_EQUAL_HEX32_MESSAGE(
             replacement.version, active->version, driver->name);
         bm13xx_harness_end();
@@ -207,7 +207,7 @@ TEST_CASE("Bitmain occupied work slots transfer ownership to replacements",
 
     TEST_ASSERT_EQUAL_HEX8(replacement_id, bm1397_harness_packet(1)->bytes[4]);
     const asic_job_t *active = bm1397_harness_active_job(replacement_slot);
-    TEST_ASSERT_TRUE(active->is_valid);
+    TEST_ASSERT_TRUE(bm1397_harness_slot_valid(replacement_slot));
     TEST_ASSERT_EQUAL_HEX32(replacement.version, active->version);
     bm1397_harness_end();
 }

@@ -52,23 +52,23 @@ void bm1397_encode_job_packet(const asic_job_t *job, uint8_t chip_slot,
     }
 }
 
-void bm13xx_build_job_packet(AsicTaskModule *task,
+void bm13xx_build_job_packet(asic_job_store_t *store,
                              const asic_job_t *job, bm13xx_job_packet_t *packet)
 {
-    uint8_t slot = asic_claim_job_slot(task, job);
-    uint8_t chip_slot = asic_encode_wire_job_slot(slot, BM13XX_TX_SLOT_SHIFT);
+    uint8_t slot = (uint8_t)asic_job_store_claim(store, job);
+    uint8_t chip_slot = bm_encode_wire_job_slot(slot, BM13XX_TX_SLOT_SHIFT);
     bm13xx_encode_job_packet(job, chip_slot, packet);
 #if BM_DEBUG_JOBS
     ESP_LOGI(TAG, "Send Job: slot %u (0x%02X)", slot, chip_slot);
 #endif
 }
 
-void bm1397_build_job_packet(AsicTaskModule *task,
+void bm1397_build_job_packet(asic_job_store_t *store,
                              uint8_t software_midstates,
                              const asic_job_t *job, bm1397_job_packet_t *packet)
 {
-    uint8_t slot = asic_claim_job_slot(task, job);
-    uint8_t chip_slot = asic_encode_wire_job_slot(slot, BM1397_TX_SLOT_SHIFT);
+    uint8_t slot = (uint8_t)asic_job_store_claim(store, job);
+    uint8_t chip_slot = bm_encode_wire_job_slot(slot, BM1397_TX_SLOT_SHIFT);
     bm1397_encode_job_packet(job, chip_slot, software_midstates, packet);
 #if BM_DEBUG_JOBS
     ESP_LOGI(TAG, "Send Job: slot %u (0x%02X)", slot, chip_slot);

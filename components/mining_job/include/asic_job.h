@@ -17,7 +17,6 @@ typedef enum {
 /* Hash arrays use Bitcoin header byte order; integers use host byte order.
  * Metadata strings must be null-terminated. */
 typedef struct asic_job {
-    bool is_valid;
     uint32_t version;
     uint32_t version_mask;
     uint8_t prev_hash[32];

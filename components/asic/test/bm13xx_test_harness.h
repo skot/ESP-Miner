@@ -36,6 +36,7 @@ void bm13xx_harness_clear_packets(void);
 size_t bm13xx_harness_packet_count(void);
 const bm13xx_harness_packet_t *bm13xx_harness_packet(size_t index);
 asic_job_t *bm13xx_harness_active_job(uint8_t slot);
+bool bm13xx_harness_slot_valid(uint8_t slot);
 void bm13xx_harness_install_job(uint8_t slot, const asic_job_t *job);
 void bm13xx_harness_fail_writes(unsigned count);
 unsigned bm13xx_harness_delay_count(void);
