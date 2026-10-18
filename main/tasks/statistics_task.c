@@ -112,7 +112,6 @@ static inline void merge_max_positive_double(double *target, char *token, double
         format_difficulty(token, val);
     }
 }
-
 bool addStatisticData(StatisticsDataPtr data, uint16_t statsFrequency)
 {
     bool result = false;
