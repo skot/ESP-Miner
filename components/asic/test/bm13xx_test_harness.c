@@ -21,7 +21,7 @@ const bm13xx_harness_driver_t
         {"BM1373", BM1373_init, BM1373_send_work, BM1373_set_version_mask, BM1373_process_work, 0x23, 1, BM1373_SMALL_CORE_BITS},
     };
 
-enum { MAX_PACKETS = 128, JOB_SLOT = 2, JOB_SLOTS = ASIC_JOB_SLOT_COUNT };
+enum { MAX_PACKETS = 128, JOB_SLOT = 2, JOB_SLOTS = BM13XX_JOB_SLOT_COUNT };
 static GlobalState fixture_state;
 static bm13xx_harness_packet_t packets[MAX_PACKETS];
 static size_t packet_count;

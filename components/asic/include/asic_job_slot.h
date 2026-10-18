@@ -6,9 +6,6 @@
 #include <pthread.h>
 #include "asic_job.h"
 
-#define ASIC_DEFAULT_JOB_SLOTS 16
-#define ASIC_JOB_SLOT_COUNT ASIC_DEFAULT_JOB_SLOTS
-
 typedef struct asic_job_slot_entry
 {
     bool is_valid;
