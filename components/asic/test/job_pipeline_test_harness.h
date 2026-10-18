@@ -6,6 +6,11 @@
 #include <stdint.h>
 
 #include "mining.h"
+#include "asic_job.h"
+
+typedef struct GlobalState GlobalState;
+void spy_asic_send_work(GlobalState *state, asic_job_t *job);
+void test_asic_send_job(GlobalState *state, const asic_job_t *job);
 
 typedef struct {
     bool hardware_version_rolling;
@@ -13,6 +18,7 @@ typedef struct {
     bool asic_initialized;
     int job_frequency_ms;
     size_t allocation_failure_at;
+    size_t hash_failure_at;
 } job_pipeline_harness_config_t;
 
 #define JOB_PIPELINE_HARNESS_MAX_EVENTS 8
@@ -29,7 +35,7 @@ typedef struct {
 } job_pipeline_harness_event_t;
 
 typedef struct {
-    bm_job *jobs[JOB_PIPELINE_HARNESS_MAX_JOBS];
+    asic_job_t *jobs[JOB_PIPELINE_HARNESS_MAX_JOBS];
     size_t job_count;
     uint32_t version_masks[JOB_PIPELINE_HARNESS_MAX_JOBS];
     size_t version_mask_count;
@@ -37,18 +43,17 @@ typedef struct {
     size_t delay_count;
     uint8_t active_job_slot;
     size_t allocation_count;
+    size_t hash_abort_count;
 } job_pipeline_harness_result_t;
 
-/*
- * Run the real pre-refactor create_jobs_task() against a deterministic event
- * script and recording ASIC boundary. Captured jobs have the same ownership
- * production transfers to ASIC_send_work().
- */
+/* Captured jobs are owned by result; release them with job_pipeline_harness_result_free(). */
 void job_pipeline_harness_run(
     job_pipeline_harness_config_t config,
     const job_pipeline_harness_event_t *events, size_t event_count,
     job_pipeline_harness_result_t *result);
 
 void job_pipeline_harness_result_free(job_pipeline_harness_result_t *result);
+
+void job_pipeline_harness_send_job(const asic_job_t *job, job_pipeline_harness_result_t *result);
 
 #endif /* JOB_PIPELINE_TEST_HARNESS_H */

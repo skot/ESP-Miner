@@ -10,7 +10,8 @@ import {
   SystemAsic as ISystemASIC,
   SystemScoreboardEntry as ISystemScoreboardEntry,
   Settings,
-  GenericResponse
+  GenericResponse,
+  FirmwareChecksum
 } from '../generated/models';
 import { Api } from '../generated/api';
 import * as functions from '../generated/functions';
@@ -165,10 +166,14 @@ export class SystemApiService {
         fallbackStratumV2ChannelType: "extended" as const,
         poolDifficulty: 1000,
         responseTime: 10,
+        responseTimeMin: 10,
+        responseTimeMax: 10,
         responseShareBatch: 1,
         isUsingFallbackStratum: 0,
         useFallbackStratum: 0,
         poolConnectionInfo: "IPv4 (TLS)",
+        primaryPoolError: "",
+        poolBanner: "",
         frequency: 485,
         actualFrequency: 485,
         version: "v2.12.0",
@@ -220,11 +225,12 @@ export class SystemApiService {
         },
         blockFound: 1,
         showNewBlock: true,
-        coinbaseOutputs: [{value: 50, address: "payoutaddress"}],
+        coinbaseOutputs: [{value: 50, address: "payoutaddress", isUserOutput: 1}],
         coinbaseValueTotalSatoshis: 50,
         coinbaseValueUserSatoshis: 50,
         coinbaseOthersCount: 0,
         coinbaseOthersValueSatoshis: 0,
+        coinbasePayoutStatus: 'verified' as const,
         miningPaused: false,
         workReceived: 42,
       }
@@ -266,7 +272,7 @@ export class SystemApiService {
     const timestampData = [13131,18126,23125,28125,33125,38125,43125,48125,53125,58125];
 
     columnList.push("timestamp");
-    let statisticsList: number[][] = [];
+    let statisticsList: (number | null)[][] = [];
 
     for(let i: number = 0; i < 10; i++) {
       statisticsList[i] = [];
@@ -287,8 +293,9 @@ export class SystemApiService {
           case eChartLabel.fanRpm:       statisticsList[i][j] = fanRpmData[i];       break;
           case eChartLabel.fan2Rpm:      statisticsList[i][j] = fan2RpmData[i];      break;
           case eChartLabel.wifiRssi:     statisticsList[i][j] = wifiRssiData[i];     break;
-          case eChartLabel.freeHeap:     statisticsList[i][j] = freeHeapData[i];     break;
-          case eChartLabel.responseTime: statisticsList[i][j] = responseTimeData[i]; break;
+          case eChartLabel.freeHeap:        statisticsList[i][j] = freeHeapData[i];        break;
+          case eChartLabel.responseTimeMin: statisticsList[i][j] = responseTimeData[i] ? responseTimeData[i] - 1 : null; break;
+          case eChartLabel.responseTimeMax: statisticsList[i][j] = responseTimeData[i] ? responseTimeData[i] + 1 : null; break;
           default:
             if (columnList[j] === "timestamp") {
               statisticsList[i][j] = timestampData[i];
@@ -474,6 +481,23 @@ export class SystemApiService {
     }
 
     return of({ message: `Successfully switched to ${partition} (mock)` }).pipe(delay(1000));
+  }
+
+  public getFirmwareChecksum(uri: string = ''): Observable<FirmwareChecksum> {
+    if (!environment.mock && this.api && !uri) {
+      return from(this.api.invoke(functions.getFirmwareChecksum, {})).pipe(timeout(API_TIMEOUT));
+    }
+
+    if (!environment.mock && uri) {
+      return this.httpClient.get<FirmwareChecksum>(`${uri}/api/system/firmware/checksum`).pipe(timeout(API_TIMEOUT));
+    }
+
+    return of({
+      partition: 'ota_0',
+      version: 'v2.13.0',
+      size: 1638400,
+      sha256: '9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08'
+    }).pipe(delay(1000));
   }
 
   public getAsicSettings(uri: string = ''): Observable<ISystemASIC> {

@@ -1,14 +1,15 @@
+#include "asic_job.h"
 #include "result_task_test_bindings.h"
 
 #include "asic.h"
 #include "asic_common.h"
 #include "global_state.h"
 #include "hashrate_monitor_task.h"
-#include "mining.h"
 #include "scoreboard.h"
 #include "self_test.h"
 #include "stratum_task.h"
 #include "system.h"
+#include "utils.h"
 #include "unity.h"
 
 #include <float.h>
@@ -19,10 +20,9 @@
 
 typedef struct {
     bool paused;
-    bool invalid;
-    bool missing;
+    bool no_share;
     bool self_test;
-    bool replace_during_submit;
+    bool hash_failure;
     unsigned repeated_results;
     double pool_diff;
     int submit_result;
@@ -32,8 +32,6 @@ typedef struct {
 
 static jmp_buf fixture_done;
 static GlobalState fixture_state;
-static bm_job *fixture_slots[128];
-static uint8_t fixture_valid[128];
 static task_result fixture_events[2];
 static size_t fixture_event_index;
 static result_case_t fixture_case;
@@ -53,6 +51,18 @@ void result_task_spy_delay(TickType_t ticks)
     fixture_state.ASIC_initalized = true;
 }
 
+bool result_task_fake_mining_nonce_hash(const asic_job_t *job, uint32_t nonce,
+                                        uint32_t rolled_version, uint8_t hash[32])
+{
+    if (fixture_case.hash_failure) {
+        memset(hash, 0xff, 32);
+        return false;
+    }
+    uint8_t header[80];
+    asic_job_header(job, nonce, rolled_version, header);
+    return double_sha256_bin(header, sizeof(header), hash);
+}
+
 task_result *result_task_fake_process_work(GlobalState *state)
 {
     TEST_ASSERT_EQUAL_PTR(&fixture_state, state);
@@ -63,52 +73,48 @@ task_result *result_task_fake_process_work(GlobalState *state)
         return &fixture_events[0];
     }
     if (fixture_event_index <= 3 + fixture_case.repeated_results) {
-        return &fixture_events[1];
+        return fixture_case.no_share ? NULL : &fixture_events[1];
     }
     longjmp(fixture_done, 1);
 }
 
-int result_task_fake_submit_share(GlobalState *state, const bm_job *job,
+int result_task_fake_submit_share(GlobalState *state, const asic_job_t *job,
                                   uint32_t nonce, uint32_t version,
                                   uint64_t *sent_time)
 {
     TEST_ASSERT_EQUAL_PTR(&fixture_state, state);
     TEST_ASSERT_EQUAL_HEX32(7, nonce);
-    TEST_ASSERT_EQUAL_HEX32(0x20000004, version);
+    TEST_ASSERT_EQUAL_HEX32(0x20002004, version);
+    TEST_ASSERT_EQUAL_HEX32(0x20000004, job->version);
+    TEST_ASSERT_EQUAL_HEX32(0x1fffe000, job->version_mask);
+    TEST_ASSERT_EQUAL_HEX32(0x1705dd01, job->nbits);
     TEST_ASSERT_EQUAL_UINT32(123, job->ntime);
-    TEST_ASSERT_EQUAL(fixture_case.protocol, job->job_type);
-    TEST_ASSERT_NOT_NULL(job->jobid);
-    TEST_ASSERT_NOT_NULL(job->extranonce2);
+    TEST_ASSERT_EQUAL(fixture_case.protocol, job->source_type);
+    TEST_ASSERT_EQUAL_UINT8(UINT8_MAX, job->pool_id);
+    TEST_ASSERT_FLOAT_WITHIN(1e-4, fixture_case.pool_diff, target_to_diff(job->pool_target));
+    TEST_ASSERT_EQUAL_STRING("42", job->job_id);
+    TEST_ASSERT_EQUAL_STRING("aabb", job->extranonce2);
     snprintf(fixture_submitted_id, sizeof(fixture_submitted_id), "%s",
-             job->jobid);
+             job->job_id);
 
     fixture_submissions++;
-    if (fixture_case.replace_during_submit) {
-        pthread_mutex_lock(
-            &fixture_state.ASIC_TASK_MODULE.valid_jobs_lock);
-        free_bm_job(fixture_slots[8]);
-        fixture_slots[8] = NULL;
-        fixture_valid[8] = 0;
-        pthread_mutex_unlock(
-            &fixture_state.ASIC_TASK_MODULE.valid_jobs_lock);
-    }
     *sent_time = fixture_case.sent_time;
     return fixture_case.submit_result;
 }
 
-void result_task_spy_record_nonce(GlobalState *state, double difficulty)
+void result_task_spy_record_nonce(GlobalState *state, const uint8_t hash[32])
 {
     TEST_ASSERT_EQUAL_PTR(&fixture_state, state);
-    TEST_ASSERT_TRUE(difficulty > 0);
+    TEST_ASSERT_NOT_NULL(hash);
     fixture_self_tests++;
 }
 
 void result_task_spy_notify_found_nonce(GlobalState *state, double difficulty,
-                                        uint32_t target)
+                                        bool is_block)
 {
     TEST_ASSERT_EQUAL_PTR(&fixture_state, state);
     TEST_ASSERT_TRUE(difficulty > 0);
-    TEST_ASSERT_EQUAL_HEX32(0x1705dd01, target);
+    TEST_ASSERT_FALSE(is_block);
     fixture_notifications++;
 }
 
@@ -121,7 +127,7 @@ esp_err_t result_task_spy_scoreboard_add(
     TEST_ASSERT_TRUE(difficulty > 0);
     TEST_ASSERT_EQUAL_UINT32(123, ntime);
     TEST_ASSERT_EQUAL_UINT32(7, nonce);
-    TEST_ASSERT_EQUAL_UINT32(0, version_bits);
+    TEST_ASSERT_EQUAL_HEX32(0x00002000, version_bits);
     TEST_ASSERT_EQUAL_STRING("aabb", extranonce);
     snprintf(fixture_scored_id, sizeof(fixture_scored_id), "%s", job_id);
     fixture_scores++;
@@ -144,33 +150,10 @@ static void run_result_case(result_case_t test_case)
 {
     fixture_case = test_case;
     memset(&fixture_state, 0, sizeof(fixture_state));
-    memset(fixture_slots, 0, sizeof(fixture_slots));
-    memset(fixture_valid, 0, sizeof(fixture_valid));
     memset(fixture_events, 0, sizeof(fixture_events));
     fixture_state.ASIC_initalized = !fixture_case.paused;
     fixture_state.SELF_TEST_MODULE.is_active = fixture_case.self_test;
-    fixture_state.ASIC_TASK_MODULE.active_jobs = fixture_slots;
-    fixture_state.ASIC_TASK_MODULE.valid_jobs = fixture_valid;
-    TEST_ASSERT_EQUAL_INT(
-        0, pthread_mutex_init(
-               &fixture_state.ASIC_TASK_MODULE.valid_jobs_lock, NULL));
-
-    fixture_slots[8] = calloc(1, sizeof(*fixture_slots[8]));
-    TEST_ASSERT_NOT_NULL(fixture_slots[8]);
-    fixture_slots[8]->version = 0x20000004;
-    fixture_slots[8]->ntime = 123;
-    fixture_slots[8]->target = 0x1705dd01;
-    fixture_slots[8]->pool_diff = fixture_case.pool_diff;
-    fixture_slots[8]->job_type = fixture_case.protocol;
-    fixture_slots[8]->jobid = strdup("42");
-    fixture_slots[8]->extranonce2 = strdup("aabb");
-    TEST_ASSERT_NOT_NULL(fixture_slots[8]->jobid);
-    TEST_ASSERT_NOT_NULL(fixture_slots[8]->extranonce2);
-    fixture_valid[8] = !fixture_case.invalid;
-    if (fixture_case.missing) {
-        free_bm_job(fixture_slots[8]);
-        fixture_slots[8] = NULL;
-    }
+    // Results carry all required context; this consumer has no active-job store.
 
     fixture_events[0] = (task_result) {
         .register_type = REGISTER_TOTAL_COUNT,
@@ -179,11 +162,21 @@ static void run_result_case(result_case_t test_case)
         .timestamp_us = 1000,
     };
     fixture_events[1] = (task_result) {
-        .job_id = 8,
+        .job = {
+            .version = 0x20000004,
+            .version_mask = 0x1fffe000,
+            .ntime = 123,
+            .nbits = 0x1705dd01,
+            .pool_id = UINT8_MAX,
+            .source_type = fixture_case.protocol,
+            .job_id = "42",
+            .extranonce2 = "aabb",
+        },
         .nonce = 7,
-        .rolled_version = 0x20000004,
+        .rolled_version = 0x20002004,
         .timestamp_us = 1000,
     };
+    diff_to_target(fixture_case.pool_diff, fixture_events[1].job.pool_target);
     fixture_event_index = 0;
     fixture_delays = 0;
     fixture_submissions = 0;
@@ -200,16 +193,9 @@ static void run_result_case(result_case_t test_case)
 
     TEST_ASSERT_EQUAL_UINT32(1, fixture_registers);
     TEST_ASSERT_EQUAL_UINT32(fixture_case.paused ? 1 : 0, fixture_delays);
-    if (fixture_slots[8] != NULL) {
-        free_bm_job(fixture_slots[8]);
-        fixture_slots[8] = NULL;
-    }
-    TEST_ASSERT_EQUAL_INT(
-        0, pthread_mutex_destroy(
-               &fixture_state.ASIC_TASK_MODULE.valid_jobs_lock));
 }
 
-TEST_CASE("result task keeps owned snapshots through submission for every protocol",
+TEST_CASE("result task submits embedded job snapshots without a job store for every protocol",
           "[asic][result][ownership][characterization]")
 {
     for (int type = JOB_TYPE_V1; type <= JOB_TYPE_SV2_EXTENDED; ++type) {
@@ -218,7 +204,6 @@ TEST_CASE("result task keeps owned snapshots through submission for every protoc
             .pool_diff = 1e-30,
             .protocol = (miner_job_type_t)type,
             .sent_time = 2000,
-            .replace_during_submit = true,
         });
         TEST_ASSERT_EQUAL_UINT32(1, fixture_submissions);
         TEST_ASSERT_EQUAL_UINT32(1, fixture_scores);
@@ -231,15 +216,10 @@ TEST_CASE("result task keeps owned snapshots through submission for every protoc
     }
 }
 
-TEST_CASE("result task separates registers and rejects unavailable job slots",
-          "[asic][result][job-store][characterization]")
+TEST_CASE("result task separates registers and empty ASIC responses",
+          "[asic][result][characterization]")
 {
-    run_result_case((result_case_t) {.invalid = true});
-    TEST_ASSERT_EQUAL_UINT32(
-        0, fixture_submissions + fixture_scores + fixture_notifications +
-               fixture_self_tests);
-
-    run_result_case((result_case_t) {.missing = true});
+    run_result_case((result_case_t) {.no_share = true});
     TEST_ASSERT_EQUAL_UINT32(
         0, fixture_submissions + fixture_scores + fixture_notifications +
                fixture_self_tests);
@@ -280,4 +260,26 @@ TEST_CASE("result task preserves thresholds self test and repeated delivery",
     TEST_ASSERT_EQUAL_UINT32(2, fixture_submissions);
     TEST_ASSERT_EQUAL_UINT32(2, fixture_scores);
     TEST_ASSERT_EQUAL_UINT32(2, fixture_notifications);
+}
+
+TEST_CASE("result task discards results when nonce hashing fails",
+          "[asic][result][characterization]")
+{
+    run_result_case((result_case_t) {
+        .pool_diff = 1e-30,
+        .hash_failure = true,
+    });
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_submissions);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_scores);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_notifications);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_self_tests);
+
+    run_result_case((result_case_t) {
+        .self_test = true,
+        .hash_failure = true,
+    });
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_submissions);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_scores);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_notifications);
+    TEST_ASSERT_EQUAL_UINT32(0, fixture_self_tests);
 }
