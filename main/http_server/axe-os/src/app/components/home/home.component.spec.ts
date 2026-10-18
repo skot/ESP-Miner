@@ -36,6 +36,7 @@ import { LocalStorageService } from 'src/app/local-storage.service';
 import { DashboardEditService } from 'src/app/services/dashboard-edit.service';
 import { LayoutService } from 'src/app/layout/service/app.layout.service';
 import { SystemInfo as ISystemInfo, SystemStatistics as ISystemStatistics } from 'src/app/generated/models';
+import { eChartLabel } from 'src/models/enum/eChartLabel';
 
 const mockSystemInfo: ISystemInfo = {
   ASICModel: 'BM1370',
@@ -110,7 +111,11 @@ const mockSystemInfo: ISystemInfo = {
   coreVoltage: 0,
   maxPower: 20,
   poolConnectionInfo: 'Connected',
+  primaryPoolError: '',
+  poolBanner: '',
   responseTime: 45,
+  responseTimeMin: 45,
+  responseTimeMax: 45,
   responseShareBatch: 1,
   poolDifficulty: 1000,
   blockHeight: 800000,
@@ -359,15 +364,17 @@ describe('HomeComponent', () => {
       const updateSpy = spyOn(mockSystemApiService, 'updateSystem').and.callThrough();
       await expectSelectedPool('Primary');
 
-      emitPoolInfo({ useFallbackStratum: 0, isUsingFallbackStratum: 1 });
+      emitPoolInfo({ useFallbackStratum: 0, isUsingFallbackStratum: 1, fallbackStratumTLS: true });
       await expectSelectedPool('Fallback');
       expect(component.activePoolURL).toBe(mockSystemInfo.fallbackStratumURL);
       expect(component.activePoolUser).toBe(mockSystemInfo.fallbackStratumUser);
+      expect(component.activePoolTLS).toBe(true);
 
-      emitPoolInfo({ useFallbackStratum: 0, isUsingFallbackStratum: 0 });
+      emitPoolInfo({ useFallbackStratum: 0, isUsingFallbackStratum: 0, stratumTLS: false });
       await expectSelectedPool('Primary');
       expect(component.activePoolURL).toBe(mockSystemInfo.stratumURL);
       expect(component.activePoolUser).toBe(mockSystemInfo.stratumUser);
+      expect(component.activePoolTLS).toBe(false);
       expect(updateSpy).not.toHaveBeenCalled();
     });
 
@@ -376,6 +383,13 @@ describe('HomeComponent', () => {
 
       await expectSelectedPool('Primary');
       expect(component.activePoolURL).toBe(mockSystemInfo.stratumURL);
+    });
+
+    it('should display pool message in pool card when poolBanner is present', () => {
+      emitPoolInfo({ poolBanner: 'Welcome to Public-Pool!' });
+      fixture.detectChanges();
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.textContent).toContain('Welcome to Public-Pool!');
     });
 
     it('should format bitcoin addresses and display account usernames naturally in DOM', () => {
@@ -620,6 +634,46 @@ describe('HomeComponent', () => {
       expect(component.dataLabel.length).toBe(2);
     });
 
+    it('should merge response time into closest neighbor when removed point has data in limitDataPoints', () => {
+      component['statsLimit'] = 3;
+      component.dataLabel = [1000, 2000, 2050, 4000];
+      component.hashrateData = [100, 100, 100, 100];
+      component.powerData = [10, 10, 10, 10];
+      component.chartDatasets = {
+        responseTimeMin: [null, 35.5, null, null],
+        responseTimeMax: [null, 55.5, null, null]
+      };
+
+      component.limitDataPoints(0);
+
+      expect(component.dataLabel.length).toBe(3);
+      expect(component.dataLabel).not.toContain(2000);
+      expect(component.dataLabel).toContain(2050);
+      const idx2050 = component.dataLabel.indexOf(2050);
+      expect(component.chartDatasets['responseTimeMin'][idx2050]).toBe(35.5);
+      expect(component.chartDatasets['responseTimeMax'][idx2050]).toBe(55.5);
+    });
+
+    it('should merge min and max of either points when thinning in limitDataPoints', () => {
+      component['statsLimit'] = 3;
+      component.dataLabel = [1000, 2000, 2050, 4000];
+      component.hashrateData = [100, 100, 100, 100];
+      component.powerData = [10, 10, 10, 10];
+      component.chartDatasets = {
+        responseTimeMin: [null, 35.5, 25.0, null],
+        responseTimeMax: [null, 45.5, 60.0, null]
+      };
+
+      component.limitDataPoints(0);
+
+      expect(component.dataLabel.length).toBe(3);
+      expect(component.dataLabel).toContain(2050);
+      expect(component.dataLabel).not.toContain(2000);
+      const idx2050 = component.dataLabel.indexOf(2050);
+      expect(component.chartDatasets['responseTimeMin'][idx2050]).toBe(25.0);
+      expect(component.chartDatasets['responseTimeMax'][idx2050]).toBe(60.0);
+    });
+
     it('should clear flash timeouts on destroy', () => {
       component['shareAcceptedTimeout'] = setTimeout(() => {}, 10000) as any;
       component['shareRejectedTimeout'] = setTimeout(() => {}, 10000) as any;
@@ -632,6 +686,89 @@ describe('HomeComponent', () => {
       expect(clearTimeout).toHaveBeenCalledWith(component['shareAcceptedTimeout']);
       expect(clearTimeout).toHaveBeenCalledWith(component['shareRejectedTimeout']);
       expect(clearTimeout).toHaveBeenCalledWith(component['workReceivedTimeout']);
+    });
+
+    describe('FALLBACK_STRATUM messages', () => {
+      const error = { duration: 0, startTime: null };
+
+      it('should show info banner when operating on fallback pool by user preference', () => {
+        component.handleSystemMessages({
+          ...mockSystemInfo,
+          isUsingFallbackStratum: 1,
+          useFallbackStratum: 1,
+        }, error);
+
+        const msg = component.messages.find(m => m.type === 'FALLBACK_STRATUM');
+        expect(msg).toBeDefined();
+        expect(msg?.severity).toBe('info');
+        expect(msg?.text).toBe('Mining on fallback pool by user preference.');
+      });
+
+      it('should show warn banner with primaryPoolError when primary fails over to fallback', () => {
+        component.handleSystemMessages({
+          ...mockSystemInfo,
+          isUsingFallbackStratum: 1,
+          useFallbackStratum: 0,
+          primaryPoolError: 'Pool unreachable',
+        }, error);
+
+        const msg = component.messages.find(m => m.type === 'FALLBACK_STRATUM');
+        expect(msg).toBeDefined();
+        expect(msg?.severity).toBe('warn');
+        expect(msg?.text).toBe('Primary pool (stratum.pool.com:3333): Pool unreachable - mining on fallback pool.');
+      });
+
+      it('should show default warn banner when failover occurs without primaryPoolError', () => {
+        component.handleSystemMessages({
+          ...mockSystemInfo,
+          isUsingFallbackStratum: 1,
+          useFallbackStratum: 0,
+          primaryPoolError: '',
+        }, error);
+
+        const msg = component.messages.find(m => m.type === 'FALLBACK_STRATUM');
+        expect(msg).toBeDefined();
+        expect(msg?.severity).toBe('warn');
+        expect(msg?.text).toBe('Primary pool (stratum.pool.com:3333): Pool unreachable - mining on fallback pool.');
+      });
+
+      it('should show warn banner when user requested fallback but operating on primary', () => {
+        component.handleSystemMessages({
+          ...mockSystemInfo,
+          isUsingFallbackStratum: 0,
+          useFallbackStratum: 1,
+        }, error);
+
+        const msg = component.messages.find(m => m.type === 'FALLBACK_STRATUM');
+        expect(msg).toBeDefined();
+        expect(msg?.severity).toBe('warn');
+        expect(msg?.text).toBe('Fallback pool (fallback.pool.com:3333): Pool unreachable - mining on primary pool.');
+      });
+
+      it('should dismiss banner when operating normally on primary pool', () => {
+        component.messages = [{
+          type: 'FALLBACK_STRATUM',
+          severity: 'warn',
+          text: 'Primary pool (stratum.pool.com:3333): Pool unreachable - mining on fallback pool.',
+        }];
+
+        component.handleSystemMessages({
+          ...mockSystemInfo,
+          isUsingFallbackStratum: 0,
+          useFallbackStratum: 0,
+        }, error);
+
+        const msg = component.messages.find(m => m.type === 'FALLBACK_STRATUM');
+        expect(msg).toBeUndefined();
+      });
+    });
+
+    it('should return 0 for response time min/max and undefined for others in getMinForLabel', () => {
+      expect(component.getMinForLabel(eChartLabel.responseTimeMin)).toBe(0);
+      expect(component.getMinForLabel(eChartLabel.responseTimeMax)).toBe(0);
+      expect(component.getMinForLabel(eChartLabel.hashrate)).toBeUndefined();
+      expect(component.getMinForLabel(eChartLabel.none)).toBeUndefined();
+      expect(component.getMinForLabel(undefined)).toBeUndefined();
     });
   });
 });
