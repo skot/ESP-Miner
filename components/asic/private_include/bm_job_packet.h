@@ -82,7 +82,8 @@ bool bm1397_decode_job_result(asic_job_store_t *store,
                               uint8_t wire_chip_slot,
                               task_result *result);
 
-typedef struct GlobalState GlobalState;
-void bm13xx_clear_work(GlobalState *GLOBAL_STATE);
+void bm13xx_clear_work(asic_job_store_t *store);
+void bm13xx_init_job_slots(asic_job_store_t *store, uint16_t capacity);
+void bm13xx_destroy_job_slots(asic_job_store_t *store);
 
 #endif

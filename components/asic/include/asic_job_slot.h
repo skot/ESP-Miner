@@ -7,7 +7,6 @@
 #include "asic_job.h"
 
 #define ASIC_DEFAULT_JOB_SLOTS 16
-#define ASIC_MAX_JOB_SLOTS 32
 #define ASIC_JOB_SLOT_COUNT ASIC_DEFAULT_JOB_SLOTS
 
 typedef struct asic_job_slot_entry
@@ -27,7 +26,6 @@ typedef struct asic_job_store
 typedef struct AsicTaskModule
 {
     asic_job_store_t store;
-    asic_job_slot_entry_t entries[ASIC_MAX_JOB_SLOTS];
 } AsicTaskModule;
 
 void asic_job_store_init(asic_job_store_t *store, asic_job_slot_entry_t *entries, uint16_t capacity);
@@ -35,7 +33,5 @@ void asic_job_store_destroy(asic_job_store_t *store);
 uint16_t asic_job_store_claim(asic_job_store_t *store, const asic_job_t *job);
 bool asic_job_store_lookup(asic_job_store_t *store, uint16_t slot, asic_job_t *out_job);
 void asic_job_store_invalidate_all(asic_job_store_t *store);
-
-void asic_init_job_slots(AsicTaskModule *task, uint16_t capacity);
 
 #endif /* ASIC_JOB_SLOT_H_ */

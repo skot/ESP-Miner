@@ -46,11 +46,11 @@ static void replace_slot(GlobalState *state, const asic_job_t *replacement)
     // Also proves the decoder released its lock before handing back the result.
     TEST_ASSERT_EQUAL_INT(0, pthread_mutex_trylock(&state->ASIC_TASK_MODULE.store.lock));
     if (replacement != NULL) {
-        state->ASIC_TASK_MODULE.entries[2].job = *replacement;
-        state->ASIC_TASK_MODULE.entries[2].is_valid = true;
+        state->ASIC_TASK_MODULE.store.entries[2].job = *replacement;
+        state->ASIC_TASK_MODULE.store.entries[2].is_valid = true;
     } else {
-        memset(&state->ASIC_TASK_MODULE.entries[2].job, 0xa5, sizeof(state->ASIC_TASK_MODULE.entries[2].job));
-        state->ASIC_TASK_MODULE.entries[2].is_valid = false;
+        memset(&state->ASIC_TASK_MODULE.store.entries[2].job, 0xa5, sizeof(state->ASIC_TASK_MODULE.store.entries[2].job));
+        state->ASIC_TASK_MODULE.store.entries[2].is_valid = false;
     }
     TEST_ASSERT_EQUAL_INT(0, pthread_mutex_unlock(&state->ASIC_TASK_MODULE.store.lock));
 }

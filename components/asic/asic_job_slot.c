@@ -74,14 +74,3 @@ void asic_job_store_invalidate_all(asic_job_store_t *store)
     }
     pthread_mutex_unlock(&store->lock);
 }
-
-void asic_init_job_slots(AsicTaskModule *task, uint16_t capacity)
-{
-    if (task == NULL) {
-        return;
-    }
-    if (capacity == 0 || capacity > ASIC_MAX_JOB_SLOTS) {
-        capacity = ASIC_DEFAULT_JOB_SLOTS;
-    }
-    asic_job_store_init(&task->store, task->entries, capacity);
-}

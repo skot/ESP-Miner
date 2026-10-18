@@ -1,4 +1,5 @@
 #include <string.h>
+#include <stdlib.h>
 #include <stdbool.h>
 #include <stdio.h>
 #include <arpa/inet.h>
@@ -10,7 +11,6 @@
 #include "esp_log.h"
 #include "crc.h"
 #include "esp_timer.h"
-#include "global_state.h"
 
 #define PREAMBLE 0xAA55
 
@@ -339,9 +339,37 @@ bool bm1397_decode_job_result(asic_job_store_t *store,
     return true;
 }
 
-void bm13xx_clear_work(GlobalState *GLOBAL_STATE)
+void bm13xx_clear_work(asic_job_store_t *store)
 {
-    if (GLOBAL_STATE) {
-        asic_job_store_invalidate_all(&GLOBAL_STATE->ASIC_TASK_MODULE.store);
+    if (store) {
+        asic_job_store_invalidate_all(store);
+    }
+}
+
+void bm13xx_init_job_slots(asic_job_store_t *store, uint16_t capacity)
+{
+    if (!store || capacity == 0) {
+        return;
+    }
+    if (store->entries != NULL) {
+        bm13xx_destroy_job_slots(store);
+    }
+    asic_job_slot_entry_t *entries = (asic_job_slot_entry_t *)calloc(capacity, sizeof(asic_job_slot_entry_t));
+    if (entries == NULL) {
+        ESP_LOGE(TAG, "Failed to allocate %u Bitmain job slots", capacity);
+        return;
+    }
+    asic_job_store_init(store, entries, capacity);
+}
+
+void bm13xx_destroy_job_slots(asic_job_store_t *store)
+{
+    if (!store) {
+        return;
+    }
+    asic_job_store_destroy(store);
+    if (store->entries != NULL) {
+        free(store->entries);
+        store->entries = NULL;
     }
 }
