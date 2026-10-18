@@ -67,10 +67,6 @@ DataSource strToDataSource(const char * sourceStr)
 
 static esp_err_t GET_system_logs(httpd_req_t *req)
 {
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
     httpd_resp_set_type(req, "text/plain");
     httpd_resp_set_hdr(req, "Content-Disposition", "attachment; filename=\"bitaxe-logs.txt\"");
 
@@ -111,10 +107,6 @@ esp_err_t HTTP_send_json(httpd_req_t * req, const cJSON * item, int * prebuffer_
 /* Handler for WiFi scan endpoint */
 static esp_err_t GET_wifi_scan(httpd_req_t *req)
 {
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
     httpd_resp_set_type(req, "application/json");
 
     // Give some time for the connected flag to take effect
@@ -441,11 +433,25 @@ esp_err_t set_cors_headers(httpd_req_t * req)
     return ESP_OK;
 }
 
+static esp_err_t rest_api_wrapper(httpd_req_t * req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    esp_err_t (*handler)(httpd_req_t *) = (esp_err_t (*)(httpd_req_t *))req->user_ctx;
+    return handler(req);
+}
+
 esp_err_t HTTP_send_json_error(httpd_req_t * req, const char * status, const char * message)
 {
     httpd_resp_set_status(req, status);
     httpd_resp_set_type(req, "application/json");
-    set_cors_headers(req);
 
     cJSON * root = cJSON_CreateObject();
     if (root == NULL) {
@@ -477,19 +483,9 @@ static esp_err_t rest_recovery_handler(httpd_req_t * req)
 /* Send a 404 as JSON for unhandled api routes */
 static esp_err_t rest_api_common_handler(httpd_req_t * req)
 {
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
     httpd_resp_set_status(req, "404 Not Found");
 
     httpd_resp_set_type(req, "application/json");
-
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     cJSON * root = cJSON_CreateObject();
     cJSON_AddStringToObject(root, "error", "unknown route");
@@ -624,17 +620,6 @@ static esp_err_t web_ui_get_handler(httpd_req_t * req)
 
 static esp_err_t handle_options_request(httpd_req_t * req)
 {
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    // Set CORS headers for OPTIONS request
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
-
-    // Send a blank response for OPTIONS request
     httpd_resp_send(req, NULL, 0);
 
     return ESP_OK;
@@ -1049,15 +1034,6 @@ bool check_settings_and_update(const cJSON * const root, char **redirect_url, Gl
 static esp_err_t PATCH_update_settings(httpd_req_t * req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     int total_len = req->content_len;
     if (total_len <= 0 || total_len > MAX_REST_PAYLOAD_SIZE) {
@@ -1139,16 +1115,6 @@ static esp_err_t POST_identify(httpd_req_t * req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
-
     ESP_LOGI(TAG, "Identify mode enabled for 30s");
 
     httpd_resp_set_type(req, "application/json");
@@ -1176,16 +1142,6 @@ static esp_err_t POST_identify(httpd_req_t * req)
 
 static esp_err_t POST_restart(httpd_req_t * req)
 {
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
-
     ESP_LOGI(TAG, "Restarting System because of API Request");
 
     httpd_resp_set_type(req, "application/json");
@@ -1216,15 +1172,6 @@ static esp_err_t POST_restart(httpd_req_t * req)
 static esp_err_t POST_dismiss_block_found(httpd_req_t * req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     ESP_LOGI(TAG, "Dismissing block found notification");
 
@@ -1252,14 +1199,6 @@ static esp_err_t POST_dismiss_block_found(httpd_req_t * req)
 static esp_err_t PUT_system_pool(httpd_req_t *req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     const char *last_slash = strrchr(req->uri, '/');
     if (!last_slash) {
@@ -1316,14 +1255,6 @@ static esp_err_t PUT_system_pool(httpd_req_t *req)
 static esp_err_t DELETE_system_pool(httpd_req_t *req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     const char *last_slash = strrchr(req->uri, '/');
     if (!last_slash) {
@@ -1360,14 +1291,6 @@ static esp_err_t DELETE_system_pool(httpd_req_t *req)
 static esp_err_t POST_mining_pause(httpd_req_t * req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     GLOBAL_STATE->SYSTEM_MODULE.mining_paused = true;
     ESP_LOGI(TAG, "Mining paused by API request");
@@ -1387,14 +1310,6 @@ static esp_err_t POST_mining_pause(httpd_req_t * req)
 static esp_err_t POST_mining_resume(httpd_req_t * req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     GLOBAL_STATE->SYSTEM_MODULE.mining_paused = false;
     ESP_LOGI(TAG, "Mining resumed by API request");
@@ -1415,17 +1330,8 @@ static esp_err_t POST_mining_resume(httpd_req_t * req)
 static esp_err_t GET_system_info(httpd_req_t *req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
 
     httpd_resp_set_type(req, "application/json");
-
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     const yyjson_alc *alc = yyjson_psram_alc();
     yyjson_mut_doc *root_doc = system_api_get_full_doc(GLOBAL_STATE, alc);
@@ -1473,16 +1379,6 @@ static esp_err_t GET_system_info(httpd_req_t *req)
 
 static esp_err_t POST_system_boot(httpd_req_t *req)
 {
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
-
     int total_len = req->content_len;
     if (total_len <= 0 || total_len > MAX_REST_PAYLOAD_SIZE) {
         return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content length invalid or too large");
@@ -1551,17 +1447,7 @@ static esp_err_t POST_system_boot(httpd_req_t *req)
 
 static esp_err_t GET_system_firmware_checksum(httpd_req_t *req)
 {
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
     httpd_resp_set_type(req, "application/json");
-
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     const esp_partition_t *running = esp_ota_get_running_partition();
     const char *sha256_hex = NULL;
@@ -1611,17 +1497,7 @@ static void serialize_stats_cb(const struct StatisticsData *rows, uint16_t count
 
 static esp_err_t GET_system_statistics(httpd_req_t * req)
 {
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
-
     httpd_resp_set_type(req, "application/json");
-
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     size_t bufLen = httpd_req_get_url_query_len(req) + 1;
     bool dataSelection[SRC_NONE] = {false};
@@ -1715,17 +1591,8 @@ static esp_err_t GET_system_statistics(httpd_req_t * req)
 static esp_err_t GET_scoreboard(httpd_req_t * req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
 
     httpd_resp_set_type(req, "application/json");
-
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     Scoreboard *scoreboard = &GLOBAL_STATE->SYSTEM_MODULE.scoreboard;
     cJSON * root = cJSON_CreateArray();
@@ -1769,9 +1636,6 @@ static esp_err_t GET_scoreboard(httpd_req_t * req)
 esp_err_t POST_WWW_update(httpd_req_t * req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
 
     wifi_mode_t mode;
     esp_wifi_get_mode(&mode);
@@ -1856,9 +1720,6 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
 esp_err_t POST_OTA_update(httpd_req_t * req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
 
     wifi_mode_t mode;
     esp_wifi_get_mode(&mode);
@@ -2017,7 +1878,12 @@ esp_err_t start_rest_server(GlobalState * GLOBAL_STATE)
     websocket_init(server);
 
     for (size_t i = 0; i < num_routes; i++) {
-        ESP_ERROR_CHECK(httpd_register_uri_handler(server, &routes[i]));
+        httpd_uri_t entry = routes[i];
+        if (strncmp(entry.uri, "/api/", 5) == 0 && !entry.is_websocket) {
+            entry.user_ctx = (void *)routes[i].handler;
+            entry.handler = rest_api_wrapper;
+        }
+        ESP_ERROR_CHECK(httpd_register_uri_handler(server, &entry));
     }
 
     httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
