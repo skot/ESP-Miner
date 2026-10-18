@@ -169,12 +169,13 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
     strlcpy(s_v1_conn->user, username, sizeof(s_v1_conn->user));
     diff_to_target(1.0, s_v1_conn->pool_target);
     s_v1_conn->version_mask = 0;
+    GLOBAL_STATE->SYSTEM_MODULE.pool_banner[0] = '\0';
 
     stratum_connection_info_t conn_info;
     if (stratum_socket_resolve(stratum_url, port, &conn_info) != ESP_OK) {
         ESP_LOGE(TAG, "Address resolution failed for %s", stratum_url);
         snprintf(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info,
-                 sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "SV1: Pool unreachable");
+                 sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "Pool unreachable");
         stratum_v1_close_connection(GLOBAL_STATE);
         return ESP_FAIL;
     }
@@ -185,7 +186,7 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
     if (!transport) {
         ESP_LOGE(TAG, "Transport initialization failed.");
         snprintf(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info,
-                 sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "SV1: Internal error");
+                 sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "Internal error");
         stratum_v1_close_connection(GLOBAL_STATE);
         return ESP_FAIL;
     }
@@ -198,7 +199,7 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
     if (ret != ESP_OK) {
         ESP_LOGE(TAG, "Transport unable to connect to %s:%d (errno %d)", stratum_url, port, ret);
         snprintf(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info,
-                 sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "SV1: Connection failed");
+                 sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "Connection failed");
         esp_transport_close(transport);
         esp_transport_destroy(transport);
         stratum_v1_close_connection(GLOBAL_STATE);
@@ -257,6 +258,8 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
                 run_result = ESP_OK;
             } else {
                 ESP_LOGE(TAG, "Failed to receive JSON-RPC line, reconnecting...");
+                snprintf(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info,
+                         sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "Connection lost");
                 run_result = ESP_FAIL;
             }
             break;
@@ -364,11 +367,18 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
 
             case CLIENT_RECONNECT:
                 ESP_LOGW(TAG, "Pool requested client reconnect, pausing 1s before reconnecting...");
+                snprintf(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info,
+                         sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "Pool requested reconnect");
                 vTaskDelay(pdMS_TO_TICKS(1000));
                 reconnect_requested = true;
                 break;
 
             case CLIENT_SHOW_MESSAGE:
+                if (v1_msg.show_message) {
+                    strlcpy(GLOBAL_STATE->SYSTEM_MODULE.pool_banner,
+                            v1_msg.show_message,
+                            sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_banner));
+                }
                 break;
 
             case CLIENT_GET_VERSION:
@@ -406,7 +416,13 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
                         ESP_LOGE(TAG, "setup message rejected: %s", v1_msg.error_str);
                         if (v1_msg.message_id == authorize_message_id) {
                             snprintf(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info,
-                                     sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "SV1: Auth rejected");
+                                     sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "Auth rejected");
+                        } else if (v1_msg.message_id == subscribe_message_id) {
+                            snprintf(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info,
+                                     sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "Subscribe rejected");
+                        } else {
+                            snprintf(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info,
+                                     sizeof(GLOBAL_STATE->SYSTEM_MODULE.pool_connection_info), "Setup rejected");
                         }
                     }
                 } else if (v1_msg.message_id > 0) {
@@ -415,13 +431,16 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
                         if (response_time_ms >= 0) {
                             ESP_LOGI(TAG, "message result accepted");
                             ESP_LOGI(TAG, "Stratum response time: %.1f ms", response_time_ms);
-                            GLOBAL_STATE->SYSTEM_MODULE.response_time = response_time_ms;
+                            SYSTEM_record_response_time(GLOBAL_STATE, response_time_ms, 1);
                         } else {
                             ESP_LOGI(TAG, "message result accepted");
                         }
                         SYSTEM_notify_accepted_share(GLOBAL_STATE);
                     } else {
                         ESP_LOGW(TAG, "message result rejected: %s", v1_msg.error_str);
+                        if (response_time_ms >= 0) {
+                            SYSTEM_record_response_time(GLOBAL_STATE, response_time_ms, 1);
+                        }
                         SYSTEM_notify_rejected_share(GLOBAL_STATE, v1_msg.error_str);
                     }
                 } else {

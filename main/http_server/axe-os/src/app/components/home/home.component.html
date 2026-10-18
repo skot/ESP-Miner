@@ -221,12 +221,12 @@
                 <app-dropdown
                   formControlName="chartY1Unit"
                   [options]="chartUnitGroups"
-                  class="w-40 text-sm">
+                  class="w-48 text-sm">
                 </app-dropdown>
                 <app-dropdown
                   formControlName="chartY2Unit"
                   [options]="chartUnitGroups"
-                  class="w-40 text-sm">
+                  class="w-48 text-sm">
                 </app-dropdown>
               </div>
 
@@ -410,11 +410,14 @@
               </app-dropdown>
             </div>
 
-            <div class="flex flex-nowrap">
+            <div class="flex flex-nowrap items-baseline">
               <div class="w-24 shrink-0 text-secondary">
                 <span>URL</span>
               </div>
-              <div>
+              <div class="flex items-center gap-1">
+                @if (activePoolTLS) {
+                  <i class="pi pi-lock text-xs text-secondary" appTooltip="TLS" tooltipPosition="top"></i>
+                }
                 <tooltip-text-icon
                   text="{{ activePoolURL }}:{{activePoolPort}}"
                   tooltip="{{ info.poolConnectionInfo }}"
@@ -428,9 +431,20 @@
               </div>
 
               <div appTooltip="{{ activePoolUser }}" tooltipPosition="top" sensitive-data>
-                <span class="font-mono font-bold text-base">{{ activePoolUserAddressPart | address }}</span>{{ activePoolUserSuffixPart }}
+                <span class="font-bold text-base" [innerHTML]="activePoolUser | address"></span>
               </div>
             </div>
+
+            @if (info.poolBanner) {
+              <div class="flex flex-nowrap items-baseline">
+                <div class="w-24 shrink-0 text-secondary">
+                  <span>Message</span>
+                </div>
+                <div class="line-break-anywhere">
+                  {{ info.poolBanner }}
+                </div>
+              </div>
+            }
 
             <div class="flex flex-nowrap">
               <div class="w-24 shrink-0 text-secondary">
@@ -442,13 +456,13 @@
               @if (info.responseTime > 0) {
                 {{ info.responseTime | number:'1.1-1' }} ms
                 @if ((info.responseShareBatch ?? 0) > 1) {
-                  <span class="text-neutral-500" appTooltip="The pool acknowledged {{ info.responseShareBatch }} shares in one batch; the time reflects the most recent share, so it may include the pool's batching window" tooltipPosition="top">&nbsp;(batched ×{{ info.responseShareBatch }})</span>
+                  <span class="text-secondary" appTooltip="The pool acknowledged {{ info.responseShareBatch }} shares in one batch; the time reflects the most recent share, so it may include the pool's batching window" tooltipPosition="top">&nbsp;(batched ×{{ info.responseShareBatch }})</span>
                 }
               } @else {
                 --
               }
             </div>
-            @if ((info.coinbaseOutputs?.length ?? 0) > 0) {
+            @if ((info.coinbasePayoutStatus === 'verified' || info.coinbasePayoutStatus === 'not_found') && (info.coinbaseOutputs?.length ?? 0) > 0) {
               <div class="flex flex-nowrap">
                 @let percentage = payoutPercentage;
                 @if (percentage >= 95) {
@@ -483,7 +497,7 @@
               }
             </div>
             <div class="flex flex-nowrap">
-              <div class="w-24 shrink-0 text-neutral-500">
+              <div class="w-24 shrink-0 text-secondary">
                 <span>Mode</span>
               </div>
               <div>{{ activePoolProtocol }}</div>
@@ -558,10 +572,10 @@
                 @for (output of orderedCoinbaseOutputs; track output; let i = $index) {
                   <div class="flex justify-between">
                     @if (output.value > 0) {
-                      @if (output.address === activePoolUserAddressPart) {
-                        <span><span class="font-mono text-sm font-bold" appTooltip="Your payout address" tooltipPosition="top" sensitive-data>{{ output.address | address }}</span>&nbsp;<i class="pi pi-star-fill text-xs"></i></span>
+                      @if (output.isUserOutput === 1) {
+                        <span><span class="text-sm font-bold" appTooltip="Your payout address" tooltipPosition="top" sensitive-data [innerHTML]="output.address | address"></span>&nbsp;<i class="pi pi-star-fill text-xs"></i></span>
                       } @else {
-                        <span class="font-mono text-sm" appTooltip="{{ output.address }}" tooltipPosition="top">{{ output.address | address }}</span>
+                        <span class="text-sm" appTooltip="{{ output.address }}" tooltipPosition="top" [innerHTML]="output.address | address"></span>
                       }
                       <span class="text-sm">{{ output.value | sats }}</span>
                     } @else {

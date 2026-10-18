@@ -26,7 +26,6 @@ import { GridStack, GridItemHTMLElement } from 'gridstack';
 import { DashboardEditService, WidgetDef } from 'src/app/services/dashboard-edit.service';
 
 type PoolLabel = 'Primary' | 'Fallback';
-type ProtocolLabel = 'SV2 Standard Channel' | 'SV2 Extended Channel';
 type MessageType =
   | 'SYSTEM_INFO_ERROR'
   | 'MINING_PAUSED'
@@ -88,7 +87,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   public dataLabel: number[] = [];
   public hashrateData: number[] = [];
   public powerData: number[] = [];
-  public chartDatasets: { [key: string]: number[] } = {};
+  public chartDatasets: { [key: string]: (number | null)[] } = {};
   public chartUnitGroups = ChartUnitGroups;
   public chartHiddenSensors: Record<string, boolean> = {};
   public chartData?: any;
@@ -106,6 +105,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   public activePoolUser!: string;
   public activePoolLabel!: PoolLabel;
   public activePoolProtocol!: string;
+  public activePoolTLS: boolean = false;
   public responseTime!: number;
   private isChangingPool: boolean = false;
   private targetPoolLabel: PoolLabel | null = null;
@@ -177,8 +177,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   private lastChartUpdate: number = 0;
   private lastBucket: number = -1;
 
-  // Performance optimization cache properties
-  private primaryColorRgb: { r: number, g: number, b: number } = { r: 0, g: 0, b: 0 };
   private isHardwareConfigInitialized = false;
   public asicsAmount: number = 0;
   public asicDomainsAmount: number = 0;
@@ -187,8 +185,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   public efficiency: number = 0;
   public efficiencyAverage: number = 0;
   public expectedEfficiency: number = 0;
-  public activePoolUserAddressPart: string = '';
-  public activePoolUserSuffixPart: string = '';
   public activePoolShareWarning: boolean = true;
   public orderedCoinbaseOutputs: ISystemInfo['coinbaseOutputs'] = [];
   public sortedRejectionReasons: Array<{ message: string; count: number; percentage: number }> = [];
@@ -201,7 +197,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   private lastHasFan2Rpm = false;
 
   private destroy$ = new Subject<void>();
-  private infoSubscription?: Subscription;
   private statsSubscription?: Subscription;
   private latestInfo?: ISystemInfo;
   private liveDataStarted = false;
@@ -525,15 +520,25 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
   }
 
-  private createChartDatasets(
-    formControlName: 'chartY1Unit' | 'chartY2Unit',
-    baseColor: string,
-    mixColor: string,
-    fill: boolean,
-    yAxisID: 'y' | 'y2'
-  ): any[] {
+  private createChartDatasets(yAxisID: 'y' | 'y2'): any[] {
+    const isY1 = yAxisID === 'y';
+    const formControlName = isY1 ? 'chartY1Unit' : 'chartY2Unit';
     const unit = this.form?.get(formControlName)?.value;
-    const labels = ChartUnitGroups.find(g => g.value === unit)?.labels || [];
+    const group = ChartUnitGroups.find(g => g.value === unit);
+    const labels = group?.labels || [];
+    const isScatter = group?.type === 'scatter';
+
+    const showLine = !isScatter;
+    const fill = isY1 && !isScatter;
+    const pointRadius = isScatter ? 3 : 2;
+    const borderWidth = isScatter ? 0 : 1;
+
+    const documentStyle = getComputedStyle(document.documentElement);
+    const textColorSecondary = documentStyle.getPropertyValue('--color-text-secondary').trim() || '#808080';
+    const baseColor = isY1
+      ? (documentStyle.getPropertyValue('--color-primary').trim() || '#F80421')
+      : (documentStyle.getPropertyValue('--chart-axis2-color').trim() || textColorSecondary);
+    const mixColor = documentStyle.getPropertyValue('--color-text-main').trim() || '#ffffff';
 
     const entries = labels
       .filter(label => this.isSensorSupported(label, this.latestInfo))
@@ -553,7 +558,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     const fillIndex = fill ? entries.findIndex(entry => !entry.hidden) : -1;
 
     return entries.map(({ labelKey, label, index, hidden }) => {
-      const borderColor = index === 0
+      const borderColor = (index === 0 || isScatter)
         ? baseColor
         : `color-mix(in srgb, ${baseColor} ${100 - index * 15}%, ${mixColor} ${index * 15}%)`;
       const backgroundColor = `color-mix(in srgb, ${borderColor}, transparent 81%)`;
@@ -565,10 +570,13 @@ export class HomeComponent implements OnInit, OnDestroy {
         fill: index === fillIndex,
         backgroundColor,
         borderColor,
+        pointBackgroundColor: borderColor,
+        pointBorderColor: borderColor,
         tension: 0,
-        pointRadius: 2,
+        showLine,
+        pointRadius,
         pointHoverRadius: 5,
-        borderWidth: 1,
+        borderWidth,
         yAxisID,
         hidden
       };
@@ -582,23 +590,16 @@ export class HomeComponent implements OnInit, OnDestroy {
    */
   private refreshChartFill(): void {
     const onFilledAxis = (this.chartData?.datasets ?? []).filter((dataset: any) => dataset.yAxisID === 'y');
-    const target = onFilledAxis.find((dataset: any) => !dataset.hidden);
+    const target = onFilledAxis.find((dataset: any) => !dataset.hidden && dataset.showLine !== false);
     onFilledAxis.forEach((dataset: any) => {
-      dataset.fill = dataset === target;
+      dataset.fill = (dataset === target && dataset.showLine !== false);
     });
   }
 
   private rebuildChartDatasets() {
-    const documentStyle = getComputedStyle(document.documentElement);
-    const primaryColor = documentStyle.getPropertyValue('--color-primary').trim() || '#F80421';
-    const textColor = documentStyle.getPropertyValue('--color-text-main').trim() || '#ffffff';
-    const textColorSecondary = documentStyle.getPropertyValue('--color-text-secondary').trim() || '#808080';
-    const axis2Color = documentStyle.getPropertyValue('--chart-axis2-color').trim() || textColorSecondary;
-
     const datasets = [
-      ...this.createChartDatasets('chartY1Unit', primaryColor, textColor, true, 'y'),
-      // 'black' as the mix colour darkened the series into the dark background.
-      ...this.createChartDatasets('chartY2Unit', axis2Color, textColor, false, 'y2')
+      ...this.createChartDatasets('y'),
+      ...this.createChartDatasets('y2')
     ];
 
     if (this.chartData) {
@@ -616,7 +617,6 @@ export class HomeComponent implements OnInit, OnDestroy {
     const surfaceBorder = documentStyle.getPropertyValue('--color-border-content').trim();
     const primaryColor = documentStyle.getPropertyValue('--color-primary').trim();
     const axis2Color = documentStyle.getPropertyValue('--chart-axis2-color').trim() || textColorSecondary;
-    this.primaryColorRgb = this.hexToRgb(primaryColor);
 
     this.rebuildChartDatasets();
 
@@ -659,7 +659,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     const textColorSecondary = documentStyle.getPropertyValue('--color-text-secondary').trim();
     const surfaceBorder = documentStyle.getPropertyValue('--color-border-content').trim();
     const primaryColor = documentStyle.getPropertyValue('--color-primary').trim();
-    this.primaryColorRgb = this.hexToRgb(primaryColor);
+    const axis2Color = documentStyle.getPropertyValue('--chart-axis2-color').trim() || textColorSecondary;
 
     this.chartData = {
       labels: this.dataLabel,
@@ -712,6 +712,7 @@ export class HomeComponent implements OnInit, OnDestroy {
           }
         },
         tooltip: {
+          filter: (tooltipItem: any) => tooltipItem.raw !== null && tooltipItem.raw !== undefined,
           callbacks: {
             label: function (tooltipItem: any) {
               let label = tooltipItem.dataset.label || '';
@@ -808,7 +809,7 @@ export class HomeComponent implements OnInit, OnDestroy {
           display: true,
           position: 'right',
           ticks: {
-            color: textColorSecondary,
+            color: axis2Color,
             callback: (value: number) => {
               const y2Dataset = this.chartData?.datasets?.find((d: any) => d.yAxisID === 'y2');
               return y2Dataset?.label ? HomeComponent.cbFormatValue(value, y2Dataset.label, {tickmark: true}) : value.toString();
@@ -850,8 +851,8 @@ export class HomeComponent implements OnInit, OnDestroy {
           stats.labels.forEach((labelKey, labelIdx) => {
             const valEnum = chartLabelValue(labelKey);
             if (valEnum === eChartLabel.asicVoltage || valEnum === eChartLabel.voltage || valEnum === eChartLabel.current) {
-              stats.statistics.forEach((element: number[]) => {
-                if (element[labelIdx] !== undefined) {
+              stats.statistics.forEach((element: (number | null)[]) => {
+                if (element[labelIdx] !== undefined && element[labelIdx] !== null) {
                   element[labelIdx] = element[labelIdx] / 1000;
                 }
               });
@@ -860,15 +861,19 @@ export class HomeComponent implements OnInit, OnDestroy {
 
           this.lastStatsFrequency = 0;
           if (stats.statistics.length >= 2 && idxTimestamp !== -1) {
-            const totalDurationMs = stats.statistics[stats.statistics.length - 1][idxTimestamp] - stats.statistics[0][idxTimestamp];
-            this.lastStatsFrequency = Math.floor(totalDurationMs / (stats.statistics.length - 1) / 1000);
+            const lastTs = stats.statistics[stats.statistics.length - 1][idxTimestamp];
+            const firstTs = stats.statistics[0][idxTimestamp];
+            if (lastTs !== null && firstTs !== null) {
+              const totalDurationMs = lastTs - firstTs;
+              this.lastStatsFrequency = Math.floor(totalDurationMs / (stats.statistics.length - 1) / 1000);
+            }
           }
 
           // 1. Gather existing points only if we are not clearing
           const existingPoints = clear ? [] : this.dataLabel.map((timestamp, i) => {
-            const values: Record<string, number> = {};
+            const values: Record<string, number | null> = {};
             allLabels.forEach(labelKey => {
-              values[labelKey] = this.chartDatasets[labelKey]?.[i] ?? 0;
+              values[labelKey] = this.chartDatasets[labelKey]?.[i] ?? null;
             });
             return {
               timestamp,
@@ -879,16 +884,16 @@ export class HomeComponent implements OnInit, OnDestroy {
           }).sort((a, b) => a.timestamp - b.timestamp);
 
           // 2. Always map and sort backend statistics
-          const backendPoints = stats.statistics.map((element: number[]) => {
-            const values: Record<string, number> = {};
+          const backendPoints = stats.statistics.map((element: (number | null)[]) => {
+            const values: Record<string, number | null> = {};
             allLabels.forEach(labelKey => {
               const labelIdx = stats.labels.indexOf(labelKey);
-              values[labelKey] = labelIdx !== -1 ? element[labelIdx] : 0.0;
+              values[labelKey] = labelIdx !== -1 ? element[labelIdx] : null;
             });
             return {
-              timestamp: Date.now() - stats.currentTimestamp + element[idxTimestamp],
-              hashrate: idxHashrate !== -1 ? element[idxHashrate] : 0.0,
-              power: idxPower !== -1 ? element[idxPower] : 0.0,
+              timestamp: Date.now() - stats.currentTimestamp + (element[idxTimestamp] ?? 0),
+              hashrate: (idxHashrate !== -1 ? element[idxHashrate] : 0.0) ?? 0.0,
+              power: (idxPower !== -1 ? element[idxPower] : 0.0) ?? 0.0,
               values
             };
           }).sort((a, b) => a.timestamp - b.timestamp);
@@ -918,7 +923,7 @@ export class HomeComponent implements OnInit, OnDestroy {
                 if (!this.chartDatasets[labelKey]) {
                   this.chartDatasets[labelKey] = [];
                 }
-                this.chartDatasets[labelKey].push(p.values[labelKey] ?? 0.0);
+                this.chartDatasets[labelKey].push(p.values[labelKey] ?? null);
               });
             });
           }
@@ -1009,6 +1014,7 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.activePoolUser = isCurrentlyFallback ? info.fallbackStratumUser : info.stratumUser;
         this.activePoolPort = isCurrentlyFallback ? info.fallbackStratumPort : info.stratumPort;
         this.activePoolShareWarning = !!(isCurrentlyFallback ? info.fallbackStratumShareWarning : info.stratumShareWarning);
+        this.activePoolTLS = !!(isCurrentlyFallback ? info.fallbackStratumTLS : info.stratumTLS);
         const activeProtocol = isCurrentlyFallback ? info.fallbackStratumProtocol : info.stratumProtocol;
         if (activeProtocol === 'SV2') {
           const channelType = isCurrentlyFallback ? info.fallbackStratumV2ChannelType : info.stratumV2ChannelType;
@@ -1018,8 +1024,6 @@ export class HomeComponent implements OnInit, OnDestroy {
         }
         this.responseTime = info.responseTime;
 
-        this.activePoolUserAddressPart = this.getAddressPart(this.activePoolUser);
-        this.activePoolUserSuffixPart = this.getSuffixPart(this.activePoolUser);
         this.orderedCoinbaseOutputs = this.getOrderedCoinbaseOutputs(info);
 
         const totalShares = info.sharesAccepted + info.sharesRejected;
@@ -1045,11 +1049,25 @@ export class HomeComponent implements OnInit, OnDestroy {
           this.hashrateData.push(info.hashRate || 0);
           this.powerData.push(info.power || 0);
 
+          const currentSharesAccepted = info.sharesAccepted;
+          const currentSharesRejected = info.sharesRejected;
+          const hasNewShare = (this.lastSharesAcceptedCount !== -1 && currentSharesAccepted > this.lastSharesAcceptedCount) ||
+                              (this.lastSharesRejectedCount !== -1 && currentSharesRejected > this.lastSharesRejectedCount);
+
           Array.from(new Set([...y1Labels, ...y2Labels])).forEach(labelKey => {
             if (!this.chartDatasets[labelKey]) {
               this.chartDatasets[labelKey] = [];
             }
-            const val = HomeComponent.getDataForLabel(chartLabelValue(labelKey) as eChartLabel, info);
+            let val: number | null;
+            if (labelKey === 'responseTimeMin') {
+              const minVal = info.responseTimeMin && info.responseTimeMin > 0 ? info.responseTimeMin : info.responseTime;
+              val = (hasNewShare && minVal > 0) ? minVal : null;
+            } else if (labelKey === 'responseTimeMax') {
+              const maxVal = info.responseTimeMax && info.responseTimeMax > 0 ? info.responseTimeMax : info.responseTime;
+              val = (hasNewShare && maxVal > 0) ? maxVal : null;
+            } else {
+              val = HomeComponent.getDataForLabel(chartLabelValue(labelKey) as eChartLabel, info);
+            }
             this.chartDatasets[labelKey].push(val);
           });
 
@@ -1110,6 +1128,12 @@ export class HomeComponent implements OnInit, OnDestroy {
         formatted.temp = parseFloat(formatted.temp.toFixed(1));
         formatted.temp2 = parseFloat(formatted.temp2.toFixed(1));
         formatted.responseTime = parseFloat(formatted.responseTime.toFixed(1));
+        if (formatted.responseTimeMin !== undefined) {
+          formatted.responseTimeMin = parseFloat(formatted.responseTimeMin.toFixed(1));
+        }
+        if (formatted.responseTimeMax !== undefined) {
+          formatted.responseTimeMax = parseFloat(formatted.responseTimeMax.toFixed(1));
+        }
 
         return formatted;
       }),
@@ -1121,7 +1145,7 @@ export class HomeComponent implements OnInit, OnDestroy {
       startWith(undefined)
     );
 
-    this.infoSubscription = combineLatest([this.info$, this.systemInfoError$, asicSettings$])
+    combineLatest([this.info$, this.systemInfoError$, asicSettings$])
       .pipe(takeUntil(this.destroy$))
       .subscribe(([info, systemInfoError, asicSettings]) => {
         this.handleSystemMessages(info, systemInfoError, asicSettings?.frequencyOptions);
@@ -1217,21 +1241,6 @@ export class HomeComponent implements OnInit, OnDestroy {
     this.titleService.setTitle(parts.filter(Boolean).join(' • '));
   }
 
-
-
-  private hexToRgb(hex: string): { r: number, g: number, b: number } {
-    if (hex[0] === '#') hex = hex.slice(1);
-    if (hex.length === 3) {
-      hex = hex.split('').map((h: string) => h + h).join('');
-    }
-
-    const r = parseInt(hex.slice(0, 2), 16);
-    const g = parseInt(hex.slice(2, 4), 16);
-    const b = parseInt(hex.slice(4, 6), 16);
-
-    return { r, g, b };
-  }
-
   getRejectionExplanation(reason: string): string | null {
     return this.shareRejectReasonsService.getExplanation(reason);
   }
@@ -1252,16 +1261,19 @@ export class HomeComponent implements OnInit, OnDestroy {
   // array at all; they are summarised by coinbaseOthersCount / coinbaseOthersValueSatoshis.
   getOrderedCoinbaseOutputs(info: ISystemInfo): ISystemInfo['coinbaseOutputs'] {
     const outputs = info.coinbaseOutputs ?? [];
-    if (outputs.length <= 1 || !this.activePoolUserAddressPart) return outputs;
+    if (outputs.length <= 1) return outputs;
 
-    const userOutputs = outputs.filter(o => o.address === this.activePoolUserAddressPart);
+    const isUserOutput = (o: any) => o.isUserOutput === 1;
+
+    const userOutputs = outputs.filter(isUserOutput);
     if (!userOutputs.length) return outputs;
 
-    return [...userOutputs, ...outputs.filter(o => o.address !== this.activePoolUserAddressPart)];
+    return [...userOutputs, ...outputs.filter(o => !isUserOutput(o))];
   }
 
+
   getPayoutPercentage(info: ISystemInfo) {
-    if (info.coinbaseValueTotalSatoshis) {
+    if ((info.coinbasePayoutStatus === 'verified' || info.coinbasePayoutStatus === 'not_found') && info.coinbaseValueTotalSatoshis) {
       return (info.coinbaseValueUserSatoshis ?? 0) / info.coinbaseValueTotalSatoshis * 100;
     }
     return -1;
@@ -1298,12 +1310,28 @@ export class HomeComponent implements OnInit, OnDestroy {
     updateMessage(!!info.power_fault, 'POWER_FAULT', 'error', `${info.power_fault} Check your Power Supply.`);
     updateMessage(!!info.hardware_fault, 'HARDWARE_FAULT', 'error', `${info.hardware_fault}`);
     updateMessage(isFrequencyLow(info.frequency, frequencyOptions), 'FREQUENCY_LOW', 'warn', 'Device frequency is set low - See settings');
-    updateMessage(info.isUsingFallbackStratum === 1 && info.useFallbackStratum === 0, 'FALLBACK_STRATUM', 'warn', 'Primary pool unreachable - operating on fallback pool.');
+    if (info.useFallbackStratum === 0) {
+      if (info.isUsingFallbackStratum === 0) {
+        updateMessage(false, 'FALLBACK_STRATUM', 'info', '');
+      } else {
+        const primaryEndpoint = info.stratumPort ? `${info.stratumURL}:${info.stratumPort}` : (info.stratumURL || 'unknown');
+        const reason = info.primaryPoolError || 'Pool unreachable';
+        const text = `Primary pool (${primaryEndpoint}): ${reason} - mining on fallback pool.`;
+        updateMessage(true, 'FALLBACK_STRATUM', 'warn', text);
+      }
+    } else {
+      if (info.isUsingFallbackStratum === 0) {
+        const fallbackEndpoint = info.fallbackStratumPort ? `${info.fallbackStratumURL}:${info.fallbackStratumPort}` : (info.fallbackStratumURL || 'unknown');
+        updateMessage(true, 'FALLBACK_STRATUM', 'warn', `Fallback pool (${fallbackEndpoint}): Pool unreachable - mining on primary pool.`);
+      } else {
+        updateMessage(true, 'FALLBACK_STRATUM', 'info', 'Mining on fallback pool by user preference.');
+      }
+    }
     if (info.coinbaseOutputs && info.coinbaseOutputs.length > 0) {
       let percentage = this.getPayoutPercentage(info);
       const warn = this.activePoolShareWarning;
       updateMessage(warn && percentage > 0 && percentage < 95, 'NOT_SOLO_MINING', 'warn', `Your share of the mining reward is only ${percentage.toFixed(1)}%`);
-      updateMessage(warn && percentage === 0, 'NO_MINING_REWARD', 'warn', `You don't have a share in the mining reward`);
+      updateMessage(warn && info.coinbasePayoutStatus === 'not_found', 'NO_MINING_REWARD', 'warn', `You don't have a share in the mining reward`);
     }
   }
 
@@ -1419,6 +1447,9 @@ export class HomeComponent implements OnInit, OnDestroy {
         const y1Label = y1Labels.length > 0 ? y1Labels[0] : 'none';
         const y2Label = y2Labels.length > 0 ? y2Labels[0] : 'none';
 
+        this.chartOptions.scales.y.min = this.getMinForLabel(chartLabelValue(y1Label) as eChartLabel);
+        this.chartOptions.scales.y2.min = this.getMinForLabel(chartLabelValue(y2Label) as eChartLabel);
+
         this.chartOptions.scales.y.suggestedMax = this.getSuggestedMaxForLabel(chartLabelValue(y1Label) as eChartLabel, currentInfo);
         this.chartOptions.scales.y2.suggestedMax = this.getSuggestedMaxForLabel(chartLabelValue(y2Label) as eChartLabel, currentInfo);
 
@@ -1482,6 +1513,11 @@ export class HomeComponent implements OnInit, OnDestroy {
         }
       }
       
+      const rMin = this.chartDatasets['responseTimeMin'];
+      const rMax = this.chartDatasets['responseTimeMax'];
+      const removedMin = rMin?.[low];
+      const removedMax = rMax?.[low];
+
       // Remove point at index 'low'.
       this.dataLabel.splice(low, 1);
       this.hashrateData.splice(low, 1);
@@ -1489,6 +1525,20 @@ export class HomeComponent implements OnInit, OnDestroy {
       Object.keys(this.chartDatasets).forEach(k => {
         this.chartDatasets[k].splice(low, 1);
       });
+
+      // Merge into successor (which shifted into index 'low')
+      if (rMin && removedMin != null) {
+        const currentMin = rMin[low];
+        if (currentMin == null || removedMin < currentMin) {
+          rMin[low] = removedMin;
+        }
+      }
+      if (rMax && removedMax != null) {
+        const currentMax = rMax[low];
+        if (currentMax == null || removedMax > currentMax) {
+          rMax[low] = removedMax;
+        }
+      }
     }
 
     if (this.chartData && document.visibilityState !== 'hidden') {
@@ -1512,6 +1562,14 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
   }
 
+  public getMinForLabel(label: eChartLabel | undefined): number | undefined {
+    switch (label) {
+      case eChartLabel.responseTimeMin:
+      case eChartLabel.responseTimeMax:  return 0;
+      default:                           return undefined;
+    }
+  }
+
   public getSuggestedMaxForLabel(label: eChartLabel | undefined, info: ISystemInfo): number {
     switch (label) {
       case eChartLabel.hashrate:
@@ -1529,7 +1587,8 @@ export class HomeComponent implements OnInit, OnDestroy {
       case eChartLabel.fanSpeed:         return 100;
       case eChartLabel.fanRpm:           return 7000;
       case eChartLabel.fan2Rpm:          return 7000;
-      case eChartLabel.responseTime:     return 50;
+      case eChartLabel.responseTimeMin:
+      case eChartLabel.responseTimeMax:  return 50;
       default:                           return 0;
     }
   }
@@ -1553,7 +1612,8 @@ export class HomeComponent implements OnInit, OnDestroy {
       case eChartLabel.fan2Rpm:            return info.fan2rpm;
       case eChartLabel.wifiRssi:           return info.wifiRSSI;
       case eChartLabel.freeHeap:           return info.freeHeap;
-      case eChartLabel.responseTime:       return info.responseTime;
+      case eChartLabel.responseTimeMin:    return info.responseTimeMin ?? info.responseTime;
+      case eChartLabel.responseTimeMax:    return info.responseTimeMax ?? info.responseTime;
       default:                             return 0.0;
     }
   }
@@ -1577,7 +1637,8 @@ export class HomeComponent implements OnInit, OnDestroy {
       case eChartLabel.fan2Rpm:          return {suffix: ' rpm', precision: 0};
       case eChartLabel.wifiRssi:         return {suffix: ' dBm', precision: 0};
       case eChartLabel.freeHeap:         return {suffix: ' B', precision: 0};
-      case eChartLabel.responseTime:     return {suffix: ' ms', precision: 1};
+      case eChartLabel.responseTimeMin:
+      case eChartLabel.responseTimeMax:  return {suffix: ' ms', precision: 1};
       default:                           return {suffix: '', precision: 0};
     }
   }
@@ -1596,15 +1657,5 @@ export class HomeComponent implements OnInit, OnDestroy {
         const settings = HomeComponent.getSettingsForLabel(datasetLabel);
         return value.toLocaleString(undefined, { useGrouping: false, maximumFractionDigits: args?.tickmark ? undefined : settings.precision }) + settings.suffix;
     }
-  }
-
-  getAddressPart(user: string): string {
-    const dotIndex = user.lastIndexOf('.');
-    return dotIndex !== -1 ? user.substring(0, dotIndex) : user;
-  }
-
-  getSuffixPart(user: string): string {
-    const dotIndex = user.lastIndexOf('.');
-    return dotIndex !== -1 ? '.' + user.substring(dotIndex + 1) : '';
   }
 }
