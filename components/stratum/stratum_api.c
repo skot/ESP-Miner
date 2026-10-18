@@ -829,22 +829,6 @@ static void debug_stratum_tx(const char * msg)
     }
 }
 
-// Write the whole buffer, looping over partial writes.
-// Returns len on success, -1 on error or if the peer stopped accepting data.
-static int stratum_send_all(esp_transport_handle_t transport, const char * buf, int len)
-{
-    int sent = 0;
-    while (sent < len) {
-        int ret = esp_transport_write(transport, buf + sent, len - sent, TRANSPORT_TIMEOUT_MS);
-        if (ret <= 0) {
-            ESP_LOGW(TAG, "send failed: ret=%d (sent %d/%d)", ret, sent, len);
-            return -1;
-        }
-        sent += ret;
-    }
-    return len;
-}
-
 int STRATUM_V1_subscribe(esp_transport_handle_t transport, int send_uid, const char * model)
 {
     // Subscribe
@@ -856,7 +840,7 @@ int STRATUM_V1_subscribe(esp_transport_handle_t transport, int send_uid, const c
         send_uid, model, version);
     debug_stratum_tx(subscribe_msg);
 
-    return stratum_send_all(transport, subscribe_msg, strlen(subscribe_msg));
+    return stratum_socket_send_all(transport, subscribe_msg, strlen(subscribe_msg));
 }
 
 int STRATUM_V1_suggest_difficulty(esp_transport_handle_t transport, int send_uid, uint32_t difficulty)
@@ -867,7 +851,7 @@ int STRATUM_V1_suggest_difficulty(esp_transport_handle_t transport, int send_uid
         send_uid, difficulty);
     debug_stratum_tx(difficulty_msg);
 
-    return stratum_send_all(transport, difficulty_msg, strlen(difficulty_msg));
+    return stratum_socket_send_all(transport, difficulty_msg, strlen(difficulty_msg));
 }
 
 int STRATUM_V1_extranonce_subscribe(esp_transport_handle_t transport, int send_uid)
@@ -878,7 +862,7 @@ int STRATUM_V1_extranonce_subscribe(esp_transport_handle_t transport, int send_u
         send_uid);
     debug_stratum_tx(extranonce_msg);
 
-    return stratum_send_all(transport, extranonce_msg, strlen(extranonce_msg));
+    return stratum_socket_send_all(transport, extranonce_msg, strlen(extranonce_msg));
 }
 
 int STRATUM_V1_authorize(esp_transport_handle_t transport, int send_uid, const char * username, const char * pass)
@@ -889,7 +873,7 @@ int STRATUM_V1_authorize(esp_transport_handle_t transport, int send_uid, const c
         send_uid, username, pass);
     debug_stratum_tx(authorize_msg);
 
-    return stratum_send_all(transport, authorize_msg, strlen(authorize_msg));
+    return stratum_socket_send_all(transport, authorize_msg, strlen(authorize_msg));
 }
 
 int STRATUM_V1_pong(esp_transport_handle_t transport, int message_id)
@@ -900,7 +884,7 @@ int STRATUM_V1_pong(esp_transport_handle_t transport, int message_id)
         message_id);
     debug_stratum_tx(pong_msg);
     
-    return stratum_send_all(transport, pong_msg, strlen(pong_msg));
+    return stratum_socket_send_all(transport, pong_msg, strlen(pong_msg));
 }
 
 int STRATUM_V1_send_version(esp_transport_handle_t transport, int message_id)
@@ -913,7 +897,7 @@ int STRATUM_V1_send_version(esp_transport_handle_t transport, int message_id)
         message_id, version);
     debug_stratum_tx(version_msg);
     
-    return stratum_send_all(transport, version_msg, strlen(version_msg));
+    return stratum_socket_send_all(transport, version_msg, strlen(version_msg));
 }
 
 /// @param transport Transport to write to
@@ -934,7 +918,7 @@ int STRATUM_V1_submit_share(esp_transport_handle_t transport, int send_uid, cons
         "{\"id\":%d,\"method\":\"mining.submit\",\"params\":[\"%s\",\"%s\",\"%s\",\"%08lx\",\"%08lx\",\"%08lx\"]}\n",
         send_uid, username, job_id, extranonce_2, ntime, nonce, version_bits);
 
-    int ret = stratum_send_all(transport, submit_msg, strlen(submit_msg));
+    int ret = stratum_socket_send_all(transport, submit_msg, strlen(submit_msg));
 
     uint64_t now = esp_timer_get_time();
     if (out_sent_time_us) {
@@ -956,7 +940,7 @@ int STRATUM_V1_configure_version_rolling(esp_transport_handle_t transport, int s
         send_uid);
     debug_stratum_tx(configure_msg);
 
-    return stratum_send_all(transport, configure_msg, strlen(configure_msg));
+    return stratum_socket_send_all(transport, configure_msg, strlen(configure_msg));
 }
 
 stratum_protocol_t stratum_protocol_from_string(const char *s)
