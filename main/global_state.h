@@ -6,8 +6,8 @@
 #include "esp_partition.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/semphr.h"
-#include "freertos/portmacro.h"
 #include "power_management_task.h"
+#include "asic_job_slot.h"
 #include "hashrate_monitor_task.h"
 #include "coinbase_decoder.h"
 #include "device_config.h"
@@ -38,10 +38,6 @@ typedef struct PoolConfig
 #define MAX_BLOCK_SIGNALS 8
 #define MAX_BLOCK_SIGNAL_LEN 16
 #define MAX_POOLS 8
-
-// Job id slots tracked per ASIC. Job ids are 7-bit (0..127) on all supported
-// BM13xx parts, so both the active_jobs and valid_jobs tables are sized to 128.
-#define MAX_ASIC_JOBS 128
 
 typedef struct RejectedReasonStat
 {
@@ -141,16 +137,6 @@ typedef struct SelfTestModule
     char *finished;
     esp_err_t system_init_ret;
 } SelfTestModule;
-
-typedef struct AsicTaskModule
-{
-    // ASIC may not return the nonce in the same order as the jobs were sent
-    // it also may return a previous nonce under some circumstances
-    // so we keep a list of jobs indexed by the job id
-    struct asic_job **active_jobs;
-    uint8_t *valid_jobs;
-    pthread_mutex_t valid_jobs_lock;
-} AsicTaskModule;
 
 typedef struct GlobalState
 {

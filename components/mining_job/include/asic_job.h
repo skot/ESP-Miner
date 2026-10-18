@@ -1,6 +1,7 @@
 #ifndef ASIC_JOB_H_
 #define ASIC_JOB_H_
 
+#include <stdbool.h>
 #include <stdint.h>
 
 #define ASIC_JOB_ID_LEN 32
@@ -16,6 +17,7 @@ typedef enum {
 /* Hash arrays use Bitcoin header byte order; integers use host byte order.
  * Metadata strings must be null-terminated. */
 typedef struct asic_job {
+    bool is_valid;
     uint32_t version;
     uint32_t version_mask;
     uint8_t prev_hash[32];

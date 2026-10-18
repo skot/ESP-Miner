@@ -11,7 +11,6 @@
 #include "connect.h"
 #include "sv2_protocol.h"
 #include "sv2_noise.h"
-#include "mining.h"
 #include "utils.h"
 #include "libbase58.h"
 #include "device_config.h"
