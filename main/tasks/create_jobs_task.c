@@ -11,6 +11,8 @@
 #include "esp_timer.h"
 
 #include "asic.h"
+#include "asic_common.h"
+#include "difficulty_controller.h"
 #include "system.h"
 #include "esp_heap_caps.h"
 #include "utils.h"
@@ -21,27 +23,20 @@ static void generate_work_from_miner_job(GlobalState *GLOBAL_STATE, const miner_
 {
     if (!job) return;
 
-    asic_job_t *next_job = malloc(sizeof(*next_job));
-    if (next_job == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate memory for new job");
-        return;
-    }
+    asic_job_t next_job;
     uint32_t effective_version = job->version;
     if (!GLOBAL_STATE->DEVICE_CONFIG.family.asic.hardware_version_rolling && !miner_job_is_rollable(job)) {
         effective_version = current_version;
     }
-    if (!mining_build_asic_job(job, extranonce_2, effective_version, next_job)) {
+    if (!mining_build_asic_job(job, extranonce_2, effective_version, &next_job)) {
         ESP_LOGE(TAG, "Failed to build ASIC job");
-        free(next_job);
         return;
     }
     if (!GLOBAL_STATE->ASIC_initalized) {
         ESP_LOGW(TAG, "ASIC not initialized, skipping job send");
-        free(next_job);
         return;
     }
-    ASIC_send_job(GLOBAL_STATE, next_job);
-    free(next_job);
+    ASIC_send_job(GLOBAL_STATE, &next_job);
 }
 
 void create_jobs_task(void *pvParameters)
@@ -83,6 +78,10 @@ void create_jobs_task(void *pvParameters)
             }
 
             extranonce_2 = 0;
+
+            if (GLOBAL_STATE->ASIC_initalized) {
+                difficulty_controller_update(GLOBAL_STATE);
+            }
 
             if (!current_work->clean_jobs) {
                 // Staged job for next cycle, let current ASIC cycle finish

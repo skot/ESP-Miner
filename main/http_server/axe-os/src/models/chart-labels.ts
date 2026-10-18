@@ -16,7 +16,8 @@ export const CHART_LABELS = {
   fan2Rpm: 'Fan 2 RPM',
   wifiRssi: 'Wi-Fi RSSI',
   freeHeap: 'Free Heap',
-  responseTime: 'Response Time',
+  responseTimeMin: 'Response Time Min',
+  responseTimeMax: 'Response Time Max',
   none: 'None',
 } as const;
 
@@ -30,6 +31,7 @@ export interface ChartUnitGroup {
   name: string;
   value: string;
   labels: ChartMetric[];
+  type?: 'line' | 'scatter';
 }
 
 export const ChartUnitGroups: ChartUnitGroup[] = [
@@ -42,6 +44,6 @@ export const ChartUnitGroups: ChartUnitGroup[] = [
   { name: 'Percentage (%)', value: 'percentage', labels: ['fanSpeed', 'errorPercentage'] },
   { name: 'Wi-Fi RSSI (dBm)', value: 'rssi', labels: ['wifiRssi'] },
   { name: 'Free Heap (Bytes)', value: 'heap', labels: ['freeHeap'] },
-  { name: 'Response Time (ms)', value: 'time', labels: ['responseTime'] },
+  { name: 'Response Time (ms)', value: 'time', labels: ['responseTimeMin', 'responseTimeMax'], type: 'scatter' },
   { name: 'None', value: 'none', labels: ['none'] }
 ];

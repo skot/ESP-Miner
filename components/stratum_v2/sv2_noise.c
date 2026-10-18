@@ -1,5 +1,6 @@
 #include "sv2_noise.h"
 #include "sv2_protocol.h"
+#include "stratum_socket.h"
 #include "utils.h"
 
 #include <string.h>
@@ -20,7 +21,6 @@
 
 static const char *TAG = "sv2_noise";
 
-#define TRANSPORT_TIMEOUT_MS    5000
 #define RECV_TIMEOUT_MS         (60 * 3 * 1000)
 // Handshake should complete within seconds; if the server doesn't respond fast we
 // want to fail and reconnect rather than block here for 3 minutes.
@@ -58,16 +58,6 @@ static int noise_recv_exact(esp_transport_handle_t transport, uint8_t *buf, int 
             return -1;
         }
         received += r;
-    }
-    return 0;
-}
-
-static int noise_send_all(esp_transport_handle_t transport, const uint8_t *buf, int len)
-{
-    int ret = esp_transport_write(transport, (const char *)buf, len, TRANSPORT_TIMEOUT_MS);
-    if (ret < 0) {
-        ESP_LOGD(TAG, "send returned: ret=%d", ret);
-        return -1;
     }
     return 0;
 }
@@ -384,7 +374,7 @@ int sv2_noise_handshake(sv2_noise_ctx_t *ctx, esp_transport_handle_t transport,
     ESP_LOGI(TAG, "-> Sending ephemeral public key (64 bytes)");
     ESP_LOGI(TAG, "e_pub (first 16):");
     ESP_LOG_BUFFER_HEX_LEVEL(TAG, ctx->e_pub_encoded, 16, ESP_LOG_INFO);
-    if (noise_send_all(transport, ctx->e_pub_encoded, 64) != 0) {
+    if (stratum_socket_send_all(transport, ctx->e_pub_encoded, 64) < 0) {
         ESP_LOGE(TAG, "Failed to send ephemeral key");
         return -1;
     }
@@ -563,7 +553,7 @@ int sv2_noise_send(sv2_noise_ctx_t *ctx, esp_transport_handle_t transport,
                           frame, SV2_FRAME_HEADER_SIZE, enc_hdr) != 0) {
             return -1;
         }
-        return noise_send_all(transport, enc_hdr, 22);
+        return stratum_socket_send_all(transport, enc_hdr, 22) < 0 ? -1 : 0;
     }
 
     // Build the encrypted header and payload contiguously and send them in a
@@ -589,7 +579,7 @@ int sv2_noise_send(sv2_noise_ctx_t *ctx, esp_transport_handle_t transport,
         return -1;
     }
 
-    int ret = noise_send_all(transport, out, total_len);
+    int ret = stratum_socket_send_all(transport, out, total_len) < 0 ? -1 : 0;
     free(out);
     return ret;
 }

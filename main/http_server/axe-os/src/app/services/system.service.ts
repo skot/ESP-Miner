@@ -163,10 +163,14 @@ export class SystemApiService {
         fallbackStratumV2ChannelType: "extended" as const,
         poolDifficulty: 1000,
         responseTime: 10,
+        responseTimeMin: 10,
+        responseTimeMax: 10,
         responseShareBatch: 1,
         isUsingFallbackStratum: 0,
         useFallbackStratum: 0,
         poolConnectionInfo: "IPv4 (TLS)",
+        primaryPoolError: "",
+        poolBanner: "",
         frequency: 485,
         actualFrequency: 485,
         version: "v2.12.0",
@@ -216,11 +220,12 @@ export class SystemApiService {
         },
         blockFound: 1,
         showNewBlock: true,
-        coinbaseOutputs: [{value: 50, address: "payoutaddress"}],
+        coinbaseOutputs: [{value: 50, address: "payoutaddress", isUserOutput: 1}],
         coinbaseValueTotalSatoshis: 50,
         coinbaseValueUserSatoshis: 50,
         coinbaseOthersCount: 0,
         coinbaseOthersValueSatoshis: 0,
+        coinbasePayoutStatus: 'verified' as const,
         miningPaused: false,
         workReceived: 42,
       }
@@ -262,7 +267,7 @@ export class SystemApiService {
     const timestampData = [13131,18126,23125,28125,33125,38125,43125,48125,53125,58125];
 
     columnList.push("timestamp");
-    let statisticsList: number[][] = [];
+    let statisticsList: (number | null)[][] = [];
 
     for(let i: number = 0; i < 10; i++) {
       statisticsList[i] = [];
@@ -271,22 +276,23 @@ export class SystemApiService {
           case 'hashrate':
           case 'hashrate_1m':
           case 'hashrate_10m':
-          case 'hashrate_1h':  statisticsList[i][j] = hashrateData[i];     break;
-          case 'power':        statisticsList[i][j] = powerData[i];        break;
-          case 'asicTemp':     statisticsList[i][j] = asicTempData[i];     break;
-          case 'asicTemp2':    statisticsList[i][j] = asicTemp2Data[i];    break;
-          case 'vrTemp':       statisticsList[i][j] = vrTempData[i];       break;
-          case 'asicVoltage':  statisticsList[i][j] = asicVoltageData[i];  break;
-          case 'voltage':      statisticsList[i][j] = voltageData[i];      break;
-          case 'current':      statisticsList[i][j] = currentData[i];      break;
-          case 'fanSpeed':     statisticsList[i][j] = fanSpeedData[i];     break;
-          case 'fanRpm':       statisticsList[i][j] = fanRpmData[i];       break;
-          case 'fan2Rpm':      statisticsList[i][j] = fan2RpmData[i];      break;
-          case 'wifiRssi':     statisticsList[i][j] = wifiRssiData[i];     break;
-          case 'freeHeap':     statisticsList[i][j] = freeHeapData[i];     break;
-          case 'responseTime': statisticsList[i][j] = responseTimeData[i]; break;
-          case 'timestamp':    statisticsList[i][j] = timestampData[i];    break;
-          default:             statisticsList[i][j] = 0;                   break;
+          case 'hashrate_1h':     statisticsList[i][j] = hashrateData[i];     break;
+          case 'power':           statisticsList[i][j] = powerData[i];        break;
+          case 'asicTemp':        statisticsList[i][j] = asicTempData[i];     break;
+          case 'asicTemp2':       statisticsList[i][j] = asicTemp2Data[i];    break;
+          case 'vrTemp':          statisticsList[i][j] = vrTempData[i];       break;
+          case 'asicVoltage':     statisticsList[i][j] = asicVoltageData[i];  break;
+          case 'voltage':         statisticsList[i][j] = voltageData[i];      break;
+          case 'current':         statisticsList[i][j] = currentData[i];      break;
+          case 'fanSpeed':        statisticsList[i][j] = fanSpeedData[i];     break;
+          case 'fanRpm':          statisticsList[i][j] = fanRpmData[i];       break;
+          case 'fan2Rpm':         statisticsList[i][j] = fan2RpmData[i];      break;
+          case 'wifiRssi':        statisticsList[i][j] = wifiRssiData[i];     break;
+          case 'freeHeap':        statisticsList[i][j] = freeHeapData[i];     break;
+          case 'responseTimeMin': statisticsList[i][j] = responseTimeData[i] ? responseTimeData[i] - 1 : null; break;
+          case 'responseTimeMax': statisticsList[i][j] = responseTimeData[i] ? responseTimeData[i] + 1 : null; break;
+          case 'timestamp':       statisticsList[i][j] = timestampData[i];    break;
+          default:                statisticsList[i][j] = 0;                   break;
         }
       }
     }
