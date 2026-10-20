@@ -15,6 +15,7 @@ int16_t serial_frame_test_uart_rx(uint8_t *buffer, uint16_t size,
 #define count_asic_chips serial_frame_test_count_asic_chips
 #define receive_work serial_frame_test_receive_work
 #define get_difficulty_mask serial_frame_test_get_difficulty_mask
+#define calculate_effective_asic_difficulty serial_frame_test_calculate_effective_asic_difficulty
 #define calculate_bm_timeout_ms serial_frame_test_calculate_bm_timeout_ms
 #define SERIAL_rx serial_frame_test_uart_rx
 #define esp_timer_get_time serial_frame_test_get_time
