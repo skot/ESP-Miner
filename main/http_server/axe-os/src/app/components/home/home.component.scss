@@ -44,7 +44,11 @@
     }
 }
 
-
+// Alternating checkered shading on cells for visual clarity
+.sparkline-row:nth-child(odd) > .sparkline-cell:nth-child(even),
+.sparkline-row:nth-child(even) > .sparkline-cell:nth-child(odd) {
+    background-color: color-mix(in srgb, var(--color-surface) 90%, var(--color-text-main));
+}
 
 // Gridstack layout
 .grid-stack {
