@@ -26,7 +26,8 @@ typedef enum
     SRC_FAN2_RPM,
     SRC_WIFI_RSSI,
     SRC_FREE_HEAP,
-    SRC_RESPONSE_TIME,
+    SRC_RESPONSE_TIME_MIN,
+    SRC_RESPONSE_TIME_MAX,
     SRC_NONE // last
 } DataSource;
 
@@ -38,6 +39,8 @@ struct StatisticsData
 {
     uint64_t timestamp;
     char tokens[SRC_NONE][STATS_TOKEN_LEN];
+    float responseTimeMin;
+    float responseTimeMax;
 };
 
 typedef void (*StatisticsReaderCallback)(const struct StatisticsData *rows, uint16_t count, void *user_ctx);
