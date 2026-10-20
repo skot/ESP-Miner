@@ -36,7 +36,7 @@ jobs:
         with:
           esp_idf_version: v6.0.2
           target: esp32s3
-          command: idf.py build
+          command: GITHUB_ACTIONS="true" idf.py build
           path: '.'
       - name: Upload firmware build
         uses: actions/upload-artifact@v4
@@ -57,7 +57,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        build_type: ["102", "201", "202", "203", "204", "205", "207", "302", "303", "400", "401", "402", "403", "601", "602", "603", "650", "701", "702", "801"]
+        build_type: ["102", "201", "202", "203", "204", "205", "207", "302", "303", "400", "401", "402", "403", "601", "602", "603", "650", "701", "702", "801", "1201", "1300"]
     steps:
       - name: Checkout repo
         uses: actions/checkout@v6
@@ -74,7 +74,7 @@ jobs:
 
       - name: Generate config.bin and merge factory image
         run: |
-          python3 -m esp_idf_nvs_partition_gen generate config-${{ matrix.build_type }}.cvs config.bin 0x6000
+          python3 -m esp_idf_nvs_partition_gen generate configs/config-${{ matrix.build_type }}.csv config.bin 0x6000
           # NOTE: actions/upload-artifact strips the common parent dir (build/),
           # so the downloaded firmware files sit at the workspace root.
           python3 -m esptool --chip esp32s3 merge-bin \
