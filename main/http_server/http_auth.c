@@ -11,8 +11,6 @@
 
 static const char *TAG = "http_auth";
 
-extern GlobalState * GLOBAL_STATE;
-
 static bool is_auth_required(httpd_req_t *req)
 {
     // 1. If no password is set, auth is disabled globally
@@ -24,7 +22,8 @@ static bool is_auth_required(httpd_req_t *req)
     free(password);
 
     // 2. AP Mode physically proves ownership and bypasses all auth (grandma-proof)
-    if (GLOBAL_STATE->SYSTEM_MODULE.ap_enabled) {
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
+    if (GLOBAL_STATE && GLOBAL_STATE->SYSTEM_MODULE.ap_enabled) {
         return false;
     }
 

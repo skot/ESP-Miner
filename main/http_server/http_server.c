@@ -11,12 +11,10 @@
 #include "freertos/task.h"
 #include "esp_http_server.h"
 #include "esp_log.h"
-#include "esp_netif.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "esp_vfs.h"
-#include "esp_psram.h"
 
 #include "dns_server.h"
 #include "esp_ota_ops.h"
@@ -24,8 +22,6 @@
 #include "esp_wifi.h"
 #include "lwip/inet.h"
 #include <arpa/inet.h>
-#include "lwip/lwip_napt.h"
-#include "lwip/netdb.h"
 #include "lwip/sockets.h"
 
 #include "cJSON.h"
@@ -40,22 +36,20 @@
 #include "theme_api.h"
 #include "axe-os/api/system/asic_settings.h"
 #include "display.h"
-#include "mdns.h"
 #include "http_server.h"
-#include "http_auth.h"
-#include "http_cors.h"
 #include "embedded_web_ui.h"
 #include "sv2_protocol.h"
 #include "tasks/stratum_task.h"
 #include "websocket.h"
 #include "websocket_log.h"
 #include "websocket_api.h"
+#include "http_auth.h"
 #include "system_api_json.h"
 #include "log_buffer.h"
 #include "utils.h"
 
 static const char * TAG = "http_server";
-
+static const char * CORS_TAG = "CORS";
 
 static int system_wifi_scan_prebuffer_len = 256;
 static int api_common_prebuffer_len = 256;
@@ -74,14 +68,6 @@ DataSource strToDataSource(const char * sourceStr)
 
 static esp_err_t GET_system_logs(httpd_req_t *req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
     httpd_resp_set_type(req, "text/plain");
     httpd_resp_set_hdr(req, "Content-Disposition", "attachment; filename=\"bitaxe-logs.txt\"");
 
@@ -106,9 +92,6 @@ static esp_err_t GET_system_logs(httpd_req_t *req)
     return res;
 }
 
-GlobalState * GLOBAL_STATE;
-static httpd_handle_t server = NULL;
-
 esp_err_t HTTP_send_json(httpd_req_t * req, const cJSON * item, int * prebuffer_len)
 {
     const char * response = cJSON_PrintBuffered(item, *prebuffer_len, false);
@@ -122,35 +105,9 @@ esp_err_t HTTP_send_json(httpd_req_t * req, const cJSON * item, int * prebuffer_
     return ESP_ERR_NO_MEM;
 }
 
-static esp_err_t HTTP_send_json_error(httpd_req_t * req, const char * status, const char * message)
-{
-    httpd_resp_set_status(req, status);
-    httpd_resp_set_type(req, "application/json");
-
-    cJSON * root = cJSON_CreateObject();
-    if (root == NULL) {
-        return ESP_ERR_NO_MEM;
-    }
-    cJSON_AddStringToObject(root, "message", message);
-
-    int prebuffer_len = 128;
-    esp_err_t res = HTTP_send_json(req, root, &prebuffer_len);
-    cJSON_Delete(root);
-    return res;
-}
-
-
 /* Handler for WiFi scan endpoint */
 static esp_err_t GET_wifi_scan(httpd_req_t *req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
     httpd_resp_set_type(req, "application/json");
 
     // Give some time for the connected flag to take effect
@@ -195,24 +152,240 @@ static esp_err_t GET_wifi_scan(httpd_req_t *req)
     } while (0)
 
 #define FILE_PATH_MAX (ESP_VFS_PATH_MAX + 128)
-#define SCRATCH_BUFSIZE (10240)
 #define MESSAGE_QUEUE_SIZE (128)
-
-typedef struct rest_server_context
-{
-    char base_path[ESP_VFS_PATH_MAX + 1];
-    char scratch[SCRATCH_BUFSIZE];
-} rest_server_context_t;
+#define MAX_REST_PAYLOAD_SIZE (16384) /* 16 KB max REST JSON payload */
 
 #define CHECK_FILE_EXTENSION(filename, ext) (strcasecmp(&filename[strlen(filename) - strlen(ext)], ext) == 0)
 
-/* Function for stopping the webserver */
-void stop_webserver(httpd_handle_t server)
-{
-    if (server) {
-        /* Stop the httpd server */
-        httpd_stop(server);
+static esp_err_t ip_in_private_range(uint32_t address) {
+    uint32_t ip_address = ntohl(address);
+
+    // 10.0.0.0 - 10.255.255.255 (Class A)
+    if ((ip_address >= 0x0A000000) && (ip_address <= 0x0AFFFFFF)) {
+        return ESP_OK;
     }
+
+    // 172.16.0.0 - 172.31.255.255 (Class B)
+    if ((ip_address >= 0xAC100000) && (ip_address <= 0xAC1FFFFF)) {
+        return ESP_OK;
+    }
+
+    // 192.168.0.0 - 192.168.255.255 (Class C)
+    if ((ip_address >= 0xC0A80000) && (ip_address <= 0xC0A8FFFF)) {
+        return ESP_OK;
+    }
+
+    return ESP_FAIL;
+}
+
+static uint32_t extract_origin_ip_addr(char *origin)
+{
+    char host_str[128];
+    uint32_t origin_ip_addr = 0;
+
+    // Find the start of the hostname in the Origin header
+    const char *prefix = "http://";
+    char *host_start = strstr(origin, prefix);
+    if (host_start) {
+        host_start += strlen(prefix); // Move past "http://"
+
+        // Extract the hostname portion (up to the next '/')
+        char *host_end = strchr(host_start, '/');
+        size_t host_len = host_end ? (size_t)(host_end - host_start) : strlen(host_start);
+        if (host_len < sizeof(host_str)) {
+            strncpy(host_str, host_start, host_len);
+            host_str[host_len] = '\0'; // Null-terminate the string
+
+            // Check if it's an IP address or hostname
+            struct in_addr addr;
+            if (inet_pton(AF_INET, host_str, &addr) == 1) {
+                origin_ip_addr = addr.s_addr;
+                ESP_LOGD(CORS_TAG, "Extracted IP address %lu", origin_ip_addr);
+            } else {
+                ESP_LOGD(CORS_TAG, "Origin contains hostname: %s (not an IP)", host_str);
+                // For hostnames, return 0 to indicate it's not an IP address
+                origin_ip_addr = 0;
+            }
+        } else {
+            ESP_LOGW(CORS_TAG, "Hostname string is too long: %s", host_start);
+        }
+    }
+
+    return origin_ip_addr;
+}
+
+// Helper function to normalize hostname by stripping ".local" suffix if present
+// This prevents Avahi from creating duplicate ".local.local" hostnames
+static void normalize_hostname(char *hostname, size_t max_len) {
+    if (hostname == NULL || strlen(hostname) == 0) {
+        return;
+    }
+
+    size_t len = strlen(hostname);
+    const char *suffix = ".local";
+    size_t suffix_len = strlen(suffix);
+
+    // Check if hostname ends with ".local" (case-insensitive)
+    if (len > suffix_len &&
+        strcasecmp(hostname + len - suffix_len, suffix) == 0) {
+        // Strip the ".local" suffix
+        hostname[len - suffix_len] = '\0';
+        ESP_LOGD(TAG, "Normalized hostname from '%s.local' to '%s'", hostname, hostname);
+    }
+}
+
+// Helper function to check if a hostname is a local network or reserved private domain
+static bool is_local_network_hostname(const char *host_str) {
+    if (host_str == NULL || *host_str == '\0') {
+        return false;
+    }
+
+    // Bare hostname (no dots, only resolvable on local network)
+    if (strchr(host_str, '.') == NULL) {
+        return true;
+    }
+
+    // Reserved / non-routable private local domain suffixes
+    static const char *local_suffixes[] = {
+        ".local",       // RFC 6762 (mDNS)
+        ".lan",         // Common router private LAN domain
+        ".home.arpa",   // RFC 8375 (IETF Home Network)
+        ".internal",    // ICANN-reserved private use
+        ".localdomain", // RFC 6761
+        ".home",        // Common router default
+        ".localhost"    // RFC 6761
+    };
+
+    size_t host_len = strlen(host_str);
+    for (size_t i = 0; i < sizeof(local_suffixes) / sizeof(local_suffixes[0]); i++) {
+        size_t suffix_len = strlen(local_suffixes[i]);
+        if (host_len > suffix_len && strcasecmp(host_str + host_len - suffix_len, local_suffixes[i]) == 0) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+esp_err_t is_network_allowed(httpd_req_t * req)
+{
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
+    if (!GLOBAL_STATE) {
+        httpd_resp_send_500(req);
+        return ESP_FAIL;
+    }
+
+    if (GLOBAL_STATE->SYSTEM_MODULE.ap_enabled == true) {
+        ESP_LOGI(CORS_TAG, "Device in AP mode. Allowing CORS.");
+        return ESP_OK;
+    }
+
+    int sockfd = httpd_req_to_sockfd(req);
+    char ipstr[INET6_ADDRSTRLEN];
+    struct sockaddr_in6 addr;   // esp_http_server uses IPv6 addressing
+    socklen_t addr_size = sizeof(addr);
+
+    if (getpeername(sockfd, (struct sockaddr *)&addr, &addr_size) < 0) {
+        ESP_LOGE(CORS_TAG, "Error getting client IP");
+        return ESP_FAIL;
+    }
+
+    uint32_t request_ip_addr = addr.sin6_addr.un.u32_addr[3];
+
+    // // Convert to IPv6 string
+    // inet_ntop(AF_INET, &addr.sin6_addr, ipstr, sizeof(ipstr));
+
+    // Convert to IPv4 string
+    inet_ntop(AF_INET, &request_ip_addr, ipstr, sizeof(ipstr));
+
+    // Attempt to get the Origin header.
+    char origin[128];
+    uint32_t origin_ip_addr;
+    if (httpd_req_get_hdr_value_str(req, "Origin", origin, sizeof(origin)) == ESP_OK) {
+        ESP_LOGD(CORS_TAG, "Origin header: %s", origin);
+        origin_ip_addr = extract_origin_ip_addr(origin);
+    } else {
+        ESP_LOGD(CORS_TAG, "No origin header found.");
+        origin_ip_addr = request_ip_addr;
+    }
+
+    if (origin_ip_addr != 0 && ip_in_private_range(origin_ip_addr) == ESP_OK && ip_in_private_range(request_ip_addr) == ESP_OK) {
+        ESP_LOGD(CORS_TAG, "Origin and IP both in private range. Allowing.");
+        return ESP_OK;
+    }
+    
+    // If origin contains hostname (origin_ip_addr == 0), proceed to hostname validation
+    if (origin_ip_addr == 0) {
+        ESP_LOGD(CORS_TAG, "Origin contains hostname, proceeding to hostname validation");
+    }
+
+    // Check if Origin header matches the avahi hostname or is a local-network hostname
+    if (httpd_req_get_hdr_value_len(req, "Origin") > 0) {
+        httpd_req_get_hdr_value_str(req, "Origin", origin, sizeof(origin));
+        ESP_LOGD(CORS_TAG, "Origin header: %s", origin);
+
+        // Extract the host portion from the origin for local-hostname validation
+        char host_str[128] = {0};
+        const char *prefix = "http://";
+        char *host_start = strstr(origin, prefix);
+        bool is_local_hostname = false;
+        if (host_start) {
+            host_start += strlen(prefix);
+            // Strip port if present
+            char *colon = strchr(host_start, ':');
+            char *slash = strchr(host_start, '/');
+            size_t host_len = 0;
+            if (colon) {
+                host_len = colon - host_start;
+            } else if (slash) {
+                host_len = slash - host_start;
+            } else {
+                host_len = strlen(host_start);
+            }
+            if (host_len > 0 && host_len < sizeof(host_str)) {
+                strncpy(host_str, host_start, host_len);
+                host_str[host_len] = '\0';
+
+                // Allow local network hostnames (bare, .local, .lan, .home.arpa, .internal, etc.)
+                if (is_local_network_hostname(host_str)) {
+                    is_local_hostname = true;
+                    ESP_LOGD(CORS_TAG, "Origin host '%s' is a local network hostname - allowing", host_str);
+                }
+            }
+        }
+
+        if (is_local_hostname) {
+            ESP_LOGD(CORS_TAG, "Request from local hostname - allowing access");
+            return ESP_OK;
+        }
+
+        // Fall back to exact match against this device's configured hostname
+        char *hostname = nvs_config_get_string(NVS_CONFIG_HOSTNAME);
+        ESP_LOGD(CORS_TAG, "Configured hostname: %s", hostname);
+        // Match origin as http://<hostname>.local[:port] or http://<hostname>[:port]
+        const char *patterns[] = { "http://%s.local", "http://%s" };
+        bool matched = false;
+        for (int i = 0; i < 2 && !matched; i++) {
+            char expected[256];
+            snprintf(expected, sizeof(expected), patterns[i], hostname);
+            size_t len = strlen(expected);
+            // Origin must start with expected, followed by end-of-string or ':port'
+            if (strncmp(origin, expected, len) == 0 &&
+                (origin[len] == '\0' || origin[len] == ':')) {
+                matched = true;
+            }
+        }
+        free(hostname);
+        if (matched) {
+            ESP_LOGD(CORS_TAG, "Request from hostname - allowing access");
+            return ESP_OK;
+        }
+    } else {
+        ESP_LOGD(CORS_TAG, "No Origin header found");
+    }
+
+    ESP_LOGI(CORS_TAG, "Client is NOT in the private ip ranges or same range as server.");
+    return ESP_FAIL;
 }
 
 /* Set HTTP response content type according to file extension */
@@ -239,12 +412,69 @@ static esp_err_t set_content_type_from_file(httpd_req_t * req, const char * file
     return httpd_resp_set_type(req, type);
 }
 
+esp_err_t set_cors_headers(httpd_req_t * req)
+{
+    esp_err_t err;
+
+    err = httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
+    if (err != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    err = httpd_resp_set_hdr(req, "Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS");
+    if (err != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    err = httpd_resp_set_hdr(req, "Access-Control-Allow-Headers", "Content-Type");
+    if (err != ESP_OK) {
+        return ESP_FAIL;
+    }
+
+    return ESP_OK;
+}
+
+static esp_err_t rest_api_wrapper(httpd_req_t * req)
+{
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
+    }
+
+    if (set_cors_headers(req) != ESP_OK) {
+        httpd_resp_send_500(req);
+        return ESP_OK;
+    }
+
+    if (http_auth_validate(req) != ESP_OK) {
+        return ESP_OK;
+    }
+
+    esp_err_t (*handler)(httpd_req_t *) = (esp_err_t (*)(httpd_req_t *))req->user_ctx;
+    return handler(req);
+}
+
+esp_err_t HTTP_send_json_error(httpd_req_t * req, const char * status, const char * message)
+{
+    httpd_resp_set_status(req, status);
+    httpd_resp_set_type(req, "application/json");
+
+    cJSON * root = cJSON_CreateObject();
+    if (root == NULL) {
+        return ESP_ERR_NO_MEM;
+    }
+    cJSON_AddStringToObject(root, "message", message);
+
+    int prebuffer_len = 128;
+    esp_err_t res = HTTP_send_json(req, root, &prebuffer_len);
+    cJSON_Delete(root);
+    return res;
+}
 
 /* Recovery handler */
 static esp_err_t rest_recovery_handler(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
+    if (is_network_allowed(req) != ESP_OK) {
+        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
     }
 
     if (http_auth_validate(req) != ESP_OK) {
@@ -262,15 +492,18 @@ static esp_err_t rest_recovery_handler(httpd_req_t * req)
 /* Send a 404 as JSON for unhandled api routes */
 static esp_err_t rest_api_common_handler(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    httpd_resp_set_status(req, "404 Not Found");
 
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    httpd_resp_set_type(req, "application/json");
 
-    return HTTP_send_json_error(req, "404 Not Found", "unknown route");
+    cJSON * root = cJSON_CreateObject();
+    cJSON_AddStringToObject(root, "error", "unknown route");
+
+    esp_err_t res = HTTP_send_json(req, root, &api_common_prebuffer_len);
+
+    cJSON_Delete(root);
+
+    return res;
 }
 
 static bool file_exists(const char *path) {
@@ -278,15 +511,14 @@ static bool file_exists(const char *path) {
     return (stat(path, &buffer) == 0);
 }
 
-/* Send HTTP response with the contents of the requested file */
-static esp_err_t rest_common_get_handler_spiffs(httpd_req_t * req)
+/* Send HTTP response with the contents of the requested file from SPIFFS */
+static esp_err_t serve_spiffs_file(httpd_req_t * req)
 {
     char filepath[FILE_PATH_MAX];
     char gz_file[FILE_PATH_MAX];
     uint8_t filePathLength = sizeof(filepath);
 
-    rest_server_context_t * rest_context = (rest_server_context_t *) req->user_ctx;
-    strlcpy(filepath, rest_context->base_path, filePathLength);
+    filepath[0] = '\0';
     if (req->uri[strlen(req->uri) - 1] == '/') {
         strlcat(filepath, "/index.html", filePathLength);
     } else {
@@ -320,16 +552,23 @@ static esp_err_t rest_common_get_handler_spiffs(httpd_req_t * req)
         httpd_resp_set_hdr(req, "Content-Encoding", "gzip");
     }
 
-    char * chunk = rest_context->scratch;
+    char * chunk = (char *)malloc(4096);
+    if (!chunk) {
+        close(fd);
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Out of memory");
+        return ESP_FAIL;
+    }
+
     ssize_t read_bytes;
     do {
-        /* Read file in chunks into the scratch buffer */
-        read_bytes = read(fd, chunk, SCRATCH_BUFSIZE);
+        /* Read file in chunks into the buffer */
+        read_bytes = read(fd, chunk, 4096);
         if (read_bytes == -1) {
             ESP_LOGE(TAG, "Failed to read file : %s", file_to_open);
         } else if (read_bytes > 0) {
             /* Send the buffer contents as HTTP response chunk */
             if (httpd_resp_send_chunk(req, chunk, read_bytes) != ESP_OK) {
+                free(chunk);
                 close(fd);
                 ESP_LOGE(TAG, "File sending failed!");
                 /* Abort sending file */
@@ -341,6 +580,7 @@ static esp_err_t rest_common_get_handler_spiffs(httpd_req_t * req)
         }
     } while (read_bytes > 0);
     /* Close file after sending complete */
+    free(chunk);
     close(fd);
     ESP_LOGI(TAG, "File sending complete");
     /* Respond with an empty chunk to signal HTTP response completion */
@@ -348,7 +588,8 @@ static esp_err_t rest_common_get_handler_spiffs(httpd_req_t * req)
     return ESP_OK;   
 }
 
-static esp_err_t rest_common_get_handler_embedded(httpd_req_t * req)
+/* Send HTTP response with the contents of the requested file from embedded flash */
+static esp_err_t serve_embedded_file(httpd_req_t * req)
 {
     char rel_path[FILE_PATH_MAX];
     if (req->uri[strlen(req->uri) - 1] == '/') {
@@ -378,17 +619,16 @@ static esp_err_t rest_common_get_handler_embedded(httpd_req_t * req)
     return ESP_OK;
 }
 
+/* Common GET handler for static Web UI files (dispatches to SPIFFS or embedded) */
+static esp_err_t web_ui_get_handler(httpd_req_t * req)
+{
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
+    bool use_custom = nvs_config_get_bool(NVS_CONFIG_USE_CUSTOM_WWW) && GLOBAL_STATE->filesystem_is_available;
+    return use_custom ? serve_spiffs_file(req) : serve_embedded_file(req);
+}
+
 static esp_err_t handle_options_request(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    // Send a blank response for OPTIONS request
     httpd_resp_send(req, NULL, 0);
 
     return ESP_OK;
@@ -504,7 +744,8 @@ static bool validate_pool_json(const cJSON *pool_item, int i) {
     return true;
 }
 
-static bool update_pool_nvs(const cJSON *pool_item, int i) {
+static bool update_pool_nvs(const cJSON *pool_item, int i, GlobalState *GLOBAL_STATE)
+{
     cJSON *p_obj = cJSON_CreateObject();
     
     char *old_json_str = nvs_config_get_string_indexed(NVS_CONFIG_POOL, i);
@@ -565,7 +806,7 @@ static bool update_pool_nvs(const cJSON *pool_item, int i) {
     return modified;
 }
 
-bool check_settings_and_update(const cJSON * const root, char **redirect_url)
+bool check_settings_and_update(const cJSON * const root, char **redirect_url, GlobalState * GLOBAL_STATE)
 {
     bool result = true;
     char *old_hostname = NULL;
@@ -577,7 +818,7 @@ bool check_settings_and_update(const cJSON * const root, char **redirect_url)
         old_hostname = nvs_config_get_string(NVS_CONFIG_HOSTNAME);
         char normalized_new_hostname[64];
         strlcpy(normalized_new_hostname, hostname_item->valuestring, sizeof(normalized_new_hostname));
-        http_cors_normalize_hostname(normalized_new_hostname, sizeof(normalized_new_hostname));
+        normalize_hostname(normalized_new_hostname, sizeof(normalized_new_hostname));
         if (strcmp(old_hostname, normalized_new_hostname) != 0) {
             hostname_changed = true;
             ESP_LOGI(TAG, "Hostname change detected: %s -> %s", old_hostname, hostname_item->valuestring);
@@ -706,7 +947,7 @@ bool check_settings_and_update(const cJSON * const root, char **redirect_url)
                     {
                         char normalized_hostname[64];
                         strlcpy(normalized_hostname, item->valuestring, sizeof(normalized_hostname));
-                        http_cors_normalize_hostname(normalized_hostname, sizeof(normalized_hostname));
+                        normalize_hostname(normalized_hostname, sizeof(normalized_hostname));
                         nvs_config_set_string(key, normalized_hostname);
                         update_mdns_hostname(normalized_hostname, GLOBAL_STATE);
                         ESP_LOGI(TAG, "Updated hostname to: %s", normalized_hostname);
@@ -745,7 +986,7 @@ bool check_settings_and_update(const cJSON * const root, char **redirect_url)
                 if (id_item && cJSON_IsNumber(id_item)) {
                     int idx = id_item->valueint;
                     if (idx >= 0 && idx < MAX_POOLS) {
-                        if (update_pool_nvs(pool_item, idx)) {
+                        if (update_pool_nvs(pool_item, idx, GLOBAL_STATE)) {
                             modified_pools[idx] = true;
                         }
                     }
@@ -801,37 +1042,36 @@ bool check_settings_and_update(const cJSON * const root, char **redirect_url)
 
 static esp_err_t PATCH_update_settings(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     int total_len = req->content_len;
-    int cur_len = 0;
-    char * buf = ((rest_server_context_t *) (req->user_ctx))->scratch;
-    int received = 0;
-    if (total_len >= SCRATCH_BUFSIZE) {
-        /* Respond with 500 Internal Server Error */
-        HTTP_send_json_error(req, "500 Internal Server Error", "content too long");
+    if (total_len <= 0 || total_len > MAX_REST_PAYLOAD_SIZE) {
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content length invalid or too large");
         return ESP_OK;
     }
+
+    char * buf = (char *)malloc(total_len + 1);
+    if (!buf) {
+        httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Out of memory");
+        return ESP_FAIL;
+    }
+
+    int cur_len = 0;
     while (cur_len < total_len) {
-        received = httpd_req_recv(req, buf + cur_len, total_len);
+        int received = httpd_req_recv(req, buf + cur_len, total_len - cur_len);
         if (received <= 0) {
-            /* Respond with 500 Internal Server Error */
-            HTTP_send_json_error(req, "500 Internal Server Error", "Failed to post control value");
-            return ESP_OK;
+            free(buf);
+            httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive update payload");
+            return ESP_FAIL;
         }
         cur_len += received;
     }
     buf[total_len] = '\0';
 
     cJSON * root = cJSON_Parse(buf);
+    free(buf);
     if (root == NULL) {
-        HTTP_send_json_error(req, "400 Bad Request", "Invalid JSON");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
         return ESP_OK;
     }
 
@@ -842,12 +1082,12 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
     free(current_hostname);
 
     char *redirect_url = NULL;
-    if (!check_settings_and_update(root, &redirect_url)) {
+    if (!check_settings_and_update(root, &redirect_url, GLOBAL_STATE)) {
         cJSON_Delete(root);
         if (redirect_url) {
             free(redirect_url);
         }
-        HTTP_send_json_error(req, "400 Bad Request", "Wrong API input");
+        httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Wrong API input");
         return ESP_OK;
     }
 
@@ -882,13 +1122,7 @@ static esp_err_t PATCH_update_settings(httpd_req_t * req)
 
 static esp_err_t POST_identify(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     ESP_LOGI(TAG, "Identify mode enabled for 30s");
 
@@ -917,14 +1151,6 @@ static esp_err_t POST_identify(httpd_req_t * req)
 
 static esp_err_t POST_restart(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
     ESP_LOGI(TAG, "Restarting System because of API Request");
 
     httpd_resp_set_type(req, "application/json");
@@ -954,13 +1180,7 @@ static esp_err_t POST_restart(httpd_req_t * req)
 
 static esp_err_t POST_dismiss_block_found(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     ESP_LOGI(TAG, "Dismissing block found notification");
 
@@ -987,46 +1207,46 @@ static esp_err_t POST_dismiss_block_found(httpd_req_t * req)
 
 static esp_err_t PUT_system_pool(httpd_req_t *req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     const char *last_slash = strrchr(req->uri, '/');
     if (!last_slash) {
-        return HTTP_send_json_error(req, "400 Bad Request", "Missing pool index");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing pool index");
     }
     int idx = atoi(last_slash + 1);
     if (idx < 0 || idx >= MAX_POOLS) {
-        return HTTP_send_json_error(req, "400 Bad Request", "Invalid pool index");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid pool index");
     }
 
     int total_len = req->content_len;
-    if (total_len <= 0 || total_len >= SCRATCH_BUFSIZE) {
-        return HTTP_send_json_error(req, "400 Bad Request", "Invalid request length");
+    if (total_len <= 0 || total_len > MAX_REST_PAYLOAD_SIZE) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid request length");
     }
 
-    char *buf = ((rest_server_context_t *)(req->user_ctx))->scratch;
+    char *buf = (char *)malloc(total_len + 1);
+    if (!buf) {
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Out of memory");
+    }
+
     int received = httpd_req_recv(req, buf, total_len);
     if (received <= 0) {
-        return HTTP_send_json_error(req, "500 Internal Server Error", "Failed to receive request data");
+        free(buf);
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to receive request data");
     }
     buf[received] = '\0';
 
     cJSON *root = cJSON_Parse(buf);
+    free(buf);
     if (!root) {
-        return HTTP_send_json_error(req, "400 Bad Request", "Invalid JSON");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
     }
 
     if (!validate_pool_json(root, idx)) {
         cJSON_Delete(root);
-        return HTTP_send_json_error(req, "400 Bad Request", "Invalid pool configuration payload");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid pool configuration payload");
     }
 
-    update_pool_nvs(root, idx);
+    update_pool_nvs(root, idx, GLOBAL_STATE);
     cJSON_Delete(root);
 
     SYSTEM_reload_pool_config(GLOBAL_STATE);
@@ -1043,28 +1263,22 @@ static esp_err_t PUT_system_pool(httpd_req_t *req)
 
 static esp_err_t DELETE_system_pool(httpd_req_t *req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     const char *last_slash = strrchr(req->uri, '/');
     if (!last_slash) {
-        return HTTP_send_json_error(req, "400 Bad Request", "Missing pool index");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing pool index");
     }
     int idx = atoi(last_slash + 1);
     if (idx < 0 || idx >= MAX_POOLS) {
-        return HTTP_send_json_error(req, "400 Bad Request", "Invalid pool index");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid pool index");
     }
 
     // Check if the index is selected as primary or fallback
     uint16_t prim = nvs_config_get_u16(NVS_CONFIG_PRIMARY_POOL_INDEX);
     uint16_t sec = nvs_config_get_u16(NVS_CONFIG_SECONDARY_POOL_INDEX);
     if (idx == prim || idx == sec) {
-        return HTTP_send_json_error(req, "400 Bad Request", "Cannot delete a pool that is currently selected as primary or fallback");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Cannot delete a pool that is currently selected as primary or fallback");
     }
 
     // Clear the slot in NVS
@@ -1085,13 +1299,7 @@ static esp_err_t DELETE_system_pool(httpd_req_t *req)
 
 static esp_err_t POST_mining_pause(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     GLOBAL_STATE->SYSTEM_MODULE.mining_paused = true;
     ESP_LOGI(TAG, "Mining paused by API request");
@@ -1110,13 +1318,7 @@ static esp_err_t POST_mining_pause(httpd_req_t * req)
 
 static esp_err_t POST_mining_resume(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     GLOBAL_STATE->SYSTEM_MODULE.mining_paused = false;
     ESP_LOGI(TAG, "Mining resumed by API request");
@@ -1134,15 +1336,9 @@ static esp_err_t POST_mining_resume(httpd_req_t * req)
 }
 
 /* Simple handler for getting system handler */
-static esp_err_t GET_system_info(httpd_req_t * req)
+static esp_err_t GET_system_info(httpd_req_t *req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     httpd_resp_set_type(req, "application/json");
 
@@ -1192,60 +1388,52 @@ static esp_err_t GET_system_info(httpd_req_t * req)
 
 static esp_err_t POST_system_boot(httpd_req_t *req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    size_t total_len = req->content_len;
-    if (total_len == 0) {
-        return HTTP_send_json_error(req, "400 Bad Request", "Empty request body");
+    int total_len = req->content_len;
+    if (total_len <= 0 || total_len > MAX_REST_PAYLOAD_SIZE) {
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Content length invalid or too large");
     }
 
     char *buf = malloc(total_len + 1);
     if (!buf) {
-        return HTTP_send_json_error(req, "500 Internal Server Error", "Memory allocation failed");
+        return httpd_resp_send_500(req);
     }
 
     int ret = httpd_req_recv(req, buf, total_len);
     if (ret <= 0) {
         free(buf);
-        return HTTP_send_json_error(req, "500 Internal Server Error", "Failed to receive request data");
+        return httpd_resp_send_500(req);
     }
     buf[ret] = '\0';
 
     cJSON *root = cJSON_Parse(buf);
     free(buf);
     if (!root) {
-        return HTTP_send_json_error(req, "400 Bad Request", "Invalid JSON");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Invalid JSON");
     }
 
     cJSON *p_label = cJSON_GetObjectItem(root, "partition");
     if (!cJSON_IsString(p_label)) {
         cJSON_Delete(root);
-        return HTTP_send_json_error(req, "400 Bad Request", "Missing partition label");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Missing partition label");
     }
 
     const esp_partition_t *p = esp_partition_find_first(ESP_PARTITION_TYPE_APP, ESP_PARTITION_SUBTYPE_ANY, p_label->valuestring);
     if (p == NULL) {
         cJSON_Delete(root);
-        return HTTP_send_json_error(req, "400 Bad Request", "Partition not found");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "Partition not found");
     }
 
     esp_app_desc_t app_desc;
     if (esp_ota_get_partition_description(p, &app_desc) != ESP_OK) {
         cJSON_Delete(root);
-        return HTTP_send_json_error(req, "400 Bad Request", "No valid firmware found on partition");
+        return httpd_resp_send_err(req, HTTPD_400_BAD_REQUEST, "No valid firmware found on partition");
     }
 
     esp_err_t err = esp_ota_set_boot_partition(p);
     cJSON_Delete(root);
 
     if (err != ESP_OK) {
-        return HTTP_send_json_error(req, "500 Internal Server Error", "Failed to set boot partition");
+        return httpd_resp_send_err(req, HTTPD_500_INTERNAL_SERVER_ERROR, "Failed to set boot partition");
     }
 
     // Reset custom WWW so the booted partition defaults to its matching embedded Web UI
@@ -1268,14 +1456,6 @@ static esp_err_t POST_system_boot(httpd_req_t *req)
 
 static esp_err_t GET_system_firmware_checksum(httpd_req_t *req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
     httpd_resp_set_type(req, "application/json");
 
     const esp_partition_t *running = esp_ota_get_running_partition();
@@ -1326,14 +1506,6 @@ static void serialize_stats_cb(const struct StatisticsData *rows, uint16_t count
 
 static esp_err_t GET_system_statistics(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
     httpd_resp_set_type(req, "application/json");
 
     size_t bufLen = httpd_req_get_url_query_len(req) + 1;
@@ -1427,13 +1599,7 @@ static esp_err_t GET_system_statistics(httpd_req_t * req)
 
 static esp_err_t GET_scoreboard(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     httpd_resp_set_type(req, "application/json");
 
@@ -1478,13 +1644,7 @@ static esp_err_t GET_scoreboard(httpd_req_t * req)
 
 esp_err_t POST_WWW_update(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     wifi_mode_t mode;
     esp_wifi_get_mode(&mode);
@@ -1568,13 +1728,7 @@ esp_err_t POST_WWW_update(httpd_req_t * req)
  */
 esp_err_t POST_OTA_update(httpd_req_t * req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     wifi_mode_t mode;
     esp_wifi_get_mode(&mode);
@@ -1665,240 +1819,81 @@ esp_err_t http_404_error_handler(httpd_req_t * req, httpd_err_code_t err)
     return ESP_OK;
 }
 
-esp_err_t start_rest_server(GlobalState * global_state)
+esp_err_t start_rest_server(GlobalState * GLOBAL_STATE)
 {
-    GLOBAL_STATE = global_state;
-    // Initialize the ASIC API with the global state
-    asic_api_init(GLOBAL_STATE);
-    const char * base_path = "";
+    const httpd_uri_t routes[] = {
+        // CORS preflight
+        { .uri = "/api/*",                         .method = HTTP_OPTIONS, .handler = handle_options_request },
 
-    REST_CHECK(base_path, "wrong base path", err);
-    rest_server_context_t * rest_context = calloc(1, sizeof(rest_server_context_t));
-    REST_CHECK(rest_context, "No memory for rest context", err);
-    strlcpy(rest_context->base_path, base_path, sizeof(rest_context->base_path));
+        // System queries & telemetry
+        { .uri = "/api/system/asic",               .method = HTTP_GET,     .handler = GET_system_asic },
+        { .uri = "/api/system/firmware/checksum",  .method = HTTP_GET,     .handler = GET_system_firmware_checksum },
+        { .uri = "/api/system/info",               .method = HTTP_GET,     .handler = GET_system_info },
+        { .uri = "/api/system/logs",               .method = HTTP_GET,     .handler = GET_system_logs },
+        { .uri = "/api/system/scoreboard",         .method = HTTP_GET,     .handler = GET_scoreboard },
+        { .uri = "/api/system/statistics",         .method = HTTP_GET,     .handler = GET_system_statistics },
+        { .uri = "/api/system/wifi/scan",          .method = HTTP_GET,     .handler = GET_wifi_scan },
+
+        // Settings & pools
+        { .uri = "/api/system",                    .method = HTTP_PATCH,   .handler = PATCH_update_settings },
+        { .uri = "/api/system/pools/*",            .method = HTTP_PUT,     .handler = PUT_system_pool },
+        { .uri = "/api/system/pools/*",            .method = HTTP_DELETE,  .handler = DELETE_system_pool },
+
+        // System actions & OTA updates
+        { .uri = "/api/system/blockFound/dismiss", .method = HTTP_POST,    .handler = POST_dismiss_block_found },
+        { .uri = "/api/system/boot",               .method = HTTP_POST,    .handler = POST_system_boot },
+        { .uri = "/api/system/identify",           .method = HTTP_POST,    .handler = POST_identify },
+        { .uri = "/api/system/OTA",                .method = HTTP_POST,    .handler = POST_OTA_update },
+        { .uri = "/api/system/OTAWWW",             .method = HTTP_POST,    .handler = POST_WWW_update },
+        { .uri = "/api/system/pause",              .method = HTTP_POST,    .handler = POST_mining_pause },
+        { .uri = "/api/system/restart",            .method = HTTP_POST,    .handler = POST_restart },
+        { .uri = "/api/system/resume",             .method = HTTP_POST,    .handler = POST_mining_resume },
+
+        // Theme configuration
+        { .uri = "/api/theme",                     .method = HTTP_GET,     .handler = theme_get_handler },
+        { .uri = "/api/theme",                     .method = HTTP_POST,    .handler = theme_post_handler },
+
+        // WebSockets
+        { .uri = "/api/ws",                        .method = HTTP_GET,     .handler = websocket_handler, .is_websocket = true, .ws_pre_handshake_cb = websocket_pre_handshake, .ws_post_handshake_cb = websocket_post_handshake_logs },
+        { .uri = "/api/ws/live",                   .method = HTTP_GET,     .handler = websocket_handler, .is_websocket = true, .ws_pre_handshake_cb = websocket_pre_handshake, .ws_post_handshake_cb = websocket_post_handshake_api },
+
+        // Standalone recovery page
+        { .uri = "/recovery",                      .method = HTTP_GET,     .handler = rest_recovery_handler },
+
+        // Fallbacks / Catch-alls (must remain last)
+        { .uri = "/api/*",                         .method = HTTP_ANY,     .handler = rest_api_common_handler },
+        { .uri = "/*",                             .method = HTTP_GET,     .handler = web_ui_get_handler },
+    };
+    size_t num_routes = sizeof(routes) / sizeof(routes[0]);
 
     httpd_config_t config = HTTPD_DEFAULT_CONFIG();
     config.task_priority = 4;
+    config.global_user_ctx = GLOBAL_STATE;
     config.uri_match_fn = httpd_uri_match_wildcard;
     config.stack_size = 8192;
     config.max_open_sockets = 20;
-    config.max_uri_handlers = 26;
+    config.max_uri_handlers = num_routes + 4;
     config.close_fn = websocket_close_fn;
     config.lru_purge_enable = true;
     config.keep_alive_enable = true;
 
-    ESP_LOGI(TAG, "Starting HTTP Server");
+    ESP_LOGI(TAG, "Starting HTTP Server (routes: %zu, max_uri_handlers: %u)", num_routes, config.max_uri_handlers);
+    
+    httpd_handle_t server = NULL;
+
     REST_CHECK(httpd_start(&server, &config) == ESP_OK, "Start server failed", err_start);
 
     // Initialize the WebSocket registry with the valid server handle
     websocket_init(server);
 
-    httpd_uri_t api_options_uri = {
-        .uri = "/api/*", 
-        .method = HTTP_OPTIONS, 
-        .handler = handle_options_request, 
-        .user_ctx = NULL
-    };
-    httpd_register_uri_handler(server, &api_options_uri);
-
-    httpd_uri_t recovery_explicit_get_uri = {
-        .uri = "/recovery", 
-        .method = HTTP_GET, 
-        .handler = rest_recovery_handler, 
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &recovery_explicit_get_uri);
-    
-    // Register theme API endpoints
-    ESP_ERROR_CHECK(register_theme_api_endpoints(server, rest_context));
-
-    /* URI handler for fetching system info */
-    httpd_uri_t system_info_get_uri = {
-        .uri = "/api/system/info", 
-        .method = HTTP_GET, 
-        .handler = GET_system_info, 
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_info_get_uri);
-
-    /* URI handler for setting boot partition */
-    httpd_uri_t system_boot_post_uri = {
-        .uri = "/api/system/boot", 
-        .method = HTTP_POST, 
-        .handler = POST_system_boot, 
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_boot_post_uri);
-
-    /* URI handler for fetching the running firmware checksum */
-    httpd_uri_t system_firmware_checksum_get_uri = {
-        .uri = "/api/system/firmware/checksum",
-        .method = HTTP_GET,
-        .handler = GET_system_firmware_checksum,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_firmware_checksum_get_uri);
-
-    /* URI handler for fetching system asic values */
-    httpd_uri_t system_asic_get_uri = {
-        .uri = "/api/system/asic", 
-        .method = HTTP_GET, 
-        .handler = GET_system_asic, 
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_asic_get_uri);
-
-    /* URI handler for fetching system statistic values */
-    httpd_uri_t system_statistics_get_uri = {
-        .uri = "/api/system/statistics", 
-        .method = HTTP_GET, 
-        .handler = GET_system_statistics, 
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_statistics_get_uri);
-
-    httpd_uri_t scoreboard_get_uri = {
-        .uri = "/api/system/scoreboard",
-        .method = HTTP_GET,
-        .handler = GET_scoreboard,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &scoreboard_get_uri);
-
-    /* URI handler for WiFi scan */
-    httpd_uri_t wifi_scan_get_uri = {
-        .uri = "/api/system/wifi/scan",
-        .method = HTTP_GET,
-        .handler = GET_wifi_scan,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &wifi_scan_get_uri);
-
-    /* URI handler for fetching system logs */
-    httpd_uri_t system_logs_get_uri = {
-        .uri = "/api/system/logs",
-        .method = HTTP_GET,
-        .handler = GET_system_logs,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_logs_get_uri);
-
-    httpd_uri_t system_identify_uri = {
-        .uri = "/api/system/identify", .method = HTTP_POST, 
-        .handler = POST_identify, 
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_identify_uri);
-
-    httpd_uri_t system_restart_uri = {
-        .uri = "/api/system/restart", .method = HTTP_POST, 
-        .handler = POST_restart, 
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_restart_uri);
-
-    httpd_uri_t system_mining_pause_uri = {
-        .uri = "/api/system/pause",
-        .method = HTTP_POST,
-        .handler = POST_mining_pause,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_mining_pause_uri);
-
-    httpd_uri_t system_mining_resume_uri = {
-        .uri = "/api/system/resume",
-        .method = HTTP_POST,
-        .handler = POST_mining_resume,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_mining_resume_uri);
-
-    httpd_uri_t system_dismiss_block_found_uri = {
-        .uri = "/api/system/blockFound/dismiss",
-        .method = HTTP_POST, 
-        .handler = POST_dismiss_block_found, 
-        .user_ctx = NULL
-    };
-    httpd_register_uri_handler(server, &system_dismiss_block_found_uri);
-
-    httpd_uri_t update_system_settings_uri = {
-        .uri = "/api/system", 
-        .method = HTTP_PATCH, 
-        .handler = PATCH_update_settings, 
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &update_system_settings_uri);
-
-    httpd_uri_t system_pool_put_uri = {
-        .uri = "/api/system/pools/*",
-        .method = HTTP_PUT,
-        .handler = PUT_system_pool,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_pool_put_uri);
-
-    httpd_uri_t system_pool_delete_uri = {
-        .uri = "/api/system/pools/*",
-        .method = HTTP_DELETE,
-        .handler = DELETE_system_pool,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &system_pool_delete_uri);
-
-    httpd_uri_t update_post_ota_firmware = {
-        .uri = "/api/system/OTA", 
-        .method = HTTP_POST, 
-        .handler = POST_OTA_update, 
-        .user_ctx = NULL
-    };
-    httpd_register_uri_handler(server, &update_post_ota_firmware);
-
-    httpd_uri_t update_post_ota_www = {
-        .uri = "/api/system/OTAWWW", 
-        .method = HTTP_POST, 
-        .handler = POST_WWW_update, 
-        .user_ctx = NULL
-    };
-    httpd_register_uri_handler(server, &update_post_ota_www);
-
-    httpd_uri_t ws = {
-        .uri = "/api/ws", 
-        .method = HTTP_GET, 
-        .handler = websocket_handler, 
-        .user_ctx = (void *)WS_TYPE_LOGS, 
-        .is_websocket = true,
-        .ws_pre_handshake_cb = websocket_pre_handshake,
-        .ws_post_handshake_cb = websocket_post_handshake
-    };
-    httpd_register_uri_handler(server, &ws);
-
-    httpd_uri_t ws_live = {
-        .uri = "/api/ws/live", 
-        .method = HTTP_GET, 
-        .handler = websocket_handler, 
-        .user_ctx = (void *)WS_TYPE_API, 
-        .is_websocket = true,
-        .ws_pre_handshake_cb = websocket_pre_handshake,
-        .ws_post_handshake_cb = websocket_post_handshake
-    };
-    httpd_register_uri_handler(server, &ws_live);
-
-    httpd_uri_t api_common_uri = {
-        .uri = "/api/*",
-        .method = HTTP_ANY,
-        .handler = rest_api_common_handler,
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &api_common_uri);
-    /* URI handler for getting web server files */
-    bool use_custom = nvs_config_get_bool(NVS_CONFIG_USE_CUSTOM_WWW) && GLOBAL_STATE->filesystem_is_available;
-    httpd_uri_t common_get_uri = {
-        .uri = "/*", 
-        .method = HTTP_GET, 
-        .handler = use_custom ? rest_common_get_handler_spiffs : rest_common_get_handler_embedded, 
-        .user_ctx = rest_context
-    };
-    httpd_register_uri_handler(server, &common_get_uri);
+    for (size_t i = 0; i < num_routes; i++) {
+        httpd_uri_t entry = routes[i];
+        if (strncmp(entry.uri, "/api/", 5) == 0 && !entry.is_websocket) {
+            entry.user_ctx = (void *)routes[i].handler;
+            entry.handler = rest_api_wrapper;
+        }
+        ESP_ERROR_CHECK(httpd_register_uri_handler(server, &entry));
+    }
 
     httpd_register_err_handler(server, HTTPD_404_NOT_FOUND, http_404_error_handler);
 
@@ -1920,7 +1915,5 @@ esp_err_t start_rest_server(GlobalState * global_state)
 
     return ESP_OK;
 err_start:
-    free(rest_context);
-err:
     return ESP_FAIL;
 }

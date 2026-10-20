@@ -5,27 +5,13 @@
 #include "global_state.h"
 #include "asic.h"
 #include "http_server.h"
-#include "http_auth.h"
-#include "http_cors.h"
 
 static int system_asic_prebuffer_len = 256;
-static GlobalState *GLOBAL_STATE = NULL;
-
-// Initialize the ASIC API with the global state
-void asic_api_init(GlobalState *global_state) {
-    GLOBAL_STATE = global_state;
-}
 
 /* Handler for system asic endpoint */
 esp_err_t GET_system_asic(httpd_req_t *req)
 {
-    if (http_cors_check(req) != ESP_OK) {
-        return ESP_OK;
-    }
-
-    if (http_auth_validate(req) != ESP_OK) {
-        return ESP_OK;
-    }
+    GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
 
     httpd_resp_set_type(req, "application/json");
 

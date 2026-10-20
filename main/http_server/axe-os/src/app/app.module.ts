@@ -44,7 +44,6 @@ import { HashSuffixPipe } from './pipes/hash-suffix.pipe';
 import { DiffSuffixPipe } from './pipes/diff-suffix.pipe';
 import { AddressPipe } from './pipes/address.pipe';
 import { SatsPipe } from './pipes/sats.pipe';
-import { HeatmapLightnessPipe } from './pipes/heatmap-lightness.pipe';
 import { DialogService, DialogListComponent } from './services/dialog.service';
 import { authInterceptor } from './services/auth.interceptor';
 import { LoginModalComponent } from './components/login-modal/login-modal.component';
@@ -101,8 +100,7 @@ const components = [
     HashSuffixPipe,
     DiffSuffixPipe,
     AddressPipe,
-    SatsPipe,
-    HeatmapLightnessPipe,
+    SatsPipe
   ],
   providers: [
     { provide: LocationStrategy, useClass: HashLocationStrategy },

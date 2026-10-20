@@ -10,7 +10,6 @@
 #include "websocket_api.h"
 #include "http_server.h"
 #include "http_auth.h"
-#include "http_cors.h"
 #include "log_buffer.h"
 
 #define WS_LOG_SCRATCH_SIZE 2048
@@ -177,7 +176,7 @@ void websocket_init(httpd_handle_t server)
 
 esp_err_t websocket_pre_handshake(httpd_req_t *req)
 {
-    if (http_cors_check(req) != ESP_OK) {
+    if (is_network_allowed(req) != ESP_OK) {
         return ESP_FAIL;
     }
 
@@ -198,9 +197,8 @@ esp_err_t websocket_pre_handshake(httpd_req_t *req)
     return ESP_OK;
 }
 
-esp_err_t websocket_post_handshake(httpd_req_t *req)
+static esp_err_t websocket_post_handshake_common(httpd_req_t *req, WebSocketClientType type)
 {
-    WebSocketClientType type = (WebSocketClientType)(uintptr_t)req->user_ctx;
     int fd = httpd_req_to_sockfd(req);
     if (websocket_add_client(fd, type) != ESP_OK) {
         ESP_LOGE(TAG, "Unexpected failure adding client, fd: %d", fd);
@@ -212,6 +210,16 @@ esp_err_t websocket_post_handshake(httpd_req_t *req)
     }
 
     return ESP_OK;
+}
+
+esp_err_t websocket_post_handshake_logs(httpd_req_t *req)
+{
+    return websocket_post_handshake_common(req, WS_TYPE_LOGS);
+}
+
+esp_err_t websocket_post_handshake_api(httpd_req_t *req)
+{
+    return websocket_post_handshake_common(req, WS_TYPE_API);
 }
 
 esp_err_t websocket_handler(httpd_req_t *req)
