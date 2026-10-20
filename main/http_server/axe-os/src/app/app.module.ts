@@ -13,6 +13,7 @@ import { RadioButtonComponent } from './components/radio-button/radio-button.com
 import { SliderComponent } from './components/slider/slider.component';
 import { AppChartComponent } from './components/chart/app-chart.component';
 import { DropdownComponent } from './components/dropdown/dropdown.component';
+import { ProgressbarComponent } from './components/progressbar/progressbar.component';
 
 import { AppRoutingModule } from './app-routing.module';
 import { AppComponent } from './app.component';
@@ -43,6 +44,7 @@ import { HashSuffixPipe } from './pipes/hash-suffix.pipe';
 import { DiffSuffixPipe } from './pipes/diff-suffix.pipe';
 import { AddressPipe } from './pipes/address.pipe';
 import { SatsPipe } from './pipes/sats.pipe';
+import { HeatmapLightnessPipe } from './pipes/heatmap-lightness.pipe';
 import { DialogService, DialogListComponent } from './services/dialog.service';
 
 const components = [
@@ -90,12 +92,14 @@ const components = [
     AppChartComponent,
     EditComponent,
     SettingsComponent,
+    ProgressbarComponent,
     ANSIPipe,
     DateAgoPipe,
     HashSuffixPipe,
     DiffSuffixPipe,
     AddressPipe,
     SatsPipe,
+    HeatmapLightnessPipe,
   ],
   providers: [
     { provide: LocationStrategy, useClass: HashLocationStrategy },

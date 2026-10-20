@@ -1,9 +1,12 @@
 #include "sv2_noise.h"
 #include "sv2_protocol.h"
+#include "stratum_socket.h"
 #include "utils.h"
 
 #include <string.h>
 #include <stdlib.h>
+#include <time.h>
+#include <inttypes.h>
 
 #include "esp_log.h"
 #include "esp_random.h"
@@ -18,7 +21,6 @@
 
 static const char *TAG = "sv2_noise";
 
-#define TRANSPORT_TIMEOUT_MS    5000
 #define RECV_TIMEOUT_MS         (60 * 3 * 1000)
 // Handshake should complete within seconds; if the server doesn't respond fast we
 // want to fail and reconnect rather than block here for 3 minutes.
@@ -34,6 +36,10 @@ struct sv2_noise_ctx {
     uint8_t e_pub_encoded[64];  // ElligatorSwift-encoded ephemeral pubkey
     uint8_t send_key[32];       // c1: initiator -> responder
     uint8_t recv_key[32];       // c2: responder -> initiator
+    // Note on nonce limits: The Noise Protocol specification bounds the 64-bit
+    // nonce counter at 2^64 - 1 to prevent cipher state exhaustion. At embedded
+    // miner share submit rates (~tens of submits per second), 2^64 messages is
+    // practically unreachable, so explicit in-session rekeying is omitted here.
     uint64_t send_nonce;
     uint64_t recv_nonce;
     bool handshake_complete;
@@ -48,20 +54,10 @@ static int noise_recv_exact(esp_transport_handle_t transport, uint8_t *buf, int 
     while (received < len) {
         int r = esp_transport_read(transport, (char *)buf + received, len - received, timeout_ms);
         if (r <= 0) {
-            ESP_LOGE(TAG, "recv failed: r=%d", r);
+            ESP_LOGD(TAG, "recv returned: r=%d", r);
             return -1;
         }
         received += r;
-    }
-    return 0;
-}
-
-static int noise_send_all(esp_transport_handle_t transport, const uint8_t *buf, int len)
-{
-    int ret = esp_transport_write(transport, (const char *)buf, len, TRANSPORT_TIMEOUT_MS);
-    if (ret < 0) {
-        ESP_LOGE(TAG, "send failed: ret=%d", ret);
-        return -1;
     }
     return 0;
 }
@@ -378,7 +374,7 @@ int sv2_noise_handshake(sv2_noise_ctx_t *ctx, esp_transport_handle_t transport,
     ESP_LOGI(TAG, "-> Sending ephemeral public key (64 bytes)");
     ESP_LOGI(TAG, "e_pub (first 16):");
     ESP_LOG_BUFFER_HEX_LEVEL(TAG, ctx->e_pub_encoded, 16, ESP_LOG_INFO);
-    if (noise_send_all(transport, ctx->e_pub_encoded, 64) != 0) {
+    if (stratum_socket_send_all(transport, ctx->e_pub_encoded, 64) < 0) {
         ESP_LOGE(TAG, "Failed to send ephemeral key");
         return -1;
     }
@@ -518,6 +514,7 @@ int sv2_noise_handshake(sv2_noise_ctx_t *ctx, esp_transport_handle_t transport,
             ESP_LOGE(TAG, "Server certificate INVALID - Schnorr signature verification failed!");
             return -1;
         }
+
         ESP_LOGI(TAG, "Server certificate verified OK");
     } else {
         ESP_LOGW(TAG, "Skipping certificate verification (no authority pubkey)");
@@ -556,7 +553,7 @@ int sv2_noise_send(sv2_noise_ctx_t *ctx, esp_transport_handle_t transport,
                           frame, SV2_FRAME_HEADER_SIZE, enc_hdr) != 0) {
             return -1;
         }
-        return noise_send_all(transport, enc_hdr, 22);
+        return stratum_socket_send_all(transport, enc_hdr, 22) < 0 ? -1 : 0;
     }
 
     // Build the encrypted header and payload contiguously and send them in a
@@ -582,7 +579,7 @@ int sv2_noise_send(sv2_noise_ctx_t *ctx, esp_transport_handle_t transport,
         return -1;
     }
 
-    int ret = noise_send_all(transport, out, total_len);
+    int ret = stratum_socket_send_all(transport, out, total_len) < 0 ? -1 : 0;
     free(out);
     return ret;
 }
