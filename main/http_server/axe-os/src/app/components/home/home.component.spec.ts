@@ -35,7 +35,6 @@ import { LocalStorageService } from 'src/app/local-storage.service';
 import { DashboardEditService } from 'src/app/services/dashboard-edit.service';
 import { LayoutService } from 'src/app/layout/service/app.layout.service';
 import { SystemInfo as ISystemInfo, SystemStatistics as ISystemStatistics } from 'src/app/generated/models';
-import { eChartLabel } from 'src/models/enum/eChartLabel';
 
 const mockSystemInfo: ISystemInfo = {
   ASICModel: 'BM1370',
@@ -205,13 +204,6 @@ describe('HomeComponent', () => {
   beforeEach(() => {
     mockLiveDataService.info$ = new BehaviorSubject<ISystemInfo>(structuredClone(mockSystemInfo));
     TestBed.configureTestingModule({
-      declarations: [
-        HomeComponent,
-        TooltipTextIconComponent,
-        TooltipIconComponent,
-        ConfettiComponent,
-        SnowflakesComponent
-      ],
       imports: [
         ReactiveFormsModule,
         FormsModule,
@@ -225,7 +217,12 @@ describe('HomeComponent', () => {
         DateAgoPipe,
         AddressPipe,
         SatsPipe,
-        ByteSuffixPipe
+        ByteSuffixPipe,
+        HomeComponent,
+        TooltipTextIconComponent,
+        TooltipIconComponent,
+        ConfettiComponent,
+        SnowflakesComponent
       ],
       providers: [
         provideRouter([]),
@@ -327,7 +324,7 @@ describe('HomeComponent', () => {
   it('should render the dashboard widgets and dropdowns when info is loaded', () => {
     fixture.detectChanges();
     const element = fixture.nativeElement;
-    // Verify that the dropdowns inside *ngIf are rendered
+    // Verify that the dropdowns inside the @if block are rendered
     expect(element.querySelector('app-dropdown')).toBeTruthy();
   });
 
@@ -763,10 +760,10 @@ describe('HomeComponent', () => {
     });
 
     it('should return 0 for response time min/max and undefined for others in getMinForLabel', () => {
-      expect(component.getMinForLabel(eChartLabel.responseTimeMin)).toBe(0);
-      expect(component.getMinForLabel(eChartLabel.responseTimeMax)).toBe(0);
-      expect(component.getMinForLabel(eChartLabel.hashrate)).toBeUndefined();
-      expect(component.getMinForLabel(eChartLabel.none)).toBeUndefined();
+      expect(component.getMinForLabel('responseTimeMin')).toBe(0);
+      expect(component.getMinForLabel('responseTimeMax')).toBe(0);
+      expect(component.getMinForLabel('hashrate')).toBeUndefined();
+      expect(component.getMinForLabel('none')).toBeUndefined();
       expect(component.getMinForLabel(undefined)).toBeUndefined();
     });
   });
