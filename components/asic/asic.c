@@ -1,7 +1,4 @@
 #include "asic_internal.h"
-#include <string.h>
-#include <math.h>
-#include <stdlib.h>
 
 #include <esp_log.h>
 
@@ -13,8 +10,8 @@
 
 #include "asic.h"
 #include "asic_common.h"
+#include "bm_job_packet.h"
 #include "global_state.h"
-#include "mining.h"
 #include "device_config.h"
 #include "frequency_transition_bmXX.h"
 
@@ -75,7 +72,7 @@ int ASIC_set_max_baud(GlobalState * GLOBAL_STATE)
     return 0;
 }
 
-void ASIC_send_work(GlobalState * GLOBAL_STATE, asic_job_t * next_job)
+void ASIC_send_work(GlobalState * GLOBAL_STATE, const asic_job_t * next_job)
 {
     switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
         case BM1397:
@@ -95,7 +92,6 @@ void ASIC_send_work(GlobalState * GLOBAL_STATE, asic_job_t * next_job)
             break;
         default:
             ESP_LOGE(TAG, "Unknown ASIC id %d — cannot send work", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
-            free(next_job);
             break;
     }
 }
@@ -268,4 +264,42 @@ void ASIC_set_difficulty(GlobalState * GLOBAL_STATE, uint8_t difficulty_power)
             return;
     }
     ESP_LOGE(TAG, "Unknown ASIC id %d — cannot set difficulty", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
+}
+
+void ASIC_clear_work(GlobalState * GLOBAL_STATE)
+{
+    if (!GLOBAL_STATE) {
+        return;
+    }
+
+    switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
+        case BM1397:
+        case BM1366:
+        case BM1368:
+        case BM1370:
+        case BM1373:
+            bm13xx_clear_work(&GLOBAL_STATE->job_store);
+            return;
+    }
+    ESP_LOGE(TAG, "Unknown ASIC id %d — cannot clear work", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
+}
+
+void ASIC_init_job_slots(GlobalState * GLOBAL_STATE)
+{
+    if (!GLOBAL_STATE) {
+        return;
+    }
+
+    switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
+        case BM1397:
+            bm13xx_init_job_slots(&GLOBAL_STATE->job_store, BM1397_JOB_SLOT_COUNT);
+            return;
+        case BM1366:
+        case BM1368:
+        case BM1370:
+        case BM1373:
+            bm13xx_init_job_slots(&GLOBAL_STATE->job_store, BM13XX_JOB_SLOT_COUNT);
+            return;
+    }
+    ESP_LOGE(TAG, "Unknown ASIC id %d — cannot init job slots", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
 }
