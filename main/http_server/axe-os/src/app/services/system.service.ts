@@ -1,9 +1,6 @@
 import { HttpClient, HttpEvent } from '@angular/common/http';
 import { Injectable, Optional } from '@angular/core';
 import { delay, Observable, of, timeout, from } from 'rxjs';
-import { eChartLabel } from 'src/models/enum/eChartLabel';
-import { chartLabelKey } from 'src/models/enum/eChartLabel';
-import { chartLabelValue } from 'src/models/enum/eChartLabel';
 import {
   SystemInfo as ISystemInfo,
   SystemStatistics as ISystemStatistics,
@@ -166,10 +163,14 @@ export class SystemApiService {
         fallbackStratumV2ChannelType: "extended" as const,
         poolDifficulty: 1000,
         responseTime: 10,
+        responseTimeMin: 10,
+        responseTimeMax: 10,
         responseShareBatch: 1,
         isUsingFallbackStratum: 0,
         useFallbackStratum: 0,
         poolConnectionInfo: "IPv4 (TLS)",
+        primaryPoolError: "",
+        poolBanner: "",
         frequency: 485,
         actualFrequency: 485,
         version: "v2.12.0",
@@ -219,11 +220,12 @@ export class SystemApiService {
         },
         blockFound: 1,
         showNewBlock: true,
-        coinbaseOutputs: [{value: 50, address: "payoutaddress"}],
+        coinbaseOutputs: [{value: 50, address: "payoutaddress", isUserOutput: 1}],
         coinbaseValueTotalSatoshis: 50,
         coinbaseValueUserSatoshis: 50,
         coinbaseOthersCount: 0,
         coinbaseOthersValueSatoshis: 0,
+        coinbasePayoutStatus: 'verified' as const,
         miningPaused: false,
         workReceived: 42,
       }
@@ -231,15 +233,15 @@ export class SystemApiService {
   }
 
   public getStatistics(y1: string[], y2: string[], uri: string = ''): Observable<ISystemStatistics> {
-    let columnList = [chartLabelKey(eChartLabel.hashrate), chartLabelKey(eChartLabel.power)];
+    let columnList = ['hashrate', 'power'];
 
     for (const y of y1) {
-      if ((y != chartLabelKey(eChartLabel.hashrate)) && (y != chartLabelKey(eChartLabel.power)) && !columnList.includes(y)) {
+      if (y !== 'hashrate' && y !== 'power' && !columnList.includes(y)) {
         columnList.push(y);
       }
     }
     for (const y of y2) {
-      if ((y != chartLabelKey(eChartLabel.hashrate)) && (y != chartLabelKey(eChartLabel.power)) && !columnList.includes(y)) {
+      if (y !== 'hashrate' && y !== 'power' && !columnList.includes(y)) {
         columnList.push(y);
       }
     }
@@ -265,36 +267,32 @@ export class SystemApiService {
     const timestampData = [13131,18126,23125,28125,33125,38125,43125,48125,53125,58125];
 
     columnList.push("timestamp");
-    let statisticsList: number[][] = [];
+    let statisticsList: (number | null)[][] = [];
 
     for(let i: number = 0; i < 10; i++) {
       statisticsList[i] = [];
       for(let j: number = 0; j < columnList.length; j++) {
-        switch (chartLabelValue(columnList[j])) {
-          case eChartLabel.hashrate:     statisticsList[i][j] = hashrateData[i];     break;
-          case eChartLabel.hashrate_1m:  statisticsList[i][j] = hashrateData[i];     break;
-          case eChartLabel.hashrate_10m: statisticsList[i][j] = hashrateData[i];     break;
-          case eChartLabel.hashrate_1h:  statisticsList[i][j] = hashrateData[i];     break;
-          case eChartLabel.power:        statisticsList[i][j] = powerData[i];        break;
-          case eChartLabel.asicTemp:     statisticsList[i][j] = asicTempData[i];     break;
-          case eChartLabel.asicTemp2:    statisticsList[i][j] = asicTemp2Data[i];    break;
-          case eChartLabel.vrTemp:       statisticsList[i][j] = vrTempData[i];       break;
-          case eChartLabel.asicVoltage:  statisticsList[i][j] = asicVoltageData[i];  break;
-          case eChartLabel.voltage:      statisticsList[i][j] = voltageData[i];      break;
-          case eChartLabel.current:      statisticsList[i][j] = currentData[i];      break;
-          case eChartLabel.fanSpeed:     statisticsList[i][j] = fanSpeedData[i];     break;
-          case eChartLabel.fanRpm:       statisticsList[i][j] = fanRpmData[i];       break;
-          case eChartLabel.fan2Rpm:      statisticsList[i][j] = fan2RpmData[i];      break;
-          case eChartLabel.wifiRssi:     statisticsList[i][j] = wifiRssiData[i];     break;
-          case eChartLabel.freeHeap:     statisticsList[i][j] = freeHeapData[i];     break;
-          case eChartLabel.responseTime: statisticsList[i][j] = responseTimeData[i]; break;
-          default:
-            if (columnList[j] === "timestamp") {
-              statisticsList[i][j] = timestampData[i];
-            } else {
-              statisticsList[i][j] = 0;
-            }
-            break;
+        switch (columnList[j]) {
+          case 'hashrate':
+          case 'hashrate_1m':
+          case 'hashrate_10m':
+          case 'hashrate_1h':     statisticsList[i][j] = hashrateData[i];     break;
+          case 'power':           statisticsList[i][j] = powerData[i];        break;
+          case 'asicTemp':        statisticsList[i][j] = asicTempData[i];     break;
+          case 'asicTemp2':       statisticsList[i][j] = asicTemp2Data[i];    break;
+          case 'vrTemp':          statisticsList[i][j] = vrTempData[i];       break;
+          case 'asicVoltage':     statisticsList[i][j] = asicVoltageData[i];  break;
+          case 'voltage':         statisticsList[i][j] = voltageData[i];      break;
+          case 'current':         statisticsList[i][j] = currentData[i];      break;
+          case 'fanSpeed':        statisticsList[i][j] = fanSpeedData[i];     break;
+          case 'fanRpm':          statisticsList[i][j] = fanRpmData[i];       break;
+          case 'fan2Rpm':         statisticsList[i][j] = fan2RpmData[i];      break;
+          case 'wifiRssi':        statisticsList[i][j] = wifiRssiData[i];     break;
+          case 'freeHeap':        statisticsList[i][j] = freeHeapData[i];     break;
+          case 'responseTimeMin': statisticsList[i][j] = responseTimeData[i] ? responseTimeData[i] - 1 : null; break;
+          case 'responseTimeMax': statisticsList[i][j] = responseTimeData[i] ? responseTimeData[i] + 1 : null; break;
+          case 'timestamp':       statisticsList[i][j] = timestampData[i];    break;
+          default:                statisticsList[i][j] = 0;                   break;
         }
       }
     }

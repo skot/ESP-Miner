@@ -19,7 +19,6 @@ import { DateAgoPipe } from 'src/app/pipes/date-ago.pipe';
 import { AddressPipe } from 'src/app/pipes/address.pipe';
 import { SatsPipe } from 'src/app/pipes/sats.pipe';
 import { ByteSuffixPipe } from 'src/app/pipes/byte-suffix.pipe';
-import { HeatmapLightnessPipe } from 'src/app/pipes/heatmap-lightness.pipe';
 
 import { TooltipTextIconComponent } from 'src/app/components/tooltip-text-icon/tooltip-text-icon.component';
 import { TooltipIconComponent } from 'src/app/components/tooltip-icon/tooltip-icon.component';
@@ -43,6 +42,7 @@ const mockSystemInfo: ISystemInfo = {
   autofanspeed: 1,
   blockSignals: [],
   coinbaseValueUserSatoshis: 0,
+  coinbasePayoutStatus: 'unknown',
   display: 'SSD1306',
   displayTimeout: 0,
   errorPercentage: 0,
@@ -109,7 +109,11 @@ const mockSystemInfo: ISystemInfo = {
   coreVoltage: 0,
   maxPower: 20,
   poolConnectionInfo: 'Connected',
+  primaryPoolError: '',
+  poolBanner: '',
   responseTime: 45,
+  responseTimeMin: 45,
+  responseTimeMax: 45,
   responseShareBatch: 1,
   poolDifficulty: 1000,
   blockHeight: 800000,
@@ -168,7 +172,8 @@ const mockSystemStatistics: ISystemStatistics = {
 
 const mockLiveDataService = {
   info$: new BehaviorSubject<ISystemInfo>(mockSystemInfo),
-  connected$: of(true)
+  connected$: of(true),
+  domainHistory: []
 };
 
 const mockSystemApiService = {
@@ -199,13 +204,6 @@ describe('HomeComponent', () => {
   beforeEach(() => {
     mockLiveDataService.info$ = new BehaviorSubject<ISystemInfo>(structuredClone(mockSystemInfo));
     TestBed.configureTestingModule({
-      declarations: [
-        HomeComponent,
-        TooltipTextIconComponent,
-        TooltipIconComponent,
-        ConfettiComponent,
-        SnowflakesComponent
-      ],
       imports: [
         ReactiveFormsModule,
         FormsModule,
@@ -220,7 +218,11 @@ describe('HomeComponent', () => {
         AddressPipe,
         SatsPipe,
         ByteSuffixPipe,
-        HeatmapLightnessPipe
+        HomeComponent,
+        TooltipTextIconComponent,
+        TooltipIconComponent,
+        ConfettiComponent,
+        SnowflakesComponent
       ],
       providers: [
         provideRouter([]),
@@ -258,6 +260,46 @@ describe('HomeComponent', () => {
     expect(component.messages.some(message => message.type === 'FREQUENCY_LOW')).toBeFalse();
   });
 
+  it('handles mining reward messages using coinbasePayoutStatus', () => {
+    const error = { duration: 0, startTime: null };
+    const baseInfo: ISystemInfo = {
+      ...mockSystemInfo,
+      coinbaseOutputs: [{ address: 'bc1qother', value: 50000 }],
+      coinbaseValueTotalSatoshis: 50000,
+      coinbaseValueUserSatoshis: 0,
+    };
+
+    // When payout status is not_found and share warning is enabled, alert NO_MINING_REWARD
+    component.activePoolShareWarning = true;
+    component.handleSystemMessages({ ...baseInfo, coinbasePayoutStatus: 'not_found' }, error);
+    expect(component.messages.some(message => message.type === 'NO_MINING_REWARD')).toBeTrue();
+
+    // When payout status is not_applicable (account pool), NO_MINING_REWARD is not shown
+    component.handleSystemMessages({ ...baseInfo, coinbasePayoutStatus: 'not_applicable' }, error);
+    expect(component.messages.some(message => message.type === 'NO_MINING_REWARD')).toBeFalse();
+
+    // When payout status is verified, NO_MINING_REWARD is not shown
+    component.handleSystemMessages({
+      ...baseInfo,
+      coinbaseValueUserSatoshis: 50000,
+      coinbasePayoutStatus: 'verified'
+    }, error);
+    expect(component.messages.some(message => message.type === 'NO_MINING_REWARD')).toBeFalse();
+  });
+
+  it('orders coinbase outputs strictly using isUserOutput without fallback to username substring', () => {
+    component.activePoolUser = 'bc1qother.worker1';
+    const outputs = [
+      { address: 'bc1qother', value: 10000, isUserOutput: 0 },
+      { address: 'bc1quser', value: 40000, isUserOutput: 1 },
+    ];
+    const ordered = component.getOrderedCoinbaseOutputs({ coinbaseOutputs: outputs } as any);
+    expect(ordered?.[0]?.address).toBe('bc1quser');
+    expect(ordered?.[0]?.isUserOutput).toBe(1);
+    expect(ordered?.[1]?.address).toBe('bc1qother');
+    expect(ordered?.[1]?.isUserOutput).toBe(0);
+  });
+
   it('keeps telemetry and messages live while settings load and after settings fail', () => {
     fixture.destroy();
     const settings = new Subject<{ frequencyOptions: number[] }>();
@@ -282,7 +324,7 @@ describe('HomeComponent', () => {
   it('should render the dashboard widgets and dropdowns when info is loaded', () => {
     fixture.detectChanges();
     const element = fixture.nativeElement;
-    // Verify that the dropdowns inside *ngIf are rendered
+    // Verify that the dropdowns inside the @if block are rendered
     expect(element.querySelector('app-dropdown')).toBeTruthy();
   });
 
@@ -318,15 +360,17 @@ describe('HomeComponent', () => {
       const updateSpy = spyOn(mockSystemApiService, 'updateSystem').and.callThrough();
       await expectSelectedPool('Primary');
 
-      emitPoolInfo({ useFallbackStratum: 0, isUsingFallbackStratum: 1 });
+      emitPoolInfo({ useFallbackStratum: 0, isUsingFallbackStratum: 1, fallbackStratumTLS: true });
       await expectSelectedPool('Fallback');
       expect(component.activePoolURL).toBe(mockSystemInfo.fallbackStratumURL);
       expect(component.activePoolUser).toBe(mockSystemInfo.fallbackStratumUser);
+      expect(component.activePoolTLS).toBe(true);
 
-      emitPoolInfo({ useFallbackStratum: 0, isUsingFallbackStratum: 0 });
+      emitPoolInfo({ useFallbackStratum: 0, isUsingFallbackStratum: 0, stratumTLS: false });
       await expectSelectedPool('Primary');
       expect(component.activePoolURL).toBe(mockSystemInfo.stratumURL);
       expect(component.activePoolUser).toBe(mockSystemInfo.stratumUser);
+      expect(component.activePoolTLS).toBe(false);
       expect(updateSpy).not.toHaveBeenCalled();
     });
 
@@ -335,6 +379,82 @@ describe('HomeComponent', () => {
 
       await expectSelectedPool('Primary');
       expect(component.activePoolURL).toBe(mockSystemInfo.stratumURL);
+    });
+
+    it('should display pool message in pool card when poolBanner is present', () => {
+      emitPoolInfo({ poolBanner: 'Welcome to Public-Pool!' });
+      fixture.detectChanges();
+      const compiled = fixture.nativeElement as HTMLElement;
+      expect(compiled.textContent).toContain('Welcome to Public-Pool!');
+    });
+
+    it('should format bitcoin addresses and display account usernames naturally in DOM', () => {
+      const getUserHtml = () => fixture.debugElement.nativeElement.querySelector('[sensitive-data] span')?.innerHTML ?? '';
+
+      // 1. Account username (not an address) - displayed cleanly without address formatting or font-mono
+      emitPoolInfo({ stratumUser: 'satoshi.worker1' });
+      fixture.detectChanges();
+      expect(getUserHtml()).toBe('satoshi.worker1');
+
+      // 2. Bitcoin address (single) - address is formatted with font-mono, worker suffix preserved
+      emitPoolInfo({
+        stratumUser: 'bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x.worker1',
+        coinbaseOutputs: [
+          { address: 'bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x', value: 50000 }
+        ]
+      });
+      fixture.detectChanges();
+      expect(getUserHtml()).toContain('<span class="font-mono">');
+      expect(getUserHtml()).toContain('bc1q');
+      expect(getUserHtml()).toContain('...');
+      expect(getUserHtml()).toContain('</span>.worker1');
+
+      // 3. Bitcoin address (multiple addresses) - both formatted, separator preserved
+      emitPoolInfo({
+        stratumUser: 'bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x, 1DYwPTnC4NgEmoqbLbcRqoSzVeH3ehmGbV.worker1',
+        coinbaseOutputs: [
+          { address: 'bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x', value: 25000 },
+          { address: '1DYwPTnC4NgEmoqbLbcRqoSzVeH3ehmGbV', value: 25000 }
+        ]
+      });
+      fixture.detectChanges();
+      expect(getUserHtml()).toContain('<span class="font-mono">');
+      expect(getUserHtml()).toContain(', <span class="font-mono">');
+      expect(getUserHtml()).toContain('</span>.worker1');
+
+      // 4. SRI solo pattern - prefix and worker suffix preserved, address formatted and wrapped in font-mono
+      emitPoolInfo({
+        stratumUser: 'sri/solo/bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x/worker1',
+        coinbaseOutputs: [
+          { address: 'bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x', value: 50000 }
+        ]
+      });
+      fixture.detectChanges();
+      expect(getUserHtml()).toContain('sri/solo/<span class="font-mono">');
+      expect(getUserHtml()).toContain('...');
+      expect(getUserHtml()).toContain('</span>/worker1');
+
+      // 5. SRI donate pattern - donation prefix preserved, address formatted and wrapped in font-mono
+      emitPoolInfo({
+        stratumUser: 'sri/donate/10/bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x/worker1',
+        coinbaseOutputs: [
+          { address: 'bc1q42aueh0wluqpzg3ng32kvaugnx4thnxa7y625x', value: 45000 }
+        ]
+      });
+      fixture.detectChanges();
+      expect(getUserHtml()).toContain('sri/donate/10/<span class="font-mono">');
+      expect(getUserHtml()).toContain('...');
+      expect(getUserHtml()).toContain('</span>/worker1');
+
+      // 6. Full donation / pool worker (no address) - displayed as-is
+      emitPoolInfo({
+        stratumUser: 'sri/donate/worker1',
+        coinbaseOutputs: [
+          { address: 'bc1qpool', value: 50000 }
+        ]
+      });
+      fixture.detectChanges();
+      expect(getUserHtml()).toBe('sri/donate/worker1');
     });
 
     it('should reflect reset pool fields (responseTime, poolDifficulty, coinbaseOutputs) on failover', async () => {
@@ -510,6 +630,46 @@ describe('HomeComponent', () => {
       expect(component.dataLabel.length).toBe(2);
     });
 
+    it('should merge response time into closest neighbor when removed point has data in limitDataPoints', () => {
+      component['statsLimit'] = 3;
+      component.dataLabel = [1000, 2000, 2050, 4000];
+      component.hashrateData = [100, 100, 100, 100];
+      component.powerData = [10, 10, 10, 10];
+      component.chartDatasets = {
+        responseTimeMin: [null, 35.5, null, null],
+        responseTimeMax: [null, 55.5, null, null]
+      };
+
+      component.limitDataPoints(0);
+
+      expect(component.dataLabel.length).toBe(3);
+      expect(component.dataLabel).not.toContain(2000);
+      expect(component.dataLabel).toContain(2050);
+      const idx2050 = component.dataLabel.indexOf(2050);
+      expect(component.chartDatasets['responseTimeMin'][idx2050]).toBe(35.5);
+      expect(component.chartDatasets['responseTimeMax'][idx2050]).toBe(55.5);
+    });
+
+    it('should merge min and max of either points when thinning in limitDataPoints', () => {
+      component['statsLimit'] = 3;
+      component.dataLabel = [1000, 2000, 2050, 4000];
+      component.hashrateData = [100, 100, 100, 100];
+      component.powerData = [10, 10, 10, 10];
+      component.chartDatasets = {
+        responseTimeMin: [null, 35.5, 25.0, null],
+        responseTimeMax: [null, 45.5, 60.0, null]
+      };
+
+      component.limitDataPoints(0);
+
+      expect(component.dataLabel.length).toBe(3);
+      expect(component.dataLabel).toContain(2050);
+      expect(component.dataLabel).not.toContain(2000);
+      const idx2050 = component.dataLabel.indexOf(2050);
+      expect(component.chartDatasets['responseTimeMin'][idx2050]).toBe(25.0);
+      expect(component.chartDatasets['responseTimeMax'][idx2050]).toBe(60.0);
+    });
+
     it('should clear flash timeouts on destroy', () => {
       component['shareAcceptedTimeout'] = setTimeout(() => {}, 10000) as any;
       component['shareRejectedTimeout'] = setTimeout(() => {}, 10000) as any;
@@ -522,6 +682,89 @@ describe('HomeComponent', () => {
       expect(clearTimeout).toHaveBeenCalledWith(component['shareAcceptedTimeout']);
       expect(clearTimeout).toHaveBeenCalledWith(component['shareRejectedTimeout']);
       expect(clearTimeout).toHaveBeenCalledWith(component['workReceivedTimeout']);
+    });
+
+    describe('FALLBACK_STRATUM messages', () => {
+      const error = { duration: 0, startTime: null };
+
+      it('should show info banner when operating on fallback pool by user preference', () => {
+        component.handleSystemMessages({
+          ...mockSystemInfo,
+          isUsingFallbackStratum: 1,
+          useFallbackStratum: 1,
+        }, error);
+
+        const msg = component.messages.find(m => m.type === 'FALLBACK_STRATUM');
+        expect(msg).toBeDefined();
+        expect(msg?.severity).toBe('info');
+        expect(msg?.text).toBe('Mining on fallback pool by user preference.');
+      });
+
+      it('should show warn banner with primaryPoolError when primary fails over to fallback', () => {
+        component.handleSystemMessages({
+          ...mockSystemInfo,
+          isUsingFallbackStratum: 1,
+          useFallbackStratum: 0,
+          primaryPoolError: 'Pool unreachable',
+        }, error);
+
+        const msg = component.messages.find(m => m.type === 'FALLBACK_STRATUM');
+        expect(msg).toBeDefined();
+        expect(msg?.severity).toBe('warn');
+        expect(msg?.text).toBe('Primary pool (stratum.pool.com:3333): Pool unreachable - mining on fallback pool.');
+      });
+
+      it('should show default warn banner when failover occurs without primaryPoolError', () => {
+        component.handleSystemMessages({
+          ...mockSystemInfo,
+          isUsingFallbackStratum: 1,
+          useFallbackStratum: 0,
+          primaryPoolError: '',
+        }, error);
+
+        const msg = component.messages.find(m => m.type === 'FALLBACK_STRATUM');
+        expect(msg).toBeDefined();
+        expect(msg?.severity).toBe('warn');
+        expect(msg?.text).toBe('Primary pool (stratum.pool.com:3333): Pool unreachable - mining on fallback pool.');
+      });
+
+      it('should show warn banner when user requested fallback but operating on primary', () => {
+        component.handleSystemMessages({
+          ...mockSystemInfo,
+          isUsingFallbackStratum: 0,
+          useFallbackStratum: 1,
+        }, error);
+
+        const msg = component.messages.find(m => m.type === 'FALLBACK_STRATUM');
+        expect(msg).toBeDefined();
+        expect(msg?.severity).toBe('warn');
+        expect(msg?.text).toBe('Fallback pool (fallback.pool.com:3333): Pool unreachable - mining on primary pool.');
+      });
+
+      it('should dismiss banner when operating normally on primary pool', () => {
+        component.messages = [{
+          type: 'FALLBACK_STRATUM',
+          severity: 'warn',
+          text: 'Primary pool (stratum.pool.com:3333): Pool unreachable - mining on fallback pool.',
+        }];
+
+        component.handleSystemMessages({
+          ...mockSystemInfo,
+          isUsingFallbackStratum: 0,
+          useFallbackStratum: 0,
+        }, error);
+
+        const msg = component.messages.find(m => m.type === 'FALLBACK_STRATUM');
+        expect(msg).toBeUndefined();
+      });
+    });
+
+    it('should return 0 for response time min/max and undefined for others in getMinForLabel', () => {
+      expect(component.getMinForLabel('responseTimeMin')).toBe(0);
+      expect(component.getMinForLabel('responseTimeMax')).toBe(0);
+      expect(component.getMinForLabel('hashrate')).toBeUndefined();
+      expect(component.getMinForLabel('none')).toBeUndefined();
+      expect(component.getMinForLabel(undefined)).toBeUndefined();
     });
   });
 });

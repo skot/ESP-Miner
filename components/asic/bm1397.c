@@ -1,9 +1,6 @@
 #include "bm_job_packet.h"
-#include <stdio.h>
-#include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
-#include <math.h>
 #include <arpa/inet.h>
 
 #include "freertos/FreeRTOS.h"
@@ -13,9 +10,7 @@
 
 #include "serial.h"
 #include "bm1397.h"
-#include "utils.h"
 #include "crc.h"
-#include "mining.h"
 #include "global_state.h"
 #include "pll.h"
 
@@ -53,7 +48,7 @@ typedef struct __attribute__((__packed__))
 {
     uint32_t nonce;                   // 2-5
     uint8_t midstate_num;             // 6
-    uint8_t id;                       // 7
+    uint8_t chip_slot;                // 7
 } bm1397_asic_result_job_t;
 
 typedef struct __attribute__((__packed__))
@@ -80,7 +75,7 @@ static const char * TAG = "bm1397";
 static uint32_t prev_nonce = 0;
 static task_result result;
 
-static int address_interval;
+static uint16_t address_interval;
 
 /// @brief
 /// @param ftdi
@@ -253,36 +248,12 @@ void BM1397_set_difficulty(uint8_t difficulty_power)
     _send_BM1397((TYPE_CMD | GROUP_ALL | CMD_WRITE), difficulty_mask, 6, BM1397_SERIALTX_DEBUG);
 }
 
-static uint8_t id = 0;
-
-void BM1397_send_work(GlobalState * GLOBAL_STATE, asic_job_t * next_job)
+void BM1397_send_work(GlobalState * GLOBAL_STATE, const asic_job_t * next_job)
 {
     bm1397_job_packet_t job;
-    // max job number is 128
-    // there is still some really weird logic with the job id bits for the asic to sort out
-    // so we have it limited to 128 and it has to increment by 4
-    id = (id + 4) % 128;
-
-    bm1397_build_job_packet(next_job, id,
-                            GLOBAL_STATE->DEVICE_CONFIG.family.asic.software_midstates, &job);
-
-    // Hold valid_jobs_lock across the free + reassignment so result decoding
-    // (which snapshots active_jobs[job_id] under the same lock) can never observe
-    // or copy a slot we are freeing/replacing here. valid_jobs is set inside the
-    // same critical section so validity and the pointer stay consistent.
-    pthread_mutex_lock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
-    if (GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job.job_id] != NULL)
-    {
-        free(GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job.job_id]);
-    }
-    GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job.job_id] = next_job;
-    GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs[job.job_id] = 1;
-    pthread_mutex_unlock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
-
-    #if BM1397_DEBUG_JOBS
-    ESP_LOGI(TAG, "Send Job: %02X", job.job_id);
-    #endif
-
+    bm1397_build_job_packet(&GLOBAL_STATE->job_store,
+                           GLOBAL_STATE->DEVICE_CONFIG.family.asic.software_midstates,
+                           next_job, &job);
     _send_BM1397((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(job), BM1397_DEBUG_WORK);
 }
 
@@ -308,29 +279,16 @@ task_result *BM1397_process_work(GlobalState * GLOBAL_STATE)
         return &result;
     }
 
-    uint8_t nonce_found = 0;
-    uint32_t first_nonce = 0;
-
-    uint8_t rx_job_id = asic_result.job.id & 0xfc;
-    uint8_t rx_midstate_index = asic_result.job.id & 0x03;
-
-    // Snapshot the complete job before slot reuse, then decode the midstate
-    // index using that same snapshot's version and mask.
-    pthread_mutex_lock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
-    if (rx_job_id >= MAX_ASIC_JOBS || GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs[rx_job_id] == 0 || GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[rx_job_id] == NULL)
-    {
-        pthread_mutex_unlock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
-        ESP_LOGW(TAG, "Invalid job nonce found, id=%d", rx_job_id);
+    if (!bm1397_decode_job_result(&GLOBAL_STATE->job_store,
+                                  address_interval,
+                                  asic_result.job.nonce,
+                                  asic_result.job.chip_slot,
+                                  &result)) {
         return NULL;
     }
-    result.job = *GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[rx_job_id];
-    pthread_mutex_unlock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
 
-    uint32_t rolled_version = result.job.version;
-    for (int i = 0; i < rx_midstate_index; i++)
-    {
-        rolled_version = increment_bitmask(rolled_version, result.job.version_mask);
-    }
+    uint8_t nonce_found = 0;
+    uint32_t first_nonce = 0;
 
     // ASIC may return the same nonce multiple times
     // or one that was already found
@@ -355,24 +313,13 @@ task_result *BM1397_process_work(GlobalState * GLOBAL_STATE)
         prev_nonce = asic_result.job.nonce;
     }
 
-    uint32_t nonce_h = ntohl(asic_result.job.nonce);
-    uint8_t asic_nr = (uint8_t)((nonce_h >> 17) & 0xff) / address_interval;
-    uint8_t core_id = (uint8_t)((nonce_h >> 25) & 0x7f);
-    uint8_t small_core_id = asic_result.job.id & 0x0f;
-
-    result.nonce = asic_result.job.nonce;
-    result.rolled_version = rolled_version;
-    result.asic_nr = asic_nr;
-    result.core_id = core_id;
-    result.small_core_id = small_core_id;
-
     return &result;
 }
 
 void BM1397_read_registers(GlobalState * GLOBAL_STATE)
 {
     uint16_t asic_count = GLOBAL_STATE->DEVICE_CONFIG.family.asic_count;
-    if (asic_count == 0 || address_interval <= 0) {
+    if (asic_count == 0 || address_interval == 0) {
         return;
     }
 

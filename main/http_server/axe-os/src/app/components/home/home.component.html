@@ -149,8 +149,8 @@
           <div class="flex justify-between mb-4">
             <div>
               <span class="block text-lg font-medium mb-4">Shares
-                <i class="pi pi-arrow-up transition-opacity duration-500 ml-2 text-sm align-middle text-green-500" [ngClass]="{'opacity-100': flashShareAccepted, 'opacity-0': !flashShareAccepted}" appTooltip="Share Accepted" tooltipPosition="top"></i>
-                <i class="pi pi-times transition-opacity duration-500 ml-1 text-sm align-middle text-red-500" [ngClass]="{'opacity-100': flashShareRejected, 'opacity-0': !flashShareRejected}" appTooltip="Share Rejected" tooltipPosition="top"></i>
+                <i class="pi pi-arrow-up transition-opacity duration-500 ml-2 text-sm align-middle text-green-500" [class.opacity-100]="flashShareAccepted" [class.opacity-0]="!flashShareAccepted" appTooltip="Share Accepted" tooltipPosition="top"></i>
+                <i class="pi pi-times transition-opacity duration-500 ml-1 text-sm align-middle text-red-500" [class.opacity-100]="flashShareRejected" [class.opacity-0]="!flashShareRejected" appTooltip="Share Rejected" tooltipPosition="top"></i>
               </span>
               <div class="font-medium text-2xl">
                 {{info.sharesAccepted | number: '1.0-0'}}
@@ -221,12 +221,12 @@
                 <app-dropdown
                   formControlName="chartY1Unit"
                   [options]="chartUnitGroups"
-                  class="w-40 text-sm">
+                  class="w-48 text-sm">
                 </app-dropdown>
                 <app-dropdown
                   formControlName="chartY2Unit"
                   [options]="chartUnitGroups"
-                  class="w-40 text-sm">
+                  class="w-48 text-sm">
                 </app-dropdown>
               </div>
 
@@ -363,7 +363,7 @@
 
           <div class="mb-4">
             <h6 class="flex justify-between mb-1" tooltipPosition="top"
-                appTooltip="{{info.fan2rpm > 0 ? 'Fan 1: ' : ''}}{{info.fanrpm}} RPM{{info.fan2rpm > 0 ? '<br>Fan 2: ' + info.fan2rpm + ' RPM' : ''}}">
+                appTooltip="{{info.fan2rpm > 0 ? 'Fan 1: ' : ''}}{{info.fanrpm}} RPM{{info.fan2rpm > 0 ? '\nFan 2: ' + info.fan2rpm + ' RPM' : ''}}">
 
               @if (info.fan2rpm > 0) {
                 Fan Speeds
@@ -410,11 +410,14 @@
               </app-dropdown>
             </div>
 
-            <div class="flex flex-nowrap">
+            <div class="flex flex-nowrap items-baseline">
               <div class="w-24 shrink-0 text-secondary">
                 <span>URL</span>
               </div>
-              <div>
+              <div class="flex items-center gap-1">
+                @if (activePoolTLS) {
+                  <i class="pi pi-lock text-xs text-secondary" appTooltip="TLS" tooltipPosition="top"></i>
+                }
                 <tooltip-text-icon
                   text="{{ activePoolURL }}:{{activePoolPort}}"
                   tooltip="{{ info.poolConnectionInfo }}"
@@ -428,9 +431,20 @@
               </div>
 
               <div appTooltip="{{ activePoolUser }}" tooltipPosition="top" sensitive-data>
-                <span class="font-mono font-bold text-base">{{ activePoolUserAddressPart | address }}</span>{{ activePoolUserSuffixPart }}
+                <span class="font-bold text-base" [innerHTML]="activePoolUser | address"></span>
               </div>
             </div>
+
+            @if (info.poolBanner) {
+              <div class="flex flex-nowrap items-baseline">
+                <div class="w-24 shrink-0 text-secondary">
+                  <span>Message</span>
+                </div>
+                <div class="line-break-anywhere">
+                  {{ info.poolBanner }}
+                </div>
+              </div>
+            }
 
             <div class="flex flex-nowrap">
               <div class="w-24 shrink-0 text-secondary">
@@ -442,13 +456,13 @@
               @if (info.responseTime > 0) {
                 {{ info.responseTime | number:'1.1-1' }} ms
                 @if ((info.responseShareBatch ?? 0) > 1) {
-                  <span class="text-neutral-500" appTooltip="The pool acknowledged {{ info.responseShareBatch }} shares in one batch; the time reflects the most recent share, so it may include the pool's batching window" tooltipPosition="top">&nbsp;(batched ×{{ info.responseShareBatch }})</span>
+                  <span class="text-secondary" appTooltip="The pool acknowledged {{ info.responseShareBatch }} shares in one batch; the time reflects the most recent share, so it may include the pool's batching window" tooltipPosition="top">&nbsp;(batched ×{{ info.responseShareBatch }})</span>
                 }
               } @else {
                 --
               }
             </div>
-            @if ((info.coinbaseOutputs?.length ?? 0) > 0) {
+            @if ((info.coinbasePayoutStatus === 'verified' || info.coinbasePayoutStatus === 'not_found') && (info.coinbaseOutputs?.length ?? 0) > 0) {
               <div class="flex flex-nowrap">
                 @let percentage = payoutPercentage;
                 @if (percentage >= 95) {
@@ -483,7 +497,7 @@
               }
             </div>
             <div class="flex flex-nowrap">
-              <div class="w-24 shrink-0 text-neutral-500">
+              <div class="w-24 shrink-0 text-secondary">
                 <span>Mode</span>
               </div>
               <div>{{ activePoolProtocol }}</div>
@@ -499,7 +513,7 @@
         <div class="card">
           <h4 class="whitespace-nowrap overflow-hidden text-ellipsis font-medium">
             Block Header
-            <i class="pi pi-arrow-down transition-opacity duration-500 ml-2 text-sm align-middle text-blue-500" [ngClass]="{'opacity-100': flashWorkReceived, 'opacity-0': !flashWorkReceived}" appTooltip="Work Received" tooltipPosition="top"></i>
+            <i class="pi pi-arrow-down transition-opacity duration-500 ml-2 text-sm align-middle text-blue-500" [class.opacity-100]="flashWorkReceived" [class.opacity-0]="!flashWorkReceived" appTooltip="Work Received" tooltipPosition="top"></i>
             @if (info.blockSignals && info.blockSignals.length > 0) {
               <span class="align-bottom ml-2">
                 @for (signal of info.blockSignals; track signal) {
@@ -558,10 +572,10 @@
                 @for (output of orderedCoinbaseOutputs; track output; let i = $index) {
                   <div class="flex justify-between">
                     @if (output.value > 0) {
-                      @if (output.address === activePoolUserAddressPart) {
-                        <span><span class="font-mono text-sm font-bold" appTooltip="Your payout address" tooltipPosition="top" sensitive-data>{{ output.address | address }}</span>&nbsp;<i class="pi pi-star-fill text-xs"></i></span>
+                      @if (output.isUserOutput === 1) {
+                        <span><span class="text-sm font-bold" appTooltip="Your payout address" tooltipPosition="top" sensitive-data [innerHTML]="output.address | address"></span>&nbsp;<i class="pi pi-star-fill text-xs"></i></span>
                       } @else {
-                        <span class="font-mono text-sm" appTooltip="{{ output.address }}" tooltipPosition="top">{{ output.address | address }}</span>
+                        <span class="text-sm" appTooltip="{{ output.address }}" tooltipPosition="top" [innerHTML]="output.address | address"></span>
                       }
                       <span class="text-sm">{{ output.value | sats }}</span>
                     } @else {
@@ -592,59 +606,29 @@
     <!-- Hashrate Registers -->
     <div class="grid-stack-item" gs-id="registers">
       <div class="grid-stack-item-content">
-        <div class="card">
+        <div class="card flex flex-col">
           <h4 class="whitespace-nowrap overflow-hidden text-ellipsis font-medium">Hashrate Registers</h4>
 
-          @if (asicsAmount; as asicAmount) {
-            <table class="heatmap text-{{asicAmount <= 2 ? 'sm' : 'xs'}} w-full">
-              <thead>
-                <tr>
-                  @if (asicAmount > 1) {
-                    <th class="text-left">ASIC</th>
-                  }
-                  @if (asicDomainsAmount; as asicDomainsAmount) {
-                    @if (asicDomainsAmount > 0) {
-                      <th [attr.colspan]="asicDomainsAmount">
-                        @if (asicDomainsAmount === 1) {
-                          Domain
-                        } @else if (asicDomainsAmount <= 4) {
-                          Domains
-                        } @else {
-                          Domains ({{ domainUnit }})
+          @if (sparklineAsicRows.length > 0) {
+            <div class="w-full flex-1 min-h-0 flex flex-col gap-1.5 overflow-hidden">
+              @for (row of sparklineAsicRows; track row.id) {
+                <div class="sparkline-row flex gap-1.5 flex-1 h-full min-w-0">
+                  @for (cell of row.cells; track cell.id) {
+                    <div class="sparkline-cell flex-1 min-w-0 h-full" [appTooltip]="cell.tooltip" tooltipPosition="top">
+                      <div class="absolute bottom-0.5 left-1 z-0 text-[10px] leading-none font-medium text-secondary truncate select-none pointer-events-none max-w-[calc(100%-8px)]">
+                        {{ cell.hashrate }}
+                      </div>
+                      <svg class="sparkline-svg w-full h-full" [attr.viewBox]="sparklineViewBox" preserveAspectRatio="none">
+                        <line x1="0" [attr.y1]="cell.nominalY" x2="100" [attr.y2]="cell.nominalY" class="nominal-line" />
+                        @if (cell.path) {
+                          <path [attr.d]="cell.path" class="sparkline-path" />
                         }
-                      </th>
-                    }
+                      </svg>
+                    </div>
                   }
-                </tr>
-              </thead>
-              <tbody>
-                @for (asic of info.hashrateMonitor?.asics; track trackByIndex($index, asic); let i = $index) {
-                  <tr class="cursor-pointer"
-                    [appTooltip]="(asicAmount > 1 ? 'ASIC ' + (i + 1) + ' - ' : '') + 'Error count: ' + asic.errorCount"
-                    tooltipPosition="bottom">
-                    @if (asicAmount > 1) {
-                      <td class="text-secondary text-left">
-                        {{ i + 1 }}
-                      </td>
-                    }
-                    @for (domain of asic?.domains; track trackByIndex($index, domain); let dIndex = $index) {
-                      <td
-                        [style.--lightness]="getHeatmapLightness(domain, info.expectedHashrate)"
-                        [style.height]="(asicAmount <= 2 ? '2rem' : null)"
-                        class="heatmap-cell"
-                        [appTooltip]="asicDomainsAmount > 4 ? ((asicAmount > 1 ? 'ASIC ' + (i + 1) + ' - ' : '') + 'Domain ' + (dIndex + 1) + ': ' + (domain | hashSuffix)) : ''"
-                        tooltipPosition="bottom">
-                        @if (asicDomainsAmount <= 4) {
-                          <span class="text-xs">{{ domain | hashSuffix }}</span>
-                        } @else {
-                          <span class="text-xs">{{ domain | hashSuffix: { power: domainPower, hideUnit: true } }}</span>
-                        }
-                      </td>
-                    }
-                  </tr>
-                }
-              </tbody>
-            </table>
+                </div>
+              }
+            </div>
           }
         </div>
       </div>
