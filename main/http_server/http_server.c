@@ -1673,6 +1673,7 @@ esp_err_t start_rest_server(GlobalState * GLOBAL_STATE)
         { .uri = "/api/system/boot",               .method = HTTP_POST,    .handler = POST_system_boot },
         { .uri = "/api/system/identify",           .method = HTTP_POST,    .handler = POST_identify },
         { .uri = "/api/system/OTA",                .method = HTTP_POST,    .handler = POST_OTA_update },
+        { .uri = "/api/system/OTA/github",         .method = HTTP_POST,    .handler = POST_OTA_github_update },
         { .uri = "/api/system/OTAWWW",             .method = HTTP_POST,    .handler = POST_WWW_update },
         { .uri = "/api/system/pause",              .method = HTTP_POST,    .handler = POST_mining_pause },
         { .uri = "/api/system/restart",            .method = HTTP_POST,    .handler = POST_restart },
