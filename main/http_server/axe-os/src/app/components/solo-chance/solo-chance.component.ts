@@ -1,8 +1,13 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { AsyncPipe } from '@angular/common';
 import { Observable, Subject, takeUntil } from 'rxjs';
 import { LiveDataService } from 'src/app/services/live-data.service';
 import { LoadingService } from 'src/app/services/loading.service';
 import { SystemInfo as ISystemInfo } from 'src/app/generated/models';
+import { HashSuffixPipe } from 'src/app/pipes/hash-suffix.pipe';
+import { DiffSuffixPipe } from 'src/app/pipes/diff-suffix.pipe';
+import { TooltipIconComponent } from '../tooltip-icon/tooltip-icon.component';
+import { TooltipTextIconComponent } from '../tooltip-text-icon/tooltip-text-icon.component';
 
 interface DifficultyRow {
   key: string;
@@ -24,7 +29,7 @@ interface DifficultyRow {
   selector: 'app-solo-chance',
   templateUrl: './solo-chance.component.html',
   styleUrls: ['./solo-chance.component.scss'],
-  standalone: false
+  imports: [AsyncPipe, HashSuffixPipe, DiffSuffixPipe, TooltipIconComponent, TooltipTextIconComponent]
 })
 export class SoloChanceComponent implements OnInit, OnDestroy {
   public info$!: Observable<ISystemInfo>;

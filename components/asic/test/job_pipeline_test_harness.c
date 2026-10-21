@@ -46,13 +46,20 @@ static void spy_task_delay(TickType_t ticks)
     harness_result->delay_count++;
 }
 
-void spy_asic_send_work(GlobalState *state, asic_job_t *job)
+void spy_asic_send_work(GlobalState *state, const asic_job_t *job)
 {
     (void)state;
     if (harness_result->job_count >= JOB_PIPELINE_HARNESS_MAX_JOBS) {
         longjmp(harness_exit, 2);
     }
-    harness_result->jobs[harness_result->job_count++] = job;
+    if (job != NULL) {
+        harness_result->storage[harness_result->job_count] = *job;
+        harness_result->jobs[harness_result->job_count] =
+            &harness_result->storage[harness_result->job_count];
+    } else {
+        harness_result->jobs[harness_result->job_count] = NULL;
+    }
+    harness_result->job_count++;
 }
 
 static void spy_asic_set_version_mask(GlobalState *state, uint32_t mask)
@@ -153,7 +160,6 @@ void job_pipeline_harness_result_free(job_pipeline_harness_result_t *result)
 {
     if (result == NULL) return;
     for (size_t index = 0; index < result->job_count; ++index) {
-        free(result->jobs[index]);
         result->jobs[index] = NULL;
     }
     result->job_count = 0;

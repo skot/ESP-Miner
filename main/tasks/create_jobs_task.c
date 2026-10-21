@@ -4,17 +4,14 @@
 
 #include "global_state.h"
 #include "esp_log.h"
-#include "esp_system.h"
 #include "mining.h"
 #include "miner_job.h"
 #include "string.h"
 #include "esp_timer.h"
 
 #include "asic.h"
-#include "asic_common.h"
 #include "difficulty_controller.h"
 #include "system.h"
-#include "esp_heap_caps.h"
 #include "utils.h"
 
 static const char *TAG = "create_jobs_task";
@@ -43,7 +40,7 @@ void create_jobs_task(void *pvParameters)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)pvParameters;
 
-    // active_jobs / valid_jobs are allocated and zeroed by SYSTEM_init_system(),
+    // active_jobs slots are zeroed by SYSTEM_init_system(),
     // before any task that touches them can run.
 
     uint32_t current_version_mask = 0;
@@ -65,7 +62,7 @@ void create_jobs_task(void *pvParameters)
 
         if (notified == pdTRUE) {
             miner_job_t *new_work = miner_job_get_slot((size_t)slot_notify);
-            ESP_LOGI(TAG, "New Work Activated (slot %lu) %s (type %d)", (unsigned long)slot_notify, new_work->job_id, new_work->type);
+            ESP_LOGI(TAG, "New Work Activated %s (type %d)", new_work->job_id, new_work->type);
             current_work = new_work;
             GLOBAL_STATE->active_job_slot_idx = (uint8_t)(slot_notify % MINER_JOB_POOL_SIZE);
             current_work_sent = false;

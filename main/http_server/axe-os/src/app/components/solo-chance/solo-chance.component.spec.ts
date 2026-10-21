@@ -1,18 +1,12 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
-import { CommonModule } from '@angular/common';
 import { of } from 'rxjs';
 
 import { SoloChanceComponent } from './solo-chance.component';
 import { LiveDataService } from 'src/app/services/live-data.service';
 import { SystemApiService } from 'src/app/services/system.service';
 import { LoadingService } from 'src/app/services/loading.service';
-import { TooltipDirective } from 'src/app/directives/tooltip.directive';
-import { DiffSuffixPipe } from 'src/app/pipes/diff-suffix.pipe';
-import { HashSuffixPipe } from 'src/app/pipes/hash-suffix.pipe';
-import { TooltipIconComponent } from '../tooltip-icon/tooltip-icon.component';
-import { TooltipTextIconComponent } from '../tooltip-text-icon/tooltip-text-icon.component';
 
 const mockLiveDataService = {
   info$: of({
@@ -32,8 +26,7 @@ describe('SoloChanceComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [SoloChanceComponent, TooltipIconComponent, TooltipTextIconComponent],
-      imports: [CommonModule, TooltipDirective, DiffSuffixPipe, HashSuffixPipe],
+      imports: [SoloChanceComponent],
       providers: [
         provideRouter([]),
         provideHttpClient(),
