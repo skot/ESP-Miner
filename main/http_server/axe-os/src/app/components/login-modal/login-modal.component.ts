@@ -1,11 +1,13 @@
 import { Component, OnInit, OnDestroy } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { AuthService } from '../../services/auth.service';
+import { ModalComponent } from '../modal/modal.component';
 
 @Component({
   selector: 'app-login-modal',
   templateUrl: './login-modal.component.html',
-  standalone: false
+  imports: [FormsModule, ModalComponent]
 })
 export class LoginModalComponent implements OnInit, OnDestroy {
   public isVisible = false;

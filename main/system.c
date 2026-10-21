@@ -38,6 +38,7 @@
 #include "hashrate_monitor_task.h"
 #include "coinbase_decoder.h"
 #include "sv2_protocol.h"
+#include "asic.h"
 
 #define NVS_COUNTER_UPDATE_INTERVAL_MS 60 * 60 * 1000  // Update NVS once per hour
 #define NOINIT_SENTINEL_VALUE 0x4C4F4732       // "LOG2" in hex
@@ -201,8 +202,10 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     module->screen_page = 0;
+    module->shares_submitted = 0;
     module->shares_accepted = 0;
     module->shares_rejected = 0;
+    module->shares_pending = 0;
     module->best_nonce_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF);
     module->best_session_nonce_diff = 0;
     module->start_time_us = esp_timer_get_time();
@@ -271,20 +274,9 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     suffixString(module->best_nonce_diff, module->best_diff_string, DIFF_STRING_SIZE, 0);
     suffixString(module->best_session_nonce_diff, module->best_session_diff_string, DIFF_STRING_SIZE, 0);
 
-    // Initialize mutexes
-    pthread_mutex_init(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock, NULL);
+    // Initialize mutexes and job slots
+    ASIC_init_job_slots(GLOBAL_STATE);
     pthread_mutex_init(&GLOBAL_STATE->transport_mutex, NULL);
-
-    // Allocate the job tracking tables here rather than in create_jobs_task().
-    // The stratum tasks touch valid_jobs (via SYSTEM_reset_pool_session) as soon as they
-    // connect, so tying the allocation to create_jobs_task actually starting is a
-    // NULL dereference waiting to happen if that task ever fails to spawn.
-    GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs = calloc(MAX_ASIC_JOBS, sizeof(*GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs));
-    GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs = calloc(MAX_ASIC_JOBS, sizeof(uint8_t));
-    if (GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs == NULL || GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate job tracking tables");
-        abort();
-    }
 }
 
 void SYSTEM_init_versions(GlobalState * GLOBAL_STATE)
@@ -416,21 +408,35 @@ static void clean_jobs_queue(GlobalState * GLOBAL_STATE)
 {
     ESP_LOGI(TAG, "Clean Jobs: invalidating active jobs");
 
-    pthread_mutex_lock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
-    for (int i = 0; i < MAX_ASIC_JOBS; i = i + 4) {
-        GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs[i] = 0;
-    }
-    pthread_mutex_unlock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
+    ASIC_clear_work(GLOBAL_STATE);
 
     // Reset hashrate measurements to prevent a spike on reconnection
     hashrate_monitor_reset_measurements(GLOBAL_STATE);
 }
 
+static inline void update_pending_shares(SystemModule *module)
+{
+    uint64_t resolved = module->shares_accepted + module->shares_rejected;
+    uint64_t pending = (module->shares_submitted > resolved) ? (module->shares_submitted - resolved) : 0;
+    module->shares_pending = (uint16_t)(pending > UINT16_MAX ? UINT16_MAX : pending);
+}
+
+void SYSTEM_notify_submitted_share(GlobalState * GLOBAL_STATE)
+{
+    if (!GLOBAL_STATE) return;
+
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    module->shares_submitted++;
+    update_pending_shares(module);
+}
+
 void SYSTEM_notify_accepted_share(GlobalState * GLOBAL_STATE)
 {
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    if (!GLOBAL_STATE) return;
 
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
     module->shares_accepted++;
+    update_pending_shares(module);
 }
 
 static int compare_rejected_reason_stats(const void *a, const void *b) {
@@ -441,9 +447,11 @@ static int compare_rejected_reason_stats(const void *a, const void *b) {
 
 void SYSTEM_notify_rejected_share(GlobalState * GLOBAL_STATE, char * error_msg)
 {
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    if (!GLOBAL_STATE) return;
 
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
     module->shares_rejected++;
+    update_pending_shares(module);
 
     for (int i = 0; i < module->rejected_reason_stats_count; i++) {
         if (strncmp(module->rejected_reason_stats[i].message, error_msg, sizeof(module->rejected_reason_stats[i].message) - 1) == 0) {
@@ -508,6 +516,7 @@ void SYSTEM_reset_pool_session(GlobalState * GLOBAL_STATE)
         module->rejected_reason_stats[i].message[0] = '\0';
     }
     module->rejected_reason_stats_count = 0;
+    module->shares_submitted = 0;
     module->shares_accepted = 0;
     module->shares_rejected = 0;
     module->shares_pending = 0;
