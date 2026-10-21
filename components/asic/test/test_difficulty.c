@@ -82,7 +82,7 @@ TEST_CASE("Check BM13xx and BM1397 set_difficulty serial packet generation", "[a
     };
 
     for (size_t i = 0; i < BM13XX_HARNESS_DRIVER_COUNT; ++i) {
-        bm13xx_harness_begin();
+        bm13xx_harness_begin(&bm13xx_harness_drivers[i]);
         bm13xx_harness_clear_packets();
 
         bm13xx_harness_drivers[i].set_difficulty(8);

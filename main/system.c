@@ -37,6 +37,7 @@
 #include "hashrate_monitor_task.h"
 #include "coinbase_decoder.h"
 #include "sv2_protocol.h"
+#include "asic.h"
 
 #define NVS_COUNTER_UPDATE_INTERVAL_MS 60 * 60 * 1000  // Update NVS once per hour
 #define NOINIT_SENTINEL_VALUE 0x4C4F4732       // "LOG2" in hex
@@ -273,20 +274,9 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     suffixString(module->best_nonce_diff, module->best_diff_string, DIFF_STRING_SIZE, 0);
     suffixString(module->best_session_nonce_diff, module->best_session_diff_string, DIFF_STRING_SIZE, 0);
 
-    // Initialize mutexes
-    pthread_mutex_init(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock, NULL);
+    // Initialize mutexes and job slots
+    ASIC_init_job_slots(GLOBAL_STATE);
     pthread_mutex_init(&GLOBAL_STATE->transport_mutex, NULL);
-
-    // Allocate the job tracking tables here rather than in create_jobs_task().
-    // The stratum tasks touch valid_jobs (via SYSTEM_reset_pool_session) as soon as they
-    // connect, so tying the allocation to create_jobs_task actually starting is a
-    // NULL dereference waiting to happen if that task ever fails to spawn.
-    GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs = calloc(MAX_ASIC_JOBS, sizeof(*GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs));
-    GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs = calloc(MAX_ASIC_JOBS, sizeof(uint8_t));
-    if (GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs == NULL || GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs == NULL) {
-        ESP_LOGE(TAG, "Failed to allocate job tracking tables");
-        abort();
-    }
 }
 
 void SYSTEM_init_versions(GlobalState * GLOBAL_STATE)
@@ -418,11 +408,7 @@ static void clean_jobs_queue(GlobalState * GLOBAL_STATE)
 {
     ESP_LOGI(TAG, "Clean Jobs: invalidating active jobs");
 
-    pthread_mutex_lock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
-    for (int i = 0; i < MAX_ASIC_JOBS; i = i + 4) {
-        GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs[i] = 0;
-    }
-    pthread_mutex_unlock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
+    ASIC_clear_work(GLOBAL_STATE);
 
     // Reset hashrate measurements to prevent a spike on reconnection
     hashrate_monitor_reset_measurements(GLOBAL_STATE);
