@@ -128,9 +128,11 @@ TEST_CASE("BM13xx response version bits reconstruct rolled block versions",
         {0x20000004, {0x01, 0x00}, 0x20200004},
         {0x20000004, {0x80, 0x00}, 0x30000004},
         {0x20000004, {0xff, 0xff}, 0x3fffe004},
-        /* The current drivers OR returned bits with the saved base version. */
-        {0x21002004, {0x00, 0x01}, 0x21002004},
-        {0x21002004, {0x00, 0x02}, 0x21006004},
+        /* Rolled version bits clear previously set bits within the version mask. */
+        {0x21002004, {0x00, 0x00}, 0x20000004},
+        {0x21002004, {0x00, 0x01}, 0x20002004},
+        {0x21002004, {0x00, 0x02}, 0x20004004},
+        {0x20002004, {0x00, 0x02}, 0x20004004},
     };
 
     for (size_t d = 0; d < BM13XX_HARNESS_DRIVER_COUNT; d++) {
@@ -229,7 +231,7 @@ TEST_CASE("BM13xx rolled version reaches SV1 and SV2 share messages byte exact",
         const task_result *result = driver->process_work(state);
         TEST_ASSERT_NOT_NULL(result);
         const uint32_t rolled_version = result->rolled_version;
-        const uint32_t version_bits = rolled_version ^ base_version;
+        const uint32_t version_bits = rolled_version & result->job.version_mask;
         TEST_ASSERT_EQUAL_HEX32(0x20002004, rolled_version);
         TEST_ASSERT_EQUAL_HEX32(0x00002000, version_bits);
 

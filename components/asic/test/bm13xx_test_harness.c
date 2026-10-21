@@ -12,6 +12,7 @@
 #include "mining.h"
 #include "serial.h"
 #include "unity.h"
+#include "utils.h"
 
 const bm13xx_harness_driver_t
     bm13xx_harness_drivers[BM13XX_HARNESS_DRIVER_COUNT] = {
@@ -116,7 +117,10 @@ unsigned bm13xx_harness_delay_count(void)
 
 void bm13xx_harness_set_job(uint32_t version, bool valid, bool present)
 {
-    saved_job = (asic_job_t) {.version = version};
+    saved_job = (asic_job_t) {
+        .version = version,
+        .version_mask = BIP320_VERSION_ROLLING_MASK,
+    };
     active_jobs[JOB_SLOT] = present ? &saved_job : NULL;
     valid_jobs[JOB_SLOT] = valid;
 }

@@ -309,7 +309,8 @@ task_result * BM1368_process_work(GlobalState * GLOBAL_STATE)
         return NULL;
     }
     result.job = *GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id];
-    result.rolled_version = result.job.version | version_bits;
+    uint32_t mask = result.job.version_mask & BIP320_VERSION_ROLLING_MASK;
+    result.rolled_version = (result.job.version & ~mask) | (version_bits & mask);
     pthread_mutex_unlock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
 
     result.nonce = asic_result.job.nonce;
