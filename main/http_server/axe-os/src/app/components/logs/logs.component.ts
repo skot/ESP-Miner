@@ -1,15 +1,16 @@
 import { AfterViewChecked, Component, Input, OnInit, ElementRef, OnDestroy, ViewChild, HostListener } from '@angular/core';
-import { FormBuilder, FormGroup, Validators } from '@angular/forms';
+import { FormBuilder, FormGroup, Validators, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { Subscription } from 'rxjs';
 import { ToastrService } from 'ngx-toastr';
 import { WebsocketService } from 'src/app/services/web-socket.service';
 import { SystemApiService } from 'src/app/services/system.service';
+import { TooltipDirective } from '../../directives/tooltip.directive';
 
 @Component({
-    selector: 'app-logs',
-    templateUrl: './logs.component.html',
-    styleUrl: './logs.component.scss',
-    standalone: false
+  selector: 'app-logs',
+  templateUrl: './logs.component.html',
+  styleUrl: './logs.component.scss',
+  imports: [FormsModule, ReactiveFormsModule, TooltipDirective]
 })
 export class LogsComponent implements OnInit, OnDestroy, AfterViewChecked {
   public loadingLogs: boolean = false;

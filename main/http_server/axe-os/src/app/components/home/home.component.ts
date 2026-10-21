@@ -3,7 +3,7 @@ import { map, Observable, shareReplay, Subscription, switchMap, tap, first, Subj
 import { HttpErrorResponse } from '@angular/common/http';
 import { getHttpErrorMessage } from 'src/app/utils/error-handler';
 import { isFrequencyLow } from 'src/app/utils/common-functions';
-import { FormBuilder, FormGroup } from '@angular/forms';
+import { FormBuilder, FormGroup, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
 import { DateAgoPipe } from 'src/app/pipes/date-ago.pipe';
 import { HashSuffixPipe } from 'src/app/pipes/hash-suffix.pipe';
@@ -20,10 +20,19 @@ import { SystemInfo as ISystemInfo, SystemStatistics as ISystemStatistics } from
 import { Title } from '@angular/platform-browser';
 import { AppChartComponent } from '../chart/app-chart.component';
 import { SelectOption } from 'src/app/models/select-option.model';
-import { eChartLabel, ChartUnitGroups, chartLabelValue, chartLabelKey } from 'src/models/enum/eChartLabel';
+import { CHART_LABELS, ChartMetric, ChartUnitGroups, CHART_LABEL_TO_METRIC } from 'src/models/chart-labels';
 import { LocalStorageService } from 'src/app/local-storage.service';
 import { GridStack, GridItemHTMLElement } from 'gridstack';
 import { DashboardEditService, WidgetDef } from 'src/app/services/dashboard-edit.service';
+import { AsyncPipe, DecimalPipe } from '@angular/common';
+import { TooltipDirective } from '../../directives/tooltip.directive';
+import { TooltipTextIconComponent } from '../tooltip-text-icon/tooltip-text-icon.component';
+import { DropdownComponent } from '../dropdown/dropdown.component';
+import { ProgressbarComponent } from '../progressbar/progressbar.component';
+import { ConfettiComponent } from '../confetti/confetti.component';
+import { AddressPipe } from '../../pipes/address.pipe';
+import { SatsPipe } from '../../pipes/sats.pipe';
+import { NgTemplateOutlet } from '@angular/common';
 
 type PoolLabel = 'Primary' | 'Fallback';
 type MessageType =
@@ -45,6 +54,21 @@ interface ISystemMessage {
 interface ISystemInfoError {
   duration: number;
   startTime: number | null;
+}
+
+export interface SparklineDomainCell {
+  id: string;
+  domainNumber: number;
+  hashrate: string;
+  nominalY: number;
+  path: string;
+  tooltip: string;
+}
+
+export interface SparklineAsicRow {
+  id: string;
+  label: string;
+  cells: SparklineDomainCell[];
 }
 
 const HOME_CHART_DATA_SOURCES = 'HOME_CHART_DATA_SOURCES';
@@ -70,11 +94,28 @@ const WIDGET_DEFAULTS: WidgetDef[] = [
 ];
 
 @Component({
-    selector: 'app-home',
-    templateUrl: './home.component.html',
-    styleUrls: ['./home.component.scss'],
-    changeDetection: ChangeDetectionStrategy.OnPush,
-    standalone: false
+  selector: 'app-home',
+  templateUrl: './home.component.html',
+  styleUrls: ['./home.component.scss'],
+  changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [
+    TooltipDirective,
+    TooltipTextIconComponent,
+    NgTemplateOutlet,
+    FormsModule,
+    ReactiveFormsModule,
+    DropdownComponent,
+    AppChartComponent,
+    ProgressbarComponent,
+    ConfettiComponent,
+    AsyncPipe,
+    DecimalPipe,
+    DateAgoPipe,
+    HashSuffixPipe,
+    DiffSuffixPipe,
+    AddressPipe,
+    SatsPipe
+  ]
 })
 export class HomeComponent implements OnInit, OnDestroy {
   public messages: ISystemMessage[] = [];
@@ -87,7 +128,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   public dataLabel: number[] = [];
   public hashrateData: number[] = [];
   public powerData: number[] = [];
-  public chartDatasets: { [key: string]: number[] } = {};
+  public chartDatasets: { [key: string]: (number | null)[] } = {};
   public chartUnitGroups = ChartUnitGroups;
   public chartHiddenSensors: Record<string, boolean> = {};
   public chartData?: any;
@@ -105,6 +146,7 @@ export class HomeComponent implements OnInit, OnDestroy {
   public activePoolUser!: string;
   public activePoolLabel!: PoolLabel;
   public activePoolProtocol!: string;
+  public activePoolTLS: boolean = false;
   public responseTime!: number;
   private isChangingPool: boolean = false;
   private targetPoolLabel: PoolLabel | null = null;
@@ -176,6 +218,10 @@ export class HomeComponent implements OnInit, OnDestroy {
   private lastChartUpdate: number = 0;
   private lastBucket: number = -1;
 
+  // Performance optimization cache properties
+  private primaryColorRgb: { r: number, g: number, b: number } = { r: 0, g: 0, b: 0 };
+  public sparklineAsicRows: SparklineAsicRow[] = [];
+  public sparklineViewBox: string = '0 0 100 30';
   private isHardwareConfigInitialized = false;
   public asicsAmount: number = 0;
   public asicDomainsAmount: number = 0;
@@ -519,20 +565,30 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
   }
 
-  private createChartDatasets(
-    formControlName: 'chartY1Unit' | 'chartY2Unit',
-    baseColor: string,
-    mixColor: string,
-    fill: boolean,
-    yAxisID: 'y' | 'y2'
-  ): any[] {
+  private createChartDatasets(yAxisID: 'y' | 'y2'): any[] {
+    const isY1 = yAxisID === 'y';
+    const formControlName = isY1 ? 'chartY1Unit' : 'chartY2Unit';
     const unit = this.form?.get(formControlName)?.value;
-    const labels = ChartUnitGroups.find(g => g.value === unit)?.labels || [];
+    const group = ChartUnitGroups.find(g => g.value === unit);
+    const labels = group?.labels || [];
+    const isScatter = group?.type === 'scatter';
+
+    const showLine = !isScatter;
+    const fill = isY1 && !isScatter;
+    const pointRadius = isScatter ? 3 : 2;
+    const borderWidth = isScatter ? 0 : 1;
+
+    const documentStyle = getComputedStyle(document.documentElement);
+    const textColorSecondary = documentStyle.getPropertyValue('--color-text-secondary').trim() || '#808080';
+    const baseColor = isY1
+      ? (documentStyle.getPropertyValue('--color-primary').trim() || '#F80421')
+      : (documentStyle.getPropertyValue('--chart-axis2-color').trim() || textColorSecondary);
+    const mixColor = documentStyle.getPropertyValue('--color-text-main').trim() || '#ffffff';
 
     const entries = labels
       .filter(label => this.isSensorSupported(label, this.latestInfo))
       .map((labelKey, index) => {
-        const label = chartLabelValue(labelKey) || labelKey;
+        const label = CHART_LABELS[labelKey as ChartMetric] ?? labelKey;
         return {
           labelKey,
           label,
@@ -547,7 +603,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     const fillIndex = fill ? entries.findIndex(entry => !entry.hidden) : -1;
 
     return entries.map(({ labelKey, label, index, hidden }) => {
-      const borderColor = index === 0
+      const borderColor = (index === 0 || isScatter)
         ? baseColor
         : `color-mix(in srgb, ${baseColor} ${100 - index * 15}%, ${mixColor} ${index * 15}%)`;
       const backgroundColor = `color-mix(in srgb, ${borderColor}, transparent 81%)`;
@@ -559,10 +615,13 @@ export class HomeComponent implements OnInit, OnDestroy {
         fill: index === fillIndex,
         backgroundColor,
         borderColor,
+        pointBackgroundColor: borderColor,
+        pointBorderColor: borderColor,
         tension: 0,
-        pointRadius: 2,
+        showLine,
+        pointRadius,
         pointHoverRadius: 5,
-        borderWidth: 1,
+        borderWidth,
         yAxisID,
         hidden
       };
@@ -576,23 +635,16 @@ export class HomeComponent implements OnInit, OnDestroy {
    */
   private refreshChartFill(): void {
     const onFilledAxis = (this.chartData?.datasets ?? []).filter((dataset: any) => dataset.yAxisID === 'y');
-    const target = onFilledAxis.find((dataset: any) => !dataset.hidden);
+    const target = onFilledAxis.find((dataset: any) => !dataset.hidden && dataset.showLine !== false);
     onFilledAxis.forEach((dataset: any) => {
-      dataset.fill = dataset === target;
+      dataset.fill = (dataset === target && dataset.showLine !== false);
     });
   }
 
   private rebuildChartDatasets() {
-    const documentStyle = getComputedStyle(document.documentElement);
-    const primaryColor = documentStyle.getPropertyValue('--color-primary').trim() || '#F80421';
-    const textColor = documentStyle.getPropertyValue('--color-text-main').trim() || '#ffffff';
-    const textColorSecondary = documentStyle.getPropertyValue('--color-text-secondary').trim() || '#808080';
-    const axis2Color = documentStyle.getPropertyValue('--chart-axis2-color').trim() || textColorSecondary;
-
     const datasets = [
-      ...this.createChartDatasets('chartY1Unit', primaryColor, textColor, true, 'y'),
-      // 'black' as the mix colour darkened the series into the dark background.
-      ...this.createChartDatasets('chartY2Unit', axis2Color, textColor, false, 'y2')
+      ...this.createChartDatasets('y'),
+      ...this.createChartDatasets('y2')
     ];
 
     if (this.chartData) {
@@ -652,6 +704,7 @@ export class HomeComponent implements OnInit, OnDestroy {
     const textColorSecondary = documentStyle.getPropertyValue('--color-text-secondary').trim();
     const surfaceBorder = documentStyle.getPropertyValue('--color-border-content').trim();
     const primaryColor = documentStyle.getPropertyValue('--color-primary').trim();
+    const axis2Color = documentStyle.getPropertyValue('--chart-axis2-color').trim() || textColorSecondary;
 
     this.chartData = {
       labels: this.dataLabel,
@@ -704,6 +757,7 @@ export class HomeComponent implements OnInit, OnDestroy {
           }
         },
         tooltip: {
+          filter: (tooltipItem: any) => tooltipItem.raw !== null && tooltipItem.raw !== undefined,
           callbacks: {
             label: function (tooltipItem: any) {
               let label = tooltipItem.dataset.label || '';
@@ -800,7 +854,7 @@ export class HomeComponent implements OnInit, OnDestroy {
           display: true,
           position: 'right',
           ticks: {
-            color: textColorSecondary,
+            color: axis2Color,
             callback: (value: number) => {
               const y2Dataset = this.chartData?.datasets?.find((d: any) => d.yAxisID === 'y2');
               return y2Dataset?.label ? HomeComponent.cbFormatValue(value, y2Dataset.label, {tickmark: true}) : value.toString();
@@ -835,15 +889,14 @@ export class HomeComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: stats => {
-          const idxHashrate = stats.labels.indexOf(chartLabelKey(eChartLabel.hashrate));
-          const idxPower = stats.labels.indexOf(chartLabelKey(eChartLabel.power));
+          const idxHashrate = stats.labels.indexOf('hashrate');
+          const idxPower = stats.labels.indexOf('power');
           const idxTimestamp = stats.labels.indexOf('timestamp');
 
           stats.labels.forEach((labelKey, labelIdx) => {
-            const valEnum = chartLabelValue(labelKey);
-            if (valEnum === eChartLabel.asicVoltage || valEnum === eChartLabel.voltage || valEnum === eChartLabel.current) {
-              stats.statistics.forEach((element: number[]) => {
-                if (element[labelIdx] !== undefined) {
+            if (labelKey === 'asicVoltage' || labelKey === 'voltage' || labelKey === 'current') {
+              stats.statistics.forEach((element: (number | null)[]) => {
+                if (element[labelIdx] !== undefined && element[labelIdx] !== null) {
                   element[labelIdx] = element[labelIdx] / 1000;
                 }
               });
@@ -852,15 +905,19 @@ export class HomeComponent implements OnInit, OnDestroy {
 
           this.lastStatsFrequency = 0;
           if (stats.statistics.length >= 2 && idxTimestamp !== -1) {
-            const totalDurationMs = stats.statistics[stats.statistics.length - 1][idxTimestamp] - stats.statistics[0][idxTimestamp];
-            this.lastStatsFrequency = Math.floor(totalDurationMs / (stats.statistics.length - 1) / 1000);
+            const lastTs = stats.statistics[stats.statistics.length - 1][idxTimestamp];
+            const firstTs = stats.statistics[0][idxTimestamp];
+            if (lastTs !== null && firstTs !== null) {
+              const totalDurationMs = lastTs - firstTs;
+              this.lastStatsFrequency = Math.floor(totalDurationMs / (stats.statistics.length - 1) / 1000);
+            }
           }
 
           // 1. Gather existing points only if we are not clearing
           const existingPoints = clear ? [] : this.dataLabel.map((timestamp, i) => {
-            const values: Record<string, number> = {};
+            const values: Record<string, number | null> = {};
             allLabels.forEach(labelKey => {
-              values[labelKey] = this.chartDatasets[labelKey]?.[i] ?? 0;
+              values[labelKey] = this.chartDatasets[labelKey]?.[i] ?? null;
             });
             return {
               timestamp,
@@ -871,16 +928,16 @@ export class HomeComponent implements OnInit, OnDestroy {
           }).sort((a, b) => a.timestamp - b.timestamp);
 
           // 2. Always map and sort backend statistics
-          const backendPoints = stats.statistics.map((element: number[]) => {
-            const values: Record<string, number> = {};
+          const backendPoints = stats.statistics.map((element: (number | null)[]) => {
+            const values: Record<string, number | null> = {};
             allLabels.forEach(labelKey => {
               const labelIdx = stats.labels.indexOf(labelKey);
-              values[labelKey] = labelIdx !== -1 ? element[labelIdx] : 0.0;
+              values[labelKey] = labelIdx !== -1 ? element[labelIdx] : null;
             });
             return {
-              timestamp: Date.now() - stats.currentTimestamp + element[idxTimestamp],
-              hashrate: idxHashrate !== -1 ? element[idxHashrate] : 0.0,
-              power: idxPower !== -1 ? element[idxPower] : 0.0,
+              timestamp: Date.now() - stats.currentTimestamp + (element[idxTimestamp] ?? 0),
+              hashrate: (idxHashrate !== -1 ? element[idxHashrate] : 0.0) ?? 0.0,
+              power: (idxPower !== -1 ? element[idxPower] : 0.0) ?? 0.0,
               values
             };
           }).sort((a, b) => a.timestamp - b.timestamp);
@@ -910,7 +967,7 @@ export class HomeComponent implements OnInit, OnDestroy {
                 if (!this.chartDatasets[labelKey]) {
                   this.chartDatasets[labelKey] = [];
                 }
-                this.chartDatasets[labelKey].push(p.values[labelKey] ?? 0.0);
+                this.chartDatasets[labelKey].push(p.values[labelKey] ?? null);
               });
             });
           }
@@ -937,7 +994,7 @@ export class HomeComponent implements OnInit, OnDestroy {
       });
   }
 
-  static isSameAxisUnit(label1: eChartLabel | undefined, label2: eChartLabel | undefined) {
+  static isSameAxisUnit(label1: string | undefined, label2: string | undefined) {
     if (!label1 || !label2) return false;
     return this.getSettingsForLabel(label1).suffix == this.getSettingsForLabel(label2).suffix;
   }
@@ -969,14 +1026,8 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.maxFrequency = Math.max(800, info.actualFrequency || info.frequency || 0);
         this.statsLimit = info.statsLimit || 720;
 
-        // Pre-compute values for template performance
-        if (!this.isHardwareConfigInitialized && info.hashrateMonitor?.asics?.length) {
-          this.isHardwareConfigInitialized = true;
-          this.asicsAmount = info.hashrateMonitor.asics.length;
-          this.asicDomainsAmount = info.hashrateMonitor.asics[0]?.domains?.length ?? 0;
-        }
 
-        this.updateDomainUnit(info);
+        this.updateDomainSparklines(info);
 
         this.updateChartDataSources(info);
 
@@ -1001,6 +1052,7 @@ export class HomeComponent implements OnInit, OnDestroy {
         this.activePoolUser = isCurrentlyFallback ? info.fallbackStratumUser : info.stratumUser;
         this.activePoolPort = isCurrentlyFallback ? info.fallbackStratumPort : info.stratumPort;
         this.activePoolShareWarning = !!(isCurrentlyFallback ? info.fallbackStratumShareWarning : info.stratumShareWarning);
+        this.activePoolTLS = !!(isCurrentlyFallback ? info.fallbackStratumTLS : info.stratumTLS);
         const activeProtocol = isCurrentlyFallback ? info.fallbackStratumProtocol : info.stratumProtocol;
         if (activeProtocol === 'SV2') {
           const channelType = isCurrentlyFallback ? info.fallbackStratumV2ChannelType : info.stratumV2ChannelType;
@@ -1035,11 +1087,25 @@ export class HomeComponent implements OnInit, OnDestroy {
           this.hashrateData.push(info.hashRate || 0);
           this.powerData.push(info.power || 0);
 
+          const currentSharesAccepted = info.sharesAccepted;
+          const currentSharesRejected = info.sharesRejected;
+          const hasNewShare = (this.lastSharesAcceptedCount !== -1 && currentSharesAccepted > this.lastSharesAcceptedCount) ||
+                              (this.lastSharesRejectedCount !== -1 && currentSharesRejected > this.lastSharesRejectedCount);
+
           Array.from(new Set([...y1Labels, ...y2Labels])).forEach(labelKey => {
             if (!this.chartDatasets[labelKey]) {
               this.chartDatasets[labelKey] = [];
             }
-            const val = HomeComponent.getDataForLabel(chartLabelValue(labelKey) as eChartLabel, info);
+            let val: number | null;
+            if (labelKey === 'responseTimeMin') {
+              const minVal = info.responseTimeMin && info.responseTimeMin > 0 ? info.responseTimeMin : info.responseTime;
+              val = (hasNewShare && minVal > 0) ? minVal : null;
+            } else if (labelKey === 'responseTimeMax') {
+              const maxVal = info.responseTimeMax && info.responseTimeMax > 0 ? info.responseTimeMax : info.responseTime;
+              val = (hasNewShare && maxVal > 0) ? maxVal : null;
+            } else {
+              val = HomeComponent.getDataForLabel(labelKey, info);
+            }
             this.chartDatasets[labelKey].push(val);
           });
 
@@ -1100,6 +1166,12 @@ export class HomeComponent implements OnInit, OnDestroy {
         formatted.temp = parseFloat(formatted.temp.toFixed(1));
         formatted.temp2 = parseFloat(formatted.temp2.toFixed(1));
         formatted.responseTime = parseFloat(formatted.responseTime.toFixed(1));
+        if (formatted.responseTimeMin !== undefined) {
+          formatted.responseTimeMin = parseFloat(formatted.responseTimeMin.toFixed(1));
+        }
+        if (formatted.responseTimeMax !== undefined) {
+          formatted.responseTimeMax = parseFloat(formatted.responseTimeMax.toFixed(1));
+        }
 
         return formatted;
       }),
@@ -1218,9 +1290,6 @@ export class HomeComponent implements OnInit, OnDestroy {
   hasCoinbaseVisibility(info: ISystemInfo): boolean {
     return info.blockHeight > 0;
   }
-  trackByIndex(index: number, _item: any) {
-    return index;
-  }
 
   // Pools that pay miners directly from the coinbase can push the user's own output far down
   // the list, so lift it to the top. Outputs beyond the firmware's capacity are not in this
@@ -1276,7 +1345,23 @@ export class HomeComponent implements OnInit, OnDestroy {
     updateMessage(!!info.power_fault, 'POWER_FAULT', 'error', `${info.power_fault} Check your Power Supply.`);
     updateMessage(!!info.hardware_fault, 'HARDWARE_FAULT', 'error', `${info.hardware_fault}`);
     updateMessage(isFrequencyLow(info.frequency, frequencyOptions), 'FREQUENCY_LOW', 'warn', 'Device frequency is set low - See settings');
-    updateMessage(info.isUsingFallbackStratum === 1 && info.useFallbackStratum === 0, 'FALLBACK_STRATUM', 'warn', 'Primary pool unreachable - operating on fallback pool.');
+    if (info.useFallbackStratum === 0) {
+      if (info.isUsingFallbackStratum === 0) {
+        updateMessage(false, 'FALLBACK_STRATUM', 'info', '');
+      } else {
+        const primaryEndpoint = info.stratumPort ? `${info.stratumURL}:${info.stratumPort}` : (info.stratumURL || 'unknown');
+        const reason = info.primaryPoolError || 'Pool unreachable';
+        const text = `Primary pool (${primaryEndpoint}): ${reason} - mining on fallback pool.`;
+        updateMessage(true, 'FALLBACK_STRATUM', 'warn', text);
+      }
+    } else {
+      if (info.isUsingFallbackStratum === 0) {
+        const fallbackEndpoint = info.fallbackStratumPort ? `${info.fallbackStratumURL}:${info.fallbackStratumPort}` : (info.fallbackStratumURL || 'unknown');
+        updateMessage(true, 'FALLBACK_STRATUM', 'warn', `Fallback pool (${fallbackEndpoint}): Pool unreachable - mining on primary pool.`);
+      } else {
+        updateMessage(true, 'FALLBACK_STRATUM', 'info', 'Mining on fallback pool by user preference.');
+      }
+    }
     if (info.coinbaseOutputs && info.coinbaseOutputs.length > 0) {
       let percentage = this.getPayoutPercentage(info);
       const warn = this.activePoolShareWarning;
@@ -1300,28 +1385,75 @@ export class HomeComponent implements OnInit, OnDestroy {
     return percentage < 10 ? percentage.toPrecision(2) : percentage.toFixed(1);
   }
 
-  public getHeatmapLightness(domainHashrate: number, expectedHashrate: number): string {
-    const expected = expectedHashrate || 1;
-    const ratio = Math.max(0, Math.min(2, (domainHashrate / expected) * this.asicsAmount) * this.asicDomainsAmount);
-    const deviation = isNaN(ratio) ? 1 : Math.abs(ratio - 1);  // 0 = perfect, 1 = 100% off
-    const t = 1 - Math.pow(1 - deviation, 1.5); // Exponent controls graduality
+  private updateDomainSparklines(info: ISystemInfo): void {
+    const asics = info.hashrateMonitor?.asics;
+    if (!asics || !asics.length) {
+      return;
+    }
 
-    const direction = ratio > 1 ? 1 : -1;
-    const amount = direction * t * 0.4;
-    const lightness = 0.5 + amount;
+    const asicsCount = asics.length;
+    const domainsCount = asics[0]?.domains?.length ?? 0;
+    if (domainsCount === 0) {
+      return;
+    }
 
-    return lightness.toFixed(3);
-  }
+    const expected = info.expectedHashrate || 0;
+    const nominal = (expected > 0 && asicsCount > 0 && domainsCount > 0)
+      ? expected / (asicsCount * domainsCount)
+      : 1;
+    const power = HashSuffixPipe.getPower(nominal);
+    const suffix = HashSuffixPipe.getSuffix(power);
+    const viewportHeight = nominal * 1.5;
+    this.sparklineViewBox = `0 0 100 ${viewportHeight.toFixed(2)}`;
 
-  private updateDomainUnit(info: ISystemInfo) {
-    const totalDomains = this.asicsAmount * this.asicDomainsAmount;
-    if (totalDomains <= 0) return;
+    const nominalY = nominal;
+    const rows: SparklineAsicRow[] = [];
 
-    const totalHashrate = info.expectedHashrate || info.hashRate || 0;
-    if (totalHashrate <= 0) return;
+    for (let a = 0; a < asicsCount; a++) {
+      const domains = asics[a].domains || [];
+      const errorCount = asics[a].errorCount ?? 0;
+      const cells: SparklineDomainCell[] = [];
 
-    this.domainPower = HashSuffixPipe.getPower(totalHashrate / totalDomains);
-    this.domainUnit = HashSuffixPipe.getSuffix(this.domainPower);
+      for (let d = 0; d < domainsCount; d++) {
+        const history = this.liveDataService?.domainHistory?.[a]?.[d] ?? [domains[d] ?? 0];
+        const currentVal = domains[d] ?? 0;
+
+        let path = '';
+        const pts = history.length === 1 ? [history[0], history[0]] : history;
+        const nPts = pts.length;
+        if (nPts >= 2) {
+          for (let k = 0; k < nPts; k++) {
+            const px = (k / (nPts - 1)) * 100;
+            const py = (pts[k] != null && !isNaN(pts[k])) ? pts[k] : 0;
+            path += (k === 0 ? 'M ' : ' L ') + px.toFixed(1) + ' ' + py.toFixed(2);
+          }
+        }
+
+        const pct = nominal > 0 ? Math.round((currentVal / nominal) * 100) : 0;
+        const valStr = HashSuffixPipe.transform(currentVal, { hideUnit: true, power });
+        const title = asicsCount > 1 ? `ASIC ${a + 1} • Domain ${d + 1}` : `Domain ${d + 1}`;
+        const errorLine = errorCount > 0 ? `\nErrors: ${errorCount}` : '';
+        const tooltip = `${title}\n${valStr} ${suffix} (${pct}% target)${errorLine}`;
+
+        cells.push({
+          id: `${a}-${d}`,
+          domainNumber: d + 1,
+          hashrate: valStr,
+          nominalY,
+          path,
+          tooltip
+        });
+      }
+
+      rows.push({
+        id: `asic-${a}`,
+        label: `${a + 1}`,
+        cells
+      });
+    }
+
+    this.sparklineAsicRows = rows;
+    this.cd.markForCheck();
   }
 
   private updateChartUnitGroups() {
@@ -1351,9 +1483,9 @@ export class HomeComponent implements OnInit, OnDestroy {
       this.lastHasFanRpm = hasFanRpm;
       this.lastHasFan2Rpm = hasFan2Rpm;
 
-      this.chartDataSources = Object.entries(eChartLabel)
-        .filter(([key, ]) => this.isSensorSupported(key))
-        .map(([key, value]) => ({ name: value, value: key }));
+      this.chartDataSources = (Object.keys(CHART_LABELS) as ChartMetric[])
+        .filter(key => this.isSensorSupported(key))
+        .map(key => ({ name: CHART_LABELS[key], value: key }));
 
       this.updateChartUnitGroups();
       this.rebuildChartDatasets();
@@ -1397,8 +1529,11 @@ export class HomeComponent implements OnInit, OnDestroy {
         const y1Label = y1Labels.length > 0 ? y1Labels[0] : 'none';
         const y2Label = y2Labels.length > 0 ? y2Labels[0] : 'none';
 
-        this.chartOptions.scales.y.suggestedMax = this.getSuggestedMaxForLabel(chartLabelValue(y1Label) as eChartLabel, currentInfo);
-        this.chartOptions.scales.y2.suggestedMax = this.getSuggestedMaxForLabel(chartLabelValue(y2Label) as eChartLabel, currentInfo);
+        this.chartOptions.scales.y.min = this.getMinForLabel(y1Label);
+        this.chartOptions.scales.y2.min = this.getMinForLabel(y2Label);
+
+        this.chartOptions.scales.y.suggestedMax = this.getSuggestedMaxForLabel(y1Label, currentInfo);
+        this.chartOptions.scales.y2.suggestedMax = this.getSuggestedMaxForLabel(y2Label, currentInfo);
 
         this.lastBucket = currentBucket;
       }
@@ -1460,6 +1595,11 @@ export class HomeComponent implements OnInit, OnDestroy {
         }
       }
       
+      const rMin = this.chartDatasets['responseTimeMin'];
+      const rMax = this.chartDatasets['responseTimeMax'];
+      const removedMin = rMin?.[low];
+      const removedMax = rMax?.[low];
+
       // Remove point at index 'low'.
       this.dataLabel.splice(low, 1);
       this.hashrateData.splice(low, 1);
@@ -1467,6 +1607,20 @@ export class HomeComponent implements OnInit, OnDestroy {
       Object.keys(this.chartDatasets).forEach(k => {
         this.chartDatasets[k].splice(low, 1);
       });
+
+      // Merge into successor (which shifted into index 'low')
+      if (rMin && removedMin != null) {
+        const currentMin = rMin[low];
+        if (currentMin == null || removedMin < currentMin) {
+          rMin[low] = removedMin;
+        }
+      }
+      if (rMax && removedMax != null) {
+        const currentMax = rMax[low];
+        if (currentMax == null || removedMax > currentMax) {
+          rMax[low] = removedMax;
+        }
+      }
     }
 
     if (this.chartData && document.visibilityState !== 'hidden') {
@@ -1490,88 +1644,108 @@ export class HomeComponent implements OnInit, OnDestroy {
     }
   }
 
-  public getSuggestedMaxForLabel(label: eChartLabel | undefined, info: ISystemInfo): number {
-    switch (label) {
-      case eChartLabel.hashrate:
-      case eChartLabel.hashrate_1m:
-      case eChartLabel.hashrate_10m:
-      case eChartLabel.hashrate_1h:      return info.expectedHashrate;
-      case eChartLabel.errorPercentage:  return 1;
-      case eChartLabel.asicTemp:
-      case eChartLabel.asicTemp2:        return this.maxTemp;
-      case eChartLabel.vrTemp:           return this.maxTemp + 25;
-      case eChartLabel.asicVoltage:      return info.coreVoltage;
-      case eChartLabel.voltage:          return info.nominalVoltage + .5;
-      case eChartLabel.power:            return this.maxPower;
-      case eChartLabel.current:          return this.maxPower / info.coreVoltage;
-      case eChartLabel.fanSpeed:         return 100;
-      case eChartLabel.fanRpm:           return 7000;
-      case eChartLabel.fan2Rpm:          return 7000;
-      case eChartLabel.responseTime:     return 50;
-      default:                           return 0;
+  public getMinForLabel(label: string | undefined): number | undefined {
+    if (!label) return undefined;
+    const metric = CHART_LABEL_TO_METRIC[label] || (label as ChartMetric);
+    switch (metric) {
+      case 'responseTimeMin':
+      case 'responseTimeMax':  return 0;
+      default:                 return undefined;
     }
   }
 
-  static getDataForLabel(label: eChartLabel | undefined, info: ISystemInfo): number {
-    switch (label) {
-      case eChartLabel.hashrate:           return info.hashRate;
-      case eChartLabel.hashrate_1m:        return info.hashRate_1m;
-      case eChartLabel.hashrate_10m:       return info.hashRate_10m;
-      case eChartLabel.hashrate_1h:        return info.hashRate_1h;
-      case eChartLabel.errorPercentage:    return info.errorPercentage;
-      case eChartLabel.asicTemp:           return info.temp;
-      case eChartLabel.asicTemp2:          return info.temp2;
-      case eChartLabel.vrTemp:             return info.vrTemp;
-      case eChartLabel.asicVoltage:        return info.coreVoltageActual;
-      case eChartLabel.voltage:            return info.voltage;
-      case eChartLabel.power:              return info.power;
-      case eChartLabel.current:            return info.current;
-      case eChartLabel.fanSpeed:           return info.fanspeed;
-      case eChartLabel.fanRpm:             return info.fanrpm;
-      case eChartLabel.fan2Rpm:            return info.fan2rpm;
-      case eChartLabel.wifiRssi:           return info.wifiRSSI;
-      case eChartLabel.freeHeap:           return info.freeHeap;
-      case eChartLabel.responseTime:       return info.responseTime;
-      default:                             return 0.0;
+  public getSuggestedMaxForLabel(label: string | undefined, info: ISystemInfo): number {
+    if (!label) return 0;
+    const metric = CHART_LABEL_TO_METRIC[label] || (label as ChartMetric);
+    switch (metric) {
+      case 'hashrate':
+      case 'hashrate_1m':
+      case 'hashrate_10m':
+      case 'hashrate_1h':      return info.expectedHashrate;
+      case 'errorPercentage':  return 1;
+      case 'asicTemp':
+      case 'asicTemp2':        return this.maxTemp;
+      case 'vrTemp':           return this.maxTemp + 25;
+      case 'asicVoltage':      return info.coreVoltage;
+      case 'voltage':          return info.nominalVoltage + .5;
+      case 'power':            return this.maxPower;
+      case 'current':          return this.maxPower / info.coreVoltage;
+      case 'fanSpeed':         return 100;
+      case 'fanRpm':
+      case 'fan2Rpm':          return 7000;
+      case 'responseTimeMin':
+      case 'responseTimeMax':  return 50;
+      default:                 return 0;
     }
   }
 
-  static getSettingsForLabel(label: eChartLabel): {suffix: string; precision: number} {
-    switch (label) {
-      case eChartLabel.hashrate:
-      case eChartLabel.hashrate_1m:
-      case eChartLabel.hashrate_10m:
-      case eChartLabel.hashrate_1h:      return {suffix: ' H/s', precision: 0};
-      case eChartLabel.errorPercentage:  return {suffix: ' %', precision: 2};
-      case eChartLabel.asicTemp:
-      case eChartLabel.asicTemp2:
-      case eChartLabel.vrTemp:           return {suffix: ' °C', precision: 1};
-      case eChartLabel.asicVoltage:
-      case eChartLabel.voltage:          return {suffix: ' V', precision: 1};
-      case eChartLabel.power:            return {suffix: ' W', precision: 1};
-      case eChartLabel.current:          return {suffix: ' A', precision: 1};
-      case eChartLabel.fanSpeed:         return {suffix: ' %', precision: 1};
-      case eChartLabel.fanRpm:
-      case eChartLabel.fan2Rpm:          return {suffix: ' rpm', precision: 0};
-      case eChartLabel.wifiRssi:         return {suffix: ' dBm', precision: 0};
-      case eChartLabel.freeHeap:         return {suffix: ' B', precision: 0};
-      case eChartLabel.responseTime:     return {suffix: ' ms', precision: 1};
-      default:                           return {suffix: '', precision: 0};
+  static getDataForLabel(label: string | undefined, info: ISystemInfo): number {
+    if (!label) return 0.0;
+    const metric = CHART_LABEL_TO_METRIC[label] || (label as ChartMetric);
+    switch (metric) {
+      case 'hashrate':           return info.hashRate;
+      case 'hashrate_1m':        return info.hashRate_1m;
+      case 'hashrate_10m':       return info.hashRate_10m;
+      case 'hashrate_1h':        return info.hashRate_1h;
+      case 'errorPercentage':    return info.errorPercentage;
+      case 'asicTemp':           return info.temp;
+      case 'asicTemp2':          return info.temp2;
+      case 'vrTemp':             return info.vrTemp;
+      case 'asicVoltage':        return info.coreVoltageActual;
+      case 'voltage':            return info.voltage;
+      case 'power':              return info.power;
+      case 'current':            return info.current;
+      case 'fanSpeed':           return info.fanspeed;
+      case 'fanRpm':             return info.fanrpm;
+      case 'fan2Rpm':            return info.fan2rpm;
+      case 'wifiRssi':           return info.wifiRSSI;
+      case 'freeHeap':           return info.freeHeap;
+      case 'responseTimeMin':    return info.responseTimeMin ?? info.responseTime;
+      case 'responseTimeMax':    return info.responseTimeMax ?? info.responseTime;
+      default:                   return 0.0;
     }
   }
 
-  static cbFormatValue(value: number, datasetLabel: eChartLabel, args?: any): string {
+  static getSettingsForLabel(label: string): {suffix: string; precision: number} {
+    const metric = CHART_LABEL_TO_METRIC[label] || (label as ChartMetric);
+    switch (metric) {
+      case 'hashrate':
+      case 'hashrate_1m':
+      case 'hashrate_10m':
+      case 'hashrate_1h':      return {suffix: ' H/s', precision: 0};
+      case 'errorPercentage':  return {suffix: ' %', precision: 2};
+      case 'asicTemp':
+      case 'asicTemp2':        return {suffix: ' °C', precision: 1};
+      case 'vrTemp':           return {suffix: ' °C', precision: 1};
+      case 'asicVoltage':      return {suffix: ' V', precision: 1};
+      case 'voltage':          return {suffix: ' V', precision: 1};
+      case 'power':            return {suffix: ' W', precision: 1};
+      case 'current':          return {suffix: ' A', precision: 1};
+      case 'fanSpeed':         return {suffix: ' %', precision: 1};
+      case 'fanRpm':
+      case 'fan2Rpm':          return {suffix: ' rpm', precision: 0};
+      case 'wifiRssi':         return {suffix: ' dBm', precision: 0};
+      case 'freeHeap':         return {suffix: ' B', precision: 0};
+      case 'responseTimeMin':
+      case 'responseTimeMax':  return {suffix: ' ms', precision: 1};
+      default:                 return {suffix: '', precision: 0};
+
+    }
+  }
+
+  static cbFormatValue(value: number, datasetLabel: string, args?: any): string {
     if (value === undefined || value === null) return '';
-    switch (datasetLabel) {
-      case eChartLabel.hashrate:
-      case eChartLabel.hashrate_1m:
-      case eChartLabel.hashrate_10m:
-      case eChartLabel.hashrate_1h:
+    const metric = CHART_LABEL_TO_METRIC[datasetLabel] || (datasetLabel as ChartMetric);
+    switch (metric) {
+      case 'hashrate':
+      case 'hashrate_1m':
+      case 'hashrate_10m':
+      case 'hashrate_1h':
         return HashSuffixPipe.transform(value, args);
-      case eChartLabel.freeHeap:
+      case 'freeHeap':
         return ByteSuffixPipe.transform(value, args);
       default:
-        const settings = HomeComponent.getSettingsForLabel(datasetLabel);
+        const settings = HomeComponent.getSettingsForLabel(metric);
         return value.toLocaleString(undefined, { useGrouping: false, maximumFractionDigits: args?.tickmark ? undefined : settings.precision }) + settings.suffix;
     }
   }
