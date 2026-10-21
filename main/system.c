@@ -201,8 +201,10 @@ void SYSTEM_init_system(GlobalState * GLOBAL_STATE)
     SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
 
     module->screen_page = 0;
+    module->shares_submitted = 0;
     module->shares_accepted = 0;
     module->shares_rejected = 0;
+    module->shares_pending = 0;
     module->best_nonce_diff = nvs_config_get_u64(NVS_CONFIG_BEST_DIFF);
     module->difficulty = 0.0;
     module->last_difficulty = 0.0;
@@ -428,11 +430,29 @@ static void clean_jobs_queue(GlobalState * GLOBAL_STATE)
     hashrate_monitor_reset_measurements(GLOBAL_STATE);
 }
 
+static inline void update_pending_shares(SystemModule *module)
+{
+    uint64_t resolved = module->shares_accepted + module->shares_rejected;
+    uint64_t pending = (module->shares_submitted > resolved) ? (module->shares_submitted - resolved) : 0;
+    module->shares_pending = (uint16_t)(pending > UINT16_MAX ? UINT16_MAX : pending);
+}
+
+void SYSTEM_notify_submitted_share(GlobalState * GLOBAL_STATE)
+{
+    if (!GLOBAL_STATE) return;
+
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    module->shares_submitted++;
+    update_pending_shares(module);
+}
+
 void SYSTEM_notify_accepted_share(GlobalState * GLOBAL_STATE)
 {
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    if (!GLOBAL_STATE) return;
 
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
     module->shares_accepted++;
+    update_pending_shares(module);
 }
 
 static int compare_rejected_reason_stats(const void *a, const void *b) {
@@ -443,9 +463,11 @@ static int compare_rejected_reason_stats(const void *a, const void *b) {
 
 void SYSTEM_notify_rejected_share(GlobalState * GLOBAL_STATE, char * error_msg)
 {
-    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
+    if (!GLOBAL_STATE) return;
 
+    SystemModule * module = &GLOBAL_STATE->SYSTEM_MODULE;
     module->shares_rejected++;
+    update_pending_shares(module);
 
     for (int i = 0; i < module->rejected_reason_stats_count; i++) {
         if (strncmp(module->rejected_reason_stats[i].message, error_msg, sizeof(module->rejected_reason_stats[i].message) - 1) == 0) {
@@ -510,6 +532,7 @@ void SYSTEM_reset_pool_session(GlobalState * GLOBAL_STATE)
         module->rejected_reason_stats[i].message[0] = '\0';
     }
     module->rejected_reason_stats_count = 0;
+    module->shares_submitted = 0;
     module->shares_accepted = 0;
     module->shares_rejected = 0;
     module->shares_pending = 0;
