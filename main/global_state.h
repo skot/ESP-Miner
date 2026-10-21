@@ -66,6 +66,7 @@ typedef struct SystemModule
     float hashrate_1h;
     float error_percentage;
     int64_t start_time_us;
+    uint64_t shares_submitted;
     uint64_t shares_accepted;
     uint64_t shares_rejected;
     uint16_t shares_pending;
@@ -93,11 +94,17 @@ typedef struct SystemModule
     bool use_fallback_stratum;
     bool is_using_fallback;
     float response_time;
+    float response_time_min;
+    float response_time_max;
+    float last_response_time_min;
+    float last_response_time_max;
     uint16_t response_share_batch;
     float process_time;
     float cpu_usage;
     double pool_difficulty;
     char pool_connection_info[64];
+    char primary_pool_error[64];
+    char pool_banner[128];
     bool overheat_mode;
     bool mining_paused;
     bool pools_unavailable;

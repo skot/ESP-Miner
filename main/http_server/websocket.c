@@ -1,6 +1,5 @@
 #include <stdint.h>
 #include <unistd.h>
-#include <sys/socket.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
@@ -26,9 +25,6 @@ static int type_counts[WS_TYPE_MAX] = {0};
 static SemaphoreHandle_t clients_mutex = NULL;
 static httpd_handle_t server_handle = NULL;
 static TaskHandle_t s_websocket_log_task_handle = NULL;
-
-const WebSocketEndpointCtx WS_CTX_LOGS = { .type = WS_TYPE_LOGS };
-const WebSocketEndpointCtx WS_CTX_API  = { .type = WS_TYPE_API  };
 
 void websocket_set_log_task_handle(TaskHandle_t task_handle)
 {
@@ -108,34 +104,28 @@ void websocket_remove_client(int fd)
 
 void websocket_send_to_client(int fd, httpd_ws_frame_t *pkt)
 {
-    if (server_handle == NULL || fd == -1 || pkt == NULL || pkt->payload == NULL)
+    if (server_handle == NULL || fd == -1)
         return;
 
-    size_t len = pkt->len;
-    uint8_t header[4];
-    size_t header_len = 0;
+    esp_err_t err = httpd_ws_send_frame_async(server_handle, fd, pkt);
 
-    header[0] = 0x81; // FIN = 1, Opcode = 1 (Text frame)
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG,
+                 "Send failed: fd=%d err=%s (%d) - removing client",
+                 fd,
+                 esp_err_to_name(err),
+                 err);
 
-    if (len < 126) {
-        header[1] = (uint8_t)len;
-        header_len = 2;
-    } else if (len <= 65535) {
-        header[1] = 126;
-        header[2] = (uint8_t)((len >> 8) & 0xFF);
-        header[3] = (uint8_t)(len & 0xFF);
-        header_len = 4;
-    } else {
-        return;
-    }
-
-    ssize_t ret1 = send(fd, header, header_len, MSG_DONTWAIT);
-    ssize_t ret2 = send(fd, pkt->payload, len, MSG_DONTWAIT);
-
-    if (ret1 < 0 || ret2 < 0) {
-        ESP_LOGW(TAG, "Direct send failed: fd=%d - removing client", fd);
         websocket_remove_client(fd);
-        httpd_sess_trigger_close(server_handle, fd);
+
+        esp_err_t close_err = httpd_sess_trigger_close(server_handle, fd);
+        if (close_err != ESP_OK) {
+            ESP_LOGW(TAG,
+                "Failed to trigger HTTP session close for fd=%d: %s (%d)",
+                fd,
+                esp_err_to_name(close_err),
+                close_err);
+        }
     }
 }
 
@@ -203,10 +193,8 @@ esp_err_t websocket_pre_handshake(httpd_req_t *req)
     return ESP_OK;
 }
 
-esp_err_t websocket_post_handshake(httpd_req_t *req)
+static esp_err_t websocket_post_handshake_common(httpd_req_t *req, WebSocketClientType type)
 {
-    const WebSocketEndpointCtx *ws_ctx = (const WebSocketEndpointCtx *)(req ? req->user_ctx : NULL);
-    WebSocketClientType type = ws_ctx ? ws_ctx->type : WS_TYPE_LOGS;
     int fd = httpd_req_to_sockfd(req);
     if (websocket_add_client(fd, type) != ESP_OK) {
         ESP_LOGE(TAG, "Unexpected failure adding client, fd: %d", fd);
@@ -218,6 +206,16 @@ esp_err_t websocket_post_handshake(httpd_req_t *req)
     }
 
     return ESP_OK;
+}
+
+esp_err_t websocket_post_handshake_logs(httpd_req_t *req)
+{
+    return websocket_post_handshake_common(req, WS_TYPE_LOGS);
+}
+
+esp_err_t websocket_post_handshake_api(httpd_req_t *req)
+{
+    return websocket_post_handshake_common(req, WS_TYPE_API);
 }
 
 esp_err_t websocket_handler(httpd_req_t *req)

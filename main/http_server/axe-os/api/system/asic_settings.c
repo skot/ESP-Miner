@@ -8,25 +8,12 @@
 
 static int system_asic_prebuffer_len = 256;
 
-// Function declarations from http_server.c
-extern esp_err_t is_network_allowed(httpd_req_t *req);
-extern esp_err_t set_cors_headers(httpd_req_t *req);
-
 /* Handler for system asic endpoint */
 esp_err_t GET_system_asic(httpd_req_t *req)
 {
     GlobalState *GLOBAL_STATE = (GlobalState *)httpd_get_global_user_ctx(req->handle);
-    if (is_network_allowed(req) != ESP_OK) {
-        return httpd_resp_send_err(req, HTTPD_401_UNAUTHORIZED, "Unauthorized");
-    }
 
     httpd_resp_set_type(req, "application/json");
-
-    // Set CORS headers
-    if (set_cors_headers(req) != ESP_OK) {
-        httpd_resp_send_500(req);
-        return ESP_OK;
-    }
 
     cJSON *root = cJSON_CreateObject();
 
