@@ -2,7 +2,6 @@
 #include "unity.h"
 
 #include "job_pipeline_test_harness.h"
-#include "mining.h"
 #include "stratum_api.h"
 #include "sv2_protocol.h"
 #include "utils.h"
@@ -63,7 +62,7 @@ static void assert_bitmain_job_fields(const asic_job_t *job,
     TEST_ASSERT_EQUAL_INT(type, job->source_type);
     TEST_ASSERT_FLOAT_WITHIN(1e-4, pool_diff, target_to_diff(job->pool_target));
     bm13xx_job_packet_t packet;
-    bm13xx_build_job_packet(job, 0, &packet);
+    bm13xx_encode_job_packet(job, 0, &packet);
     TEST_ASSERT_EQUAL_UINT8(1, packet.num_midstates);
     assert_hex32(
         "000000000000000049070000a804d248b472b528c6e5607d837bdc1335fd44bf",
@@ -74,7 +73,7 @@ static void assert_bitmain_job_fields(const asic_job_t *job,
 static void assert_packet_merkle(const char *expected_hex, const asic_job_t *job)
 {
     bm13xx_job_packet_t packet;
-    bm13xx_build_job_packet(job, 0, &packet);
+    bm13xx_encode_job_packet(job, 0, &packet);
     assert_hex32(expected_hex, packet.merkle_root);
 }
 
@@ -148,7 +147,7 @@ TEST_CASE("SV1 notify produces expected Bitmain job fields",
     TEST_ASSERT_EQUAL_STRING("1f9a56282c", asic_job->job_id);
     TEST_ASSERT_EQUAL_STRING("0000000000000000", asic_job->extranonce2);
     bm1397_job_packet_t packet;
-    bm1397_build_job_packet(asic_job, 0, 4, &packet);
+    bm1397_encode_job_packet(asic_job, 0, 4, &packet);
     TEST_ASSERT_EQUAL_UINT8(4, packet.num_midstates);
     assert_hex32(
         "4d3185f25f7d5de0e3591741cb21cae11574ddd65d490d3d68739f8a52eadf91",
@@ -301,7 +300,7 @@ TEST_CASE("SV2 standard messages produce expected Bitmain job fields",
         asic_job, 0x20008004, JOB_TYPE_SV2_STANDARD, 3, 2048.0,
         "c604a846ea9ef9b4dbd3eb32cfdb61d41fa0247f053dcece32ef0d12cd1be821");
     bm1397_job_packet_t packet;
-    bm1397_build_job_packet(asic_job, 0, 4, &packet);
+    bm1397_encode_job_packet(asic_job, 0, 4, &packet);
     TEST_ASSERT_EQUAL_UINT8(4, packet.num_midstates);
     assert_hex32(
         "d3e7e0f843a5eab9d8738ebae0845dc947140afd1a9e9aba63782cb00fdfee73",
