@@ -2,7 +2,11 @@
 export interface ColorScheme {
   id: string;
   label: string;
-  /** Drives the `dark-mode` class. */
+  /**
+   * Drives the `dark-mode` class, which is what the component styles key off.
+   * It is NOT "does the name sound dark": `light` is a lifted navy with white
+   * text, so it is dark-mode too. `white` is the only light surface here.
+   */
   dark: boolean;
   description: string;
 }
@@ -29,8 +33,10 @@ export const COLOR_SCHEMES: ColorScheme[] = [
   {
     id: 'light',
     label: 'Light',
+    // Lighter than `dark`, but still a dark surface with white text, so it
+    // keeps `dark-mode`. This matches master's `colorScheme !== 'white'` rule.
     dark: true,
-    description: 'Lifted navy',
+    description: 'Lifted navy, still a dark surface',
   },
   {
     id: 'white',
