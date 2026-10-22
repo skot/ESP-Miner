@@ -1,12 +1,17 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { getHttpErrorMessage } from 'src/app/utils/error-handler';
 import { Component, Input, OnInit } from '@angular/core';
-import { FormBuilder, FormGroup, FormArray, Validators, ValidatorFn, ValidationErrors, AbstractControl } from '@angular/forms';
+import { FormBuilder, FormGroup, FormArray, Validators, ValidatorFn, ValidationErrors, AbstractControl, FormsModule, ReactiveFormsModule } from '@angular/forms';
 import { ToastrService } from 'ngx-toastr';
 import { LoadingService } from 'src/app/services/loading.service';
 import { SystemApiService } from 'src/app/services/system.service';
 import { LiveDataService } from 'src/app/services/live-data.service';
 import { first } from 'rxjs';
+import { DropdownComponent } from '../dropdown/dropdown.component';
+import { TooltipDirective } from '../../directives/tooltip.directive';
+import { TooltipTextIconComponent } from '../tooltip-text-icon/tooltip-text-icon.component';
+import { RadioButtonComponent } from '../radio-button/radio-button.component';
+import { CheckboxComponent } from '../checkbox/checkbox.component';
 
 interface ITlsOption {
   value: number;
@@ -29,9 +34,9 @@ interface IPoolDropdownOption {
 }
 
 @Component({
-    selector: 'app-pool',
-    templateUrl: './pool.component.html',
-    standalone: false
+  selector: 'app-pool',
+  templateUrl: './pool.component.html',
+  imports: [FormsModule, ReactiveFormsModule, DropdownComponent, TooltipDirective, TooltipTextIconComponent, RadioButtonComponent, CheckboxComponent]
 })
 export class PoolComponent implements OnInit {
   public form!: FormGroup;
@@ -96,6 +101,7 @@ export class PoolComponent implements OnInit {
             stratumTLS: 0,
             stratumCert: '',
             stratumDecodeCoinbase: true,
+            stratumShareWarning: true,
             stratumV2ChannelType: 'extended',
             stratumV2AuthorityPubkey: '',
             stratumV2RequireAuth: false
@@ -116,6 +122,7 @@ export class PoolComponent implements OnInit {
             stratumTLS: 0,
             stratumCert: '',
             stratumDecodeCoinbase: true,
+            stratumShareWarning: true,
             stratumV2ChannelType: 'extended',
             stratumV2AuthorityPubkey: '',
             stratumV2RequireAuth: false
@@ -149,6 +156,7 @@ export class PoolComponent implements OnInit {
             stratumTLS: [pool.stratumTLS || 0],
             stratumCert: [pool.stratumCert || ''],
             stratumDecodeCoinbase: [pool.stratumDecodeCoinbase == true, [Validators.required]],
+            stratumShareWarning: [pool.stratumShareWarning == true, [Validators.required]],
             stratumV2ChannelType: [pool.stratumV2ChannelType || 'extended'],
             stratumV2AuthorityPubkey: [pool.stratumV2AuthorityPubkey || '', [this.base58Validator()]],
             stratumV2RequireAuth: [pool.stratumV2RequireAuth == true]
@@ -276,6 +284,7 @@ export class PoolComponent implements OnInit {
         stratumTLS: [0],
         stratumCert: [''],
         stratumDecodeCoinbase: [true, [Validators.required]],
+        stratumShareWarning: [true, [Validators.required]],
         stratumV2ChannelType: ['extended'],
         stratumV2AuthorityPubkey: ['', [this.base58Validator()]],
         stratumV2RequireAuth: [false]

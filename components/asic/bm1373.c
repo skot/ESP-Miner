@@ -1,8 +1,8 @@
+#include "bm_job_packet.h"
 #include "bm1373.h"
 
 #include "crc.h"
 #include "global_state.h"
-#include "mining.h"
 #include "serial.h"
 #include "utils.h"
 
@@ -13,11 +13,8 @@
 #include "pll.h"
 
 #include <arpa/inet.h>
-#include <math.h>
 #include <stdbool.h>
 #include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 
 #define BM1372_CHIP_ID 0x1372
@@ -80,20 +77,24 @@
 #define CMD_READ 0x02
 #define CMD_INACTIVE 0x03
 
-static const register_type_t REGISTER_MAP[] = {
-    [0x4C] = REGISTER_ERROR_COUNT,
-    [0x88] = REGISTER_DOMAIN_0_COUNT,
-    [0x89] = REGISTER_DOMAIN_1_COUNT,
-    [0x8A] = REGISTER_DOMAIN_2_COUNT,
-    [0x8B] = REGISTER_DOMAIN_3_COUNT,
-    [0x8C] = REGISTER_TOTAL_COUNT
+static const register_type_t REGISTER_MAP[256] = {
+    [BM13XX_REG_ERROR_COUNT]    = REGISTER_ERROR_COUNT,
+    [BM13XX_REG_DOMAIN_0_COUNT] = REGISTER_DOMAIN_0_COUNT,
+    [BM13XX_REG_DOMAIN_1_COUNT] = REGISTER_DOMAIN_1_COUNT,
+    [BM13XX_REG_DOMAIN_2_COUNT] = REGISTER_DOMAIN_2_COUNT,
+    [BM13XX_REG_DOMAIN_3_COUNT] = REGISTER_DOMAIN_3_COUNT,
+    [BM13XX_REG_DOMAIN_4_COUNT] = REGISTER_DOMAIN_4_COUNT,
+    [BM13XX_REG_DOMAIN_5_COUNT] = REGISTER_DOMAIN_5_COUNT,
+    [BM13XX_REG_DOMAIN_6_COUNT] = REGISTER_DOMAIN_6_COUNT,
+    [BM13XX_REG_DOMAIN_7_COUNT] = REGISTER_DOMAIN_7_COUNT,
+    [BM13XX_REG_TOTAL_COUNT]    = REGISTER_TOTAL_COUNT,
 };
 
 typedef struct __attribute__((__packed__))
 {
     uint32_t nonce;
     uint8_t midstate_num;
-    uint8_t id;
+    uint8_t chip_slot;
     uint16_t version;
 } bm1373_asic_result_job_t;
 
@@ -123,7 +124,7 @@ static task_result result;
 
 static uint8_t chip_command_address_interval;
 static uint8_t chip_response_address_interval;
-static uint8_t chip_nonce_address_interval;
+static uint16_t chip_nonce_address_interval;
 static uint8_t detected_chip_count;
 static uint8_t detected_voltage_domains;
 static bool frequency_write_failed;
@@ -338,12 +339,7 @@ uint8_t BM1373_init(GlobalState * GLOBAL_STATE)
         return 0;
     }
 
-    uint8_t difficulty_mask[6];
-    get_difficulty_mask(GLOBAL_STATE->DEVICE_CONFIG.family.asic.difficulty, difficulty_mask);
-    if (!_send_BM1373(TYPE_CMD | GROUP_ALL | CMD_WRITE, difficulty_mask,
-                      sizeof(difficulty_mask), BM1373_SERIALTX_DEBUG)) {
-        return 0;
-    }
+    // TODO: Verify sending ticket mask later
 
     if (!_write_broadcast(BM1372_REGISTER_IO_DRIVER_STRENGTH,
                           BM1372_IO_DRIVER_STRENGTH_DEFAULT)) {
@@ -448,39 +444,11 @@ int BM1373_set_max_baud(void)
     return BM1372_ASIC_BAUD;
 }
 
-static uint8_t id = 0;
-
-void BM1373_send_work(GlobalState * GLOBAL_STATE, bm_job * next_bm_job)
+void BM1373_send_work(GlobalState * GLOBAL_STATE, const asic_job_t * next_job)
 {
-    BM1373_job job;
-    id = (id + 24) % 128;
-    job.job_id = id;
-    job.num_midstates = 0x01;
-    memcpy(&job.starting_nonce, &next_bm_job->starting_nonce, 4);
-    memcpy(&job.nbits, &next_bm_job->target, 4);
-    memcpy(&job.ntime, &next_bm_job->ntime, 4);
-    memcpy(job.merkle_root, next_bm_job->merkle_root, 32);
-    memcpy(job.prev_block_hash, next_bm_job->prev_block_hash, 32);
-    memcpy(&job.version, &next_bm_job->version, 4);
-
-    // Hold valid_jobs_lock across the free + reassignment so the result task
-    // (which snapshots active_jobs[job_id] under the same lock) can never observe
-    // or copy a slot we are freeing/replacing here. valid_jobs is set inside the
-    // same critical section so validity and the pointer stay consistent.
-    pthread_mutex_lock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
-    if (GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job.job_id] != NULL) {
-        free_bm_job(GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job.job_id]);
-    }
-    GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job.job_id] = next_bm_job;
-    GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs[job.job_id] = 1;
-    pthread_mutex_unlock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
-
-    //debug sent jobs - this can get crazy if the interval is short
-    #if BM1373_DEBUG_JOBS
-    ESP_LOGI(TAG, "Send Job: %02X", job.job_id);
-    #endif
-
-    _send_BM1373((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(BM1373_job), BM1373_DEBUG_WORK);
+    bm13xx_job_packet_t job;
+    bm13xx_build_job_packet(&GLOBAL_STATE->job_store, next_job, &job);
+    _send_BM1373((TYPE_JOB | GROUP_SINGLE | CMD_WRITE), (uint8_t *)&job, sizeof(job), BM1373_DEBUG_WORK);
 }
 
 task_result * BM1373_process_work(GlobalState * GLOBAL_STATE)
@@ -505,36 +473,15 @@ task_result * BM1373_process_work(GlobalState * GLOBAL_STATE)
         return &result;
     }
 
-    // uint8_t job_id = asic_result.job_id;
-    // uint8_t rx_job_id = ((int8_t)job_id & 0xf0) >> 1;
-    // ESP_LOGI(TAG, "Job ID: %02X, RX: %02X", job_id, rx_job_id);
-
-    // uint8_t job_id = asic_result.job_id & 0xf8;
-    // ESP_LOGI(TAG, "Job ID: %02X, Core: %01X", job_id, asic_result.job_id & 0x07);
-
-    uint8_t job_id = (asic_result.job.id & 0xf0) >> 1;
-    uint32_t nonce_h = ntohl(asic_result.job.nonce);
-    uint8_t asic_nr = (uint8_t)((nonce_h >> 17) & 0xff) / chip_nonce_address_interval;
-    uint8_t core_id = (uint8_t)((nonce_h >> 25) & 0x7f);
-    uint8_t small_core_id = asic_result.job.id & 0x0f;
-    uint32_t version_bits = (ntohs(asic_result.job.version) << 13);
-
-    // Read active_jobs[job_id] under the lock
-    pthread_mutex_lock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
-    if (GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs[job_id] == 0 || GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id] == NULL) {
-        pthread_mutex_unlock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
-        ESP_LOGW(TAG, "Invalid job nonce found, 0x%02X", job_id);
+    if (!bm13xx_decode_job_result(&GLOBAL_STATE->job_store,
+                                  BM1373_SMALL_CORE_BITS,
+                                  chip_nonce_address_interval,
+                                  asic_result.job.nonce,
+                                  asic_result.job.chip_slot,
+                                  asic_result.job.version,
+                                  &result)) {
         return NULL;
     }
-    uint32_t rolled_version = GLOBAL_STATE->ASIC_TASK_MODULE.active_jobs[job_id]->version | version_bits;
-    pthread_mutex_unlock(&GLOBAL_STATE->ASIC_TASK_MODULE.valid_jobs_lock);
-
-    result.job_id = job_id;
-    result.nonce = asic_result.job.nonce;
-    result.rolled_version = rolled_version;
-    result.asic_nr = asic_nr;
-    result.core_id = core_id;
-    result.small_core_id = small_core_id;
 
     return &result;
 }
@@ -549,4 +496,12 @@ void BM1373_read_registers(void)
             vTaskDelay(pdMS_TO_TICKS(1));
         }
     }
+}
+
+void BM1373_set_difficulty(uint8_t difficulty_power)
+{
+    uint8_t difficulty_mask[6];
+    get_difficulty_mask(difficulty_power, difficulty_mask);
+    _send_BM1373(TYPE_CMD | GROUP_ALL | CMD_WRITE, difficulty_mask,
+                 sizeof(difficulty_mask), BM1373_SERIALTX_DEBUG);
 }

@@ -8,14 +8,23 @@ SRCS
     "serial.c"
     "crc.c"
     "asic_common.c"
+    "asic_job_slot.c"
     "asic.c"
+    "asic_submit.c"
+    "bm_hashrate.c"
+    "bm_job_packet.c"
+    "bm_job_midstate.c"
     "frequency_transition_bmXX.c"
     "pll.c"
 
 INCLUDE_DIRS 
     "include"
 
+PRIV_INCLUDE_DIRS
+    "private_include"
+
 REQUIRES 
+    "mining_job"
     "freertos"
     "esp_driver_uart"
     "stratum"

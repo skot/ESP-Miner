@@ -7,12 +7,7 @@
 #include <esp_transport.h>
 #include "miner_job.h"
 
-#define MAX_MERKLE_BRANCHES 32
-#define HASH_SIZE 32
-#define COINBASE_SIZE 100
-#define COINBASE2_SIZE 128
 #define MAX_REQUEST_IDS 1024
-#define MAX_EXTRANONCE_2_LEN 32
 #define MAX_POOL_MESSAGE_LEN 256
 #define STRATUM_V1_MAX_JSON_LINE_SIZE 16384
 
@@ -78,7 +73,7 @@ typedef struct StratumApiV1Message
 typedef struct sv1_conn {
     int send_uid;
     char user[256];
-    double pool_difficulty;
+    uint8_t pool_target[32];
     uint32_t version_mask;
     uint8_t extranonce1[32];
     uint8_t extranonce1_len;
@@ -87,11 +82,6 @@ typedef struct sv1_conn {
     int active_job_ids_count;
 } sv1_conn_t;
 
-typedef struct RequestTiming
-{
-    int64_t timestamp_us;
-    bool tracking;
-} RequestTiming;
 
 esp_transport_handle_t STRATUM_V1_transport_init(tls_mode tls, const char * cert);
 
@@ -120,7 +110,5 @@ int STRATUM_V1_extranonce_subscribe(esp_transport_handle_t transport, int send_u
 int STRATUM_V1_submit_share(esp_transport_handle_t transport, int send_uid, const char *username, const char *job_id,
                             const char *extranonce_2, const uint32_t ntime, const uint32_t nonce,
                             const uint32_t version_bits, uint64_t *out_sent_time_us);
-
-float STRATUM_V1_get_response_time_ms(int request_id, int64_t receive_time_us);
 
 #endif // STRATUM_API_H

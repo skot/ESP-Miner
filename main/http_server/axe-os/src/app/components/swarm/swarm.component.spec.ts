@@ -25,11 +25,6 @@ describe('SwarmComponent', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      declarations: [
-        SwarmComponent,
-        ModalComponent,
-        TooltipTextIconComponent
-      ],
       imports: [
         ReactiveFormsModule,
         FormsModule,
@@ -40,14 +35,17 @@ describe('SwarmComponent', () => {
         DiffSuffixPipe,
         DateAgoPipe,
         AddressPipe,
-        SatsPipe
+        SatsPipe,
+        SwarmComponent,
+        ModalComponent,
+        TooltipTextIconComponent
       ],
       providers: [
         provideHttpClient(),
         provideToastr()
       ]
     });
-    
+
     httpClient = TestBed.inject(HttpClient);
     spyOn(httpClient, 'get').and.callFake(((url: string) => {
       if (url.includes('/api/system/info')) {
@@ -63,6 +61,18 @@ describe('SwarmComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('uses each peer\'s own presets for low and normal frequencies', () => {
+    expect(component.getDeviceNotification({ frequency: 150, frequencyOptions: [100, 200] })).toBeUndefined();
+    expect(component.getDeviceNotification({ frequency: 150, frequencyOptions: [200, 300] })?.msg).toBe('Frequency Low');
+  });
+
+  it('does not guess a minimum for a legacy peer or hide higher-priority faults', () => {
+    expect(component.getDeviceNotification({ frequency: 100 })).toBeUndefined();
+    expect(component.getDeviceNotification({ frequency: 0 })?.msg).toBe('Frequency Low');
+    expect(component.getDeviceNotification({ frequency: 100, frequencyOptions: [200], overheat_mode: 1 })?.msg).toBe('Overheated');
+    expect(component.getDeviceNotification({ frequency: 100, frequencyOptions: [200], miningPaused: true })?.msg).toBe('Paused');
   });
 
   it('should render swarm list details and custom components when devices are present', () => {
@@ -90,8 +100,8 @@ describe('SwarmComponent', () => {
     fixture.detectChanges();
 
     const element = fixture.nativeElement;
-    
-    // Verify that components inside *ngIf are rendered
+
+    // Verify that components inside the @if block are rendered
     expect(element.querySelector('app-slider')).toBeTruthy();
     expect(element.querySelector('app-modal')).toBeTruthy();
   });

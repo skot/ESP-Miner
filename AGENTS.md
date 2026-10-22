@@ -62,18 +62,9 @@ npm run start
 ### Internal C Components (Unity & QEMU)
 Backend firmware unit tests use the Unity test framework and run under QEMU emulation (`esp32s3` machine target) in CI.
 
-**Run locally using the helper script:**
+**Execution:**
 ```bash
 bash tools/run_qemu_tests.sh
-```
-
-**Manual Execution / Under the Hood:**
-```bash
-cd test-ci
-idf.py build
-cd build
-esptool --chip esp32s3 merge-bin --pad-to-size 16MB -o flash_image.bin @flash_args
-qemu-system-xtensa -machine esp32s3 -monitor none -nographic -no-reboot -watchdog-action shutdown -drive file=flash_image.bin,if=mtd,format=raw -m 4 -serial stdio
 ```
 *Note: Test cases tagged with `[not-on-qemu]` (such as hardware-specific ASIC nonce tests) are automatically skipped in QEMU emulation.*
 
@@ -107,3 +98,6 @@ We use GitHub Actions for automated testing and releases.
 - **PSRAM**: Bitaxe heavily relies on PSRAM. Always check `esp_psram_is_initialized()` before allocating large buffers in the backend.
 - **Mock Data Parity**: When updating `openapi.yaml` and regenerating the API, you **must** update the mock data in `main/http_server/axe-os/src/app/services/system.service.ts`. The TypeScript compiler will fail if properties are missing from the `of()` calls used for development.
 - **API Type Safety**: The `SystemInfo` API uses a numeric 0/1 pattern for many boolean-like status fields (e.g., `overclockEnabled`, `overheat_mode`). In the backend, use `cJSON_AddNumberToObject(root, "key", val ? 1 : 0)` to maintain parity with the `integer` types in OpenAPI and support strict equality checks (`=== 1`) in the Angular frontend.
+- **Reduce Verbosity**: Use one paragraph to describe changes. No headings, no "What this changes", no multi-line comments.
+- **Reuse Existing Code**: Avoid refactoring and making large changes on your own. If a large change or refactor is required, refuse to make any further changes and alert your operator.
+- **Minimize Scope**: If it's a contained feature, go for a PR and isolate the changes to that feature, minimizing the scope of the PR. If you have a restructuring of refactoring in mind, open an issue first to align it with ongoing changes.

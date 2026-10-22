@@ -7,6 +7,7 @@
 #include "system.h"
 #include "asic_common.h"
 #include "asic.h"
+#include "bm_hashrate.h"
 #include "utils.h"
 
 #define EPSILON 0.0001f
@@ -80,7 +81,7 @@ void update_hash_counter(measurement_t * measurement, uint32_t value, uint64_t t
             return;
         }
         uint32_t counter = value - measurement->value; // Compute counter difference, handling uint32_t wraparound
-        measurement->hashrate = hashCounterToGhs(duration_us, counter);
+        measurement->hashrate = bm_hash_counter_to_ghs(duration_us, counter);
     }
 
     measurement->value = value;
@@ -225,17 +226,19 @@ void hashrate_monitor_register_read(void *pvParameters, register_type_t register
             update_hash_counter(&HASHRATE_MONITOR_MODULE->total_measurement[asic_nr], value, timestamp_us);
             break;
         case REGISTER_DOMAIN_0_COUNT:
-            update_hash_counter(&HASHRATE_MONITOR_MODULE->domain_measurements[asic_nr][0], value, timestamp_us);
-            break;
         case REGISTER_DOMAIN_1_COUNT:
-            update_hash_counter(&HASHRATE_MONITOR_MODULE->domain_measurements[asic_nr][1], value, timestamp_us);
-            break;
         case REGISTER_DOMAIN_2_COUNT:
-            update_hash_counter(&HASHRATE_MONITOR_MODULE->domain_measurements[asic_nr][2], value, timestamp_us);
-            break;
         case REGISTER_DOMAIN_3_COUNT:
-            update_hash_counter(&HASHRATE_MONITOR_MODULE->domain_measurements[asic_nr][3], value, timestamp_us);
+        case REGISTER_DOMAIN_4_COUNT:
+        case REGISTER_DOMAIN_5_COUNT:
+        case REGISTER_DOMAIN_6_COUNT:
+        case REGISTER_DOMAIN_7_COUNT: {
+            uint8_t domain_idx = register_type - REGISTER_DOMAIN_0_COUNT;
+            if (domain_idx < GLOBAL_STATE->DEVICE_CONFIG.family.asic.hash_domains) {
+                update_hash_counter(&HASHRATE_MONITOR_MODULE->domain_measurements[asic_nr][domain_idx], value, timestamp_us);
+            }
             break;
+        }
         case REGISTER_ERROR_COUNT:
             update_hash_counter(&HASHRATE_MONITOR_MODULE->error_measurement[asic_nr], value, timestamp_us);
             break;

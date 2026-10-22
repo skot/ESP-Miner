@@ -1,4 +1,4 @@
-#include <string.h>
+#include "asic_internal.h"
 
 #include <esp_log.h>
 
@@ -9,8 +9,9 @@
 #include "bm1373.h"
 
 #include "asic.h"
+#include "asic_common.h"
+#include "bm_job_packet.h"
 #include "global_state.h"
-#include "mining.h"
 #include "device_config.h"
 #include "frequency_transition_bmXX.h"
 
@@ -71,7 +72,7 @@ int ASIC_set_max_baud(GlobalState * GLOBAL_STATE)
     return 0;
 }
 
-void ASIC_send_work(GlobalState * GLOBAL_STATE, bm_job * next_job)
+void ASIC_send_work(GlobalState * GLOBAL_STATE, const asic_job_t * next_job)
 {
     switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
         case BM1397:
@@ -234,12 +235,71 @@ esp_err_t ASIC_get_domain_measurement(GlobalState * GLOBAL_STATE, uint8_t asic_n
     measurement_t register_measurement = monitor->domain_measurements[asic_nr][domain_nr];
     pthread_mutex_unlock(&monitor->lock);
 
-    float scale = GLOBAL_STATE->DEVICE_CONFIG.family.asic.domain_hashrate_scale;
-    if (scale <= 0.0f) {
-        scale = 1.0f;
+    measurement->time_us = register_measurement.time_us;
+    measurement->hashrate = register_measurement.hashrate;
+    return ESP_OK;
+}
+
+void ASIC_set_difficulty(GlobalState * GLOBAL_STATE, uint8_t difficulty_power)
+{
+    if (!GLOBAL_STATE || !GLOBAL_STATE->ASIC_initalized || difficulty_power == 0) {
+        return;
     }
 
-    measurement->time_us = register_measurement.time_us;
-    measurement->hashrate = register_measurement.hashrate * scale;
-    return ESP_OK;
+    switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
+        case BM1397:
+            BM1397_set_difficulty(difficulty_power);
+            return;
+        case BM1366:
+            BM1366_set_difficulty(difficulty_power);
+            return;
+        case BM1368:
+            BM1368_set_difficulty(difficulty_power);
+            return;
+        case BM1370:
+            BM1370_set_difficulty(difficulty_power);
+            return;
+        case BM1373:
+            BM1373_set_difficulty(difficulty_power);
+            return;
+    }
+    ESP_LOGE(TAG, "Unknown ASIC id %d — cannot set difficulty", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
+}
+
+void ASIC_clear_work(GlobalState * GLOBAL_STATE)
+{
+    if (!GLOBAL_STATE) {
+        return;
+    }
+
+    switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
+        case BM1397:
+        case BM1366:
+        case BM1368:
+        case BM1370:
+        case BM1373:
+            bm13xx_clear_work(&GLOBAL_STATE->job_store);
+            return;
+    }
+    ESP_LOGE(TAG, "Unknown ASIC id %d — cannot clear work", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
+}
+
+void ASIC_init_job_slots(GlobalState * GLOBAL_STATE)
+{
+    if (!GLOBAL_STATE) {
+        return;
+    }
+
+    switch (GLOBAL_STATE->DEVICE_CONFIG.family.asic.id) {
+        case BM1397:
+            bm13xx_init_job_slots(&GLOBAL_STATE->job_store, BM1397_JOB_SLOT_COUNT);
+            return;
+        case BM1366:
+        case BM1368:
+        case BM1370:
+        case BM1373:
+            bm13xx_init_job_slots(&GLOBAL_STATE->job_store, BM13XX_JOB_SLOT_COUNT);
+            return;
+    }
+    ESP_LOGE(TAG, "Unknown ASIC id %d — cannot init job slots", GLOBAL_STATE->DEVICE_CONFIG.family.asic.id);
 }
