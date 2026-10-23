@@ -149,6 +149,7 @@ typedef struct GlobalState
 {
     TaskHandle_t create_jobs_task_handle;
     volatile uint8_t active_job_slot_idx;
+    bool job_invalidation_pending;
 
     SystemModule SYSTEM_MODULE;
     DeviceConfig DEVICE_CONFIG;

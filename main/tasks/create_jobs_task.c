@@ -1,8 +1,10 @@
 #include <sys/time.h>
 #include <limits.h>
 #include <inttypes.h>
+#include <pthread.h>
 
 #include "global_state.h"
+#include "create_jobs_task.h"
 #include "esp_log.h"
 #include "mining.h"
 #include "miner_job.h"
@@ -15,6 +17,31 @@
 #include "utils.h"
 
 static const char *TAG = "create_jobs_task";
+static pthread_mutex_t notification_lock = PTHREAD_MUTEX_INITIALIZER;
+
+static void notify_job_task(GlobalState *state, uint32_t slot, bool invalidate)
+{
+    pthread_mutex_lock(&notification_lock);
+    if (invalidate) state->job_invalidation_pending = true;
+    if (state->create_jobs_task_handle) {
+        xTaskNotify(state->create_jobs_task_handle, slot, eSetValueWithOverwrite);
+    }
+    pthread_mutex_unlock(&notification_lock);
+}
+
+void create_jobs_notify(GlobalState *state, uint32_t slot)
+{
+    // Retire old work before notifications can coalesce into a non-clean job.
+    bool clean = miner_job_get_slot(slot)->clean_jobs;
+    if (clean) ASIC_clear_work(state);
+    notify_job_task(state, slot, clean);
+}
+
+void create_jobs_reset(GlobalState *state)
+{
+    ASIC_clear_work(state);
+    notify_job_task(state, CREATE_JOBS_NOTIFY_RESET, true);
+}
 
 static void generate_work_from_miner_job(GlobalState *GLOBAL_STATE, const miner_job_t *job, uint64_t extranonce_2, uint32_t current_version)
 {
@@ -60,7 +87,31 @@ void create_jobs_task(void *pvParameters)
         BaseType_t notified = xTaskNotifyWait(0, ULONG_MAX, &slot_notify, wait_ticks);
         timeout_ms -= (esp_timer_get_time() - start_time) / 1000;
 
+        pthread_mutex_lock(&notification_lock);
+        bool invalidated = GLOBAL_STATE->job_invalidation_pending;
+        GLOBAL_STATE->job_invalidation_pending = false;
+        if (invalidated) {
+            uint32_t latest;
+            if (xTaskNotifyWait(0, ULONG_MAX, &latest, 0) == pdTRUE) {
+                slot_notify = latest;
+                notified = pdTRUE;
+            }
+        }
+        pthread_mutex_unlock(&notification_lock);
+        if (invalidated) {
+            current_work = NULL;
+            current_work_sent = false;
+            // Retire a send that crossed the receipt-side invalidation.
+            ASIC_clear_work(GLOBAL_STATE);
+        }
         if (notified == pdTRUE) {
+            if (slot_notify == CREATE_JOBS_NOTIFY_RESET) {
+                current_work = NULL;
+                current_work_sent = false;
+                if (!invalidated) ASIC_clear_work(GLOBAL_STATE);
+                timeout_ms = ASIC_get_asic_job_frequency_ms(GLOBAL_STATE);
+                continue;
+            }
             miner_job_t *new_work = miner_job_get_slot((size_t)slot_notify);
             ESP_LOGI(TAG, "New Work Activated %s (type %d)", new_work->job_id, new_work->type);
             current_work = new_work;
@@ -80,7 +131,7 @@ void create_jobs_task(void *pvParameters)
                 difficulty_controller_update(GLOBAL_STATE);
             }
 
-            if (!current_work->clean_jobs) {
+            if (!current_work->clean_jobs && !invalidated) {
                 // Staged job for next cycle, let current ASIC cycle finish
                 continue;
             }
