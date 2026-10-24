@@ -803,10 +803,8 @@ esp_err_t stratum_v2_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
                     for (uint32_t i = 0; i < accepted_count; i++) {
                         SYSTEM_notify_accepted_share(GLOBAL_STATE);
                     }
-                    uint32_t resolved = last_sequence_number + 1;
-                    if (resolved > conn->resolved_shares) {
-                        conn->resolved_shares = resolved;
-                    }
+                    // Success counts are per batch; sequence IDs are not counts.
+                    conn->resolved_shares += accepted_count;
                 }
                 break;
             }
@@ -824,9 +822,9 @@ esp_err_t stratum_v2_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
                     }
                     ESP_LOGW(TAG, "Share rejected: %s", error_code);
                     SYSTEM_notify_rejected_share(GLOBAL_STATE, error_code);
-                    uint32_t resolved = seq_num + 1;
-                    if (resolved > conn->resolved_shares) {
-                        conn->resolved_shares = resolved;
+                    // An error resolves only its own share, not earlier batched successes.
+                    if (conn->resolved_shares < conn->sequence_number) {
+                        conn->resolved_shares++;
                     }
                 }
                 break;
