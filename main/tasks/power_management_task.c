@@ -147,8 +147,7 @@ void POWER_MANAGEMENT_task(void * pvParameters)
             mining_stop(GLOBAL_STATE);
             is_paused = true;
         } else if (!wants_stop && is_paused) {
-            mining_start(GLOBAL_STATE);
-            is_paused = false;
+            is_paused = mining_start(GLOBAL_STATE) == 0;
         }
 
         // If we've paused or have a hardware fault, skip doing anything else
