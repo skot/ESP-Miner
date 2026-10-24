@@ -39,6 +39,7 @@
 #include "coinbase_decoder.h"
 #include "sv2_protocol.h"
 #include "asic.h"
+#include "create_jobs_task.h"
 
 #define NVS_COUNTER_UPDATE_INTERVAL_MS 60 * 60 * 1000  // Update NVS once per hour
 #define NOINIT_SENTINEL_VALUE 0x4C4F4732       // "LOG2" in hex
@@ -408,7 +409,7 @@ static void clean_jobs_queue(GlobalState * GLOBAL_STATE)
 {
     ESP_LOGI(TAG, "Clean Jobs: invalidating active jobs");
 
-    ASIC_clear_work(GLOBAL_STATE);
+    create_jobs_reset(GLOBAL_STATE);
 
     // Reset hashrate measurements to prevent a spike on reconnection
     hashrate_monitor_reset_measurements(GLOBAL_STATE);

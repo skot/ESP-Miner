@@ -18,6 +18,19 @@ static size_t harness_event_index;
 static job_pipeline_harness_result_t *harness_result;
 static int harness_job_frequency_ms;
 static GlobalState harness_state;
+static job_pipeline_harness_config_t harness_config;
+static bool harness_notification_pending;
+static uint32_t harness_notification;
+static bool harness_drain_expected;
+
+static BaseType_t fake_task_notify(TaskHandle_t task, uint32_t value, eNotifyAction action)
+{
+    (void)task;
+    (void)action;
+    harness_notification = value;
+    harness_notification_pending = true;
+    return pdPASS;
+}
 
 static BaseType_t fake_task_notify_wait(
     uint32_t bits_to_clear_on_entry, unsigned long bits_to_clear_on_exit,
@@ -27,14 +40,38 @@ static BaseType_t fake_task_notify_wait(
     (void)bits_to_clear_on_exit;
     (void)ticks_to_wait;
 
-    if (harness_event_index >= harness_event_count) {
+    if (harness_drain_expected) {
+        harness_drain_expected = false;
+        if (!harness_notification_pending) return pdFALSE;
+        *notification_value = harness_notification;
+        harness_notification_pending = false;
+        return pdTRUE;
+    }
+    if (!harness_notification_pending && harness_event_index >= harness_event_count) {
         longjmp(harness_exit, 1);
     }
 
-    const job_pipeline_harness_event_t *event =
-        &harness_events[harness_event_index++];
-    if (event->type == JOB_PIPELINE_HARNESS_NOTIFY) {
-        *notification_value = event->slot;
+    while (!harness_notification_pending && harness_event_index < harness_event_count) {
+        const job_pipeline_harness_event_t *event;
+        do {
+            event = &harness_events[harness_event_index++];
+            if (event->type == JOB_PIPELINE_HARNESS_NOTIFY) {
+                create_jobs_notify(&harness_state, event->slot);
+            } else if (event->type == JOB_PIPELINE_HARNESS_RESET) {
+                create_jobs_reset(&harness_state);
+            }
+        } while (event->coalesce_next && harness_event_index < harness_event_count);
+        break;
+    }
+    if (harness_notification_pending) {
+        *notification_value = harness_notification;
+        harness_notification_pending = false;
+        if (harness_config.notify_after_wait && harness_result->job_count == 0) {
+            harness_config.notify_after_wait = false;
+            create_jobs_notify(&harness_state, harness_config.clean_slot);
+            create_jobs_notify(&harness_state, harness_config.following_slot);
+        }
+        harness_drain_expected = harness_state.job_invalidation_pending;
         return pdTRUE;
     }
     return pdFALSE;
@@ -48,7 +85,6 @@ static void spy_task_delay(TickType_t ticks)
 
 void spy_asic_send_work(GlobalState *state, const asic_job_t *job)
 {
-    (void)state;
     if (harness_result->job_count >= JOB_PIPELINE_HARNESS_MAX_JOBS) {
         longjmp(harness_exit, 2);
     }
@@ -59,7 +95,27 @@ void spy_asic_send_work(GlobalState *state, const asic_job_t *job)
     } else {
         harness_result->jobs[harness_result->job_count] = NULL;
     }
+    if (harness_config.reset_during_send == harness_result->job_count + 1) {
+        create_jobs_reset(state);
+    }
+    if (harness_config.notify_during_send == harness_result->job_count + 1) {
+        create_jobs_notify(state, harness_config.clean_slot);
+        create_jobs_notify(state, harness_config.following_slot);
+    }
+    harness_result->clears_before_send[harness_result->job_count] = harness_result->clear_count;
+    if (harness_config.on_send) {
+        harness_config.on_send(harness_config.context, job);
+    }
     harness_result->job_count++;
+}
+
+static void spy_asic_clear_work(GlobalState *state)
+{
+    (void)state;
+    harness_result->clear_count++;
+    if (harness_config.on_clear) {
+        harness_config.on_clear(harness_config.context);
+    }
 }
 
 static void spy_asic_set_version_mask(GlobalState *state, uint32_t mask)
@@ -95,10 +151,15 @@ static void stub_difficulty_controller_update(GlobalState *state)
 #ifdef vTaskDelay
 #undef vTaskDelay
 #endif
+#ifdef xTaskNotify
+#undef xTaskNotify
+#endif
+#define xTaskNotify fake_task_notify
 #define xTaskNotifyWait fake_task_notify_wait
 #define vTaskDelay spy_task_delay
 #define ASIC_send_work spy_asic_send_work
 #define ASIC_send_job test_asic_send_job
+#define ASIC_clear_work spy_asic_clear_work
 #define ASIC_set_version_mask spy_asic_set_version_mask
 #define ASIC_get_asic_job_frequency_ms stub_asic_get_job_frequency
 #define SYSTEM_decode_and_apply_coinbase spy_decode_coinbase
@@ -110,8 +171,10 @@ static void stub_difficulty_controller_update(GlobalState *state)
 #undef ASIC_set_version_mask
 #undef ASIC_send_work
 #undef ASIC_send_job
+#undef ASIC_clear_work
 #undef vTaskDelay
 #undef xTaskNotifyWait
+#undef xTaskNotify
 
 void job_pipeline_harness_run(
     job_pipeline_harness_config_t config,
@@ -130,6 +193,7 @@ void job_pipeline_harness_run(
         .DEVICE_CONFIG.family.asic.software_midstates =
             config.software_midstates,
         .ASIC_initalized = config.asic_initialized,
+        .create_jobs_task_handle = (void *)1,
     };
 
     harness_events = events;
@@ -137,6 +201,9 @@ void job_pipeline_harness_run(
     harness_event_index = 0;
     harness_result = result;
     harness_job_frequency_ms = config.job_frequency_ms;
+    harness_config = config;
+    harness_notification_pending = false;
+    harness_drain_expected = false;
     mining_allocator_fault_injector_reset(config.allocation_failure_at);
     mining_hash_fault_injector_reset(config.hash_failure_at);
 
@@ -152,6 +219,7 @@ void job_pipeline_harness_run(
     harness_event_count = 0;
     harness_event_index = 0;
     harness_result = NULL;
+    harness_config = (job_pipeline_harness_config_t){0};
     mining_allocator_fault_injector_reset(0);
     mining_hash_fault_injector_reset(0);
 }

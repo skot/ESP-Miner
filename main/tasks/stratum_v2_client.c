@@ -6,6 +6,7 @@
 #include "system.h"
 #include "global_state.h"
 #include "stratum_v2_client.h"
+#include "create_jobs_task.h"
 #include "stratum_task.h"
 #include "stratum_socket.h"
 #include "connect.h"
@@ -218,9 +219,7 @@ static void stratum_v2_handle_new_extended_mining_job(GlobalState *GLOBAL_STATE,
 
         GLOBAL_STATE->SYSTEM_MODULE.work_received++;
         SYSTEM_notify_new_ntime(GLOBAL_STATE, job->ntime);
-        if (GLOBAL_STATE->create_jobs_task_handle) {
-            xTaskNotify(GLOBAL_STATE->create_jobs_task_handle, slot, eSetValueWithOverwrite);
-        }
+        create_jobs_notify(GLOBAL_STATE, slot);
     }
 }
 
@@ -273,9 +272,7 @@ static void stratum_v2_handle_new_mining_job(GlobalState *GLOBAL_STATE, sv2_conn
 
         GLOBAL_STATE->SYSTEM_MODULE.work_received++;
         SYSTEM_notify_new_ntime(GLOBAL_STATE, job->ntime);
-        if (GLOBAL_STATE->create_jobs_task_handle) {
-            xTaskNotify(GLOBAL_STATE->create_jobs_task_handle, slot, eSetValueWithOverwrite);
-        }
+        create_jobs_notify(GLOBAL_STATE, slot);
     }
 }
 
@@ -334,9 +331,7 @@ static void stratum_v2_handle_set_new_prev_hash(GlobalState *GLOBAL_STATE, sv2_c
 
         GLOBAL_STATE->SYSTEM_MODULE.work_received++;
         SYSTEM_notify_new_ntime(GLOBAL_STATE, job->ntime);
-        if (GLOBAL_STATE->create_jobs_task_handle) {
-            xTaskNotify(GLOBAL_STATE->create_jobs_task_handle, slot, eSetValueWithOverwrite);
-        }
+        create_jobs_notify(GLOBAL_STATE, slot);
     } else {
         ESP_LOGW(TAG, "SetNewPrevHash for unknown job_id %lu", (unsigned long)job_id);
     }

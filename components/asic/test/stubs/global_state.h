@@ -17,6 +17,7 @@
 typedef struct GlobalState {
     void *create_jobs_task_handle;
     volatile uint8_t active_job_slot_idx;
+    bool job_invalidation_pending;
     struct {
         struct {
             uint16_t asic_count;

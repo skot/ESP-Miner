@@ -19,6 +19,7 @@
 #include "freertos/task.h"
 #include "stratum_timing.h"
 #include "difficulty_controller.h"
+#include "create_jobs_task.h"
 
 #define PROBE_RECV_BUFFER_SIZE 2048
 
@@ -309,9 +310,7 @@ esp_err_t stratum_v1_run(GlobalState *GLOBAL_STATE, uint16_t pool_idx)
                     }
                     target_job->extranonce2_len = s_v1_conn->extranonce2_len;
 
-                    if (GLOBAL_STATE->create_jobs_task_handle) {
-                        xTaskNotify(GLOBAL_STATE->create_jobs_task_handle, target_slot, eSetValueWithOverwrite);
-                    }
+                    create_jobs_notify(GLOBAL_STATE, target_slot);
                 }
                 break;
             }
